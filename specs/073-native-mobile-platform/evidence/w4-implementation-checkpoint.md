@@ -9,3 +9,6 @@ Candidate d57a2a9d08495fb66fb0876617d4845884168ca2. Owner requested early W4 sou
 - d57a2a9: close encrypted connection on lease failure/revoke, exact R029 create/update/delete vocabulary and tombstone assertion; latest host run not yet verified.
 
 Outstanding: versioned generated OpenAPI, reviewed real browser consent/OIDC callback/nonce, mounted dedicated human credentials and per-route project policy, reviewed migration/RLS/rate limits, OS keystore and actual key destruction, trusted discovery and connected UI, signed package issuance/resumable staging, atomic local edit overlay/queue and explicit manual rebase/conflict UI, realtime transport cancellation/reconnect/revoke, device time/key lifecycle and at-rest backup/temporary-file inspection, 100 real server crash/retry cases with PostGIS and concurrent Web edits, A2 device gate. No production changes, no main merge.
+
+## Additional verified evidence
+Run 46170542764 completed SUCCESS: 3 SQLCipher host tests passed, including 100 deterministic simulated unknown-ACK/restart cycles; inspected logs confirm lease/clock checks and encrypted snapshot/delta/receipt test. Android/iOS dependency graph check passed. The later d57a2a9 changes still require run 46170781633. This is host evidence, not 100 real network/PostGIS crashes or A2 qualification.
