@@ -282,6 +282,10 @@ impl NativeUnifiedProject{
  pub fn append_survey(&self,layer_id:String,track_id:String,fix_json:String,expected:String)->Result<String,String>{
   self.inner.append_survey(&layer_id,&track_id,&fix_json,&expected).map_err(unified_error)
  }
+ // Locked metadata only. No secret keys or decrypted media cross FRB.
+ pub fn media_inventory(&self,layer_id:String,after:String,expected:String)->Result<String,String>{
+  self.inner.media_inventory(&layer_id,&after,&expected).map_err(unified_error)
+ }
  pub fn vector_tile(&self,layer_id:String,z:u8,x:u32,y:u32,expected:String)->Result<Vec<u8>,String>{
   self.inner.vector_tile(&layer_id,z,x,y,&expected).map_err(unified_error)
  }
