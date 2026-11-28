@@ -1,6 +1,6 @@
 /** Local, bounded 2DM triangular/quad elevation mesh. No implicit CRS. */
 export type MeshNode=readonly [number,number,number];
-export type LocalMesh={nodes:MeshNode[];nodeIds:number[];triangles:number[];bounds:[number,number,number,number];center:[number,number];minHeight:number;maxHeight:number};
+export type LocalMesh={nodes:MeshNode[];nodeIds:number[];faceCount:number;triangles:number[];bounds:[number,number,number,number];center:[number,number];minHeight:number;maxHeight:number};
 export const MESH_MAX_BYTES=16*1024*1024;
 export const MESH_MAX_TRIANGLES=100000;
 const MAX_NODES=100000,R=6378137;
@@ -33,5 +33,5 @@ export function parse2dm(text:string,crs:4326|3857):LocalMesh{
  const cross=(a:MeshNode,b:MeshNode,c:MeshNode)=>(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);
  const add=(a:number,b:number,c:number)=>{const area=cross(nodes[a]!,nodes[b]!,nodes[c]!);if(!Number.isFinite(area)||Math.abs(area)<1e-18)throw Error("Degenerate mesh triangle");const key=[a,b,c].sort((x,y)=>x-y).join(":");if(seen.has(key))throw Error("Duplicate mesh triangle");seen.add(key);triangles.push(a,...(area>0?[b,c]:[c,b]))};
  for(const face of faces){const v=face.refs.map(id=>{const i=indices.get(id);if(i===undefined)throw Error("Missing mesh node");return i});if(v.length===3)add(v[0]!,v[1]!,v[2]!);else{const n=v.map(i=>nodes[i]!);const turns=n.map((p,i)=>cross(p,n[(i+1)%4]!,n[(i+2)%4]!));if(!turns.every(t=>t>1e-18)&&!turns.every(t=>t< -1e-18))throw Error("Non-convex or degenerate quad");add(v[0]!,v[1]!,v[2]!);add(v[0]!,v[2]!,v[3]!)}}
- return {nodes,nodeIds:[...indices.keys()],triangles,bounds:[west,south,east,north],center:[(west+east)/2,(south+north)/2],minHeight,maxHeight};
+ return {nodes,nodeIds:[...indices.keys()],faceCount:faces.length,triangles,bounds:[west,south,east,north],center:[(west+east)/2,(south+north)/2],minHeight,maxHeight};
 }

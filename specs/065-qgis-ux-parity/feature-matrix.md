@@ -88,7 +88,7 @@ Mỗi dòng phải được gắn command ID/capability, fixture, test ID, ảnh
 | PROC-07 | Raster properties, band, nodata, rendering | P | ProjectRaster, RasterWorkbench | Band metadata, stretch, palette, opacity, nodata, CRS; capability từng provider | P2 |
 | PROC-08 | Raster Calculator, NDVI/NDWI, DEM terrain | D | RasterWorkbench, RasterReportWorkbench, TerrainEngineering | Kết quả theo fixture, nodata/CRS/extent, lưu output có lineage | P2 |
 | PROC-09 | Georeferencer raster/vector GCP | P | Raster affine GCP + north-up nearest/bilinear cho TIFF giới hạn; vector XY GeoJSON affine WGS84, RMS và xuất tệp | Kiểm thử mới, topology vector, mask/palette raster mở rộng, nhập vào project và QGIS acceptance còn thiếu | P2 |
-| PROC-10 | Temporal controller / mesh / point clouds | P | TemporalMapView + temporal-plan.ts: phát khung ngày UTC hoặc khoảng/bước UTC tùy chỉnh, có trường kết thúc tùy chọn, cho lớp vector đã tải đủ ≤5.000 đối tượng, có trường timestamp và quyền đọc; read-only secondary map | Raster temporal series, mesh providers và point cloud LAS/LAZ/COPC/EPT chưa hỗ trợ; acceptance QGIS pending | P3 |
+| PROC-10 | Temporal controller / mesh / point clouds | P | TemporalMapView: vector and raster UTC series; Spatial3DSettings/Cesium: bounded LAS 1.2–1.4, EPT binary, 2DM mesh, JSON and SMS DAT temporal node datasets, RGB/height/intensity rendering | Local session preview only; no LAZ/COPC/NetCDF or remote EPT streaming; QGIS acceptance pending | P3 |
 
 ## Print Layout, CRS & interoperability (OUTPUT)
 
@@ -97,7 +97,7 @@ Mỗi dòng phải được gắn command ID/capability, fixture, test ID, ảnh
 | OUTPUT-01 | Layout manager, page, map frames | D | LayoutDesigner, PrintDesigner | Danh sách layout, khổ giấy, trang, map frame, CRS, scale; lưu phiên bản | P1 |
 | OUTPUT-02 | Item properties, guides/grid, alignment, undo | P | LayoutDesigner | Dock item properties, align/distribute, guides, snap, lock, undo/redo; golden layout | P2 |
 | OUTPUT-03 | Legend, north arrow, scale bar, label | D | LayoutDesigner, LayoutRender | Liên kết đúng map item, scale và legend; không sai đơn vị/CRS | P1 |
-| OUTPUT-04 | Atlas / report nhiều trang | U | Chưa xác nhận | Coverage layer, lọc, trang theo đối tượng, batch export; không rò dữ liệu | P3 |
+| OUTPUT-04 | Atlas / report nhiều trang | P | LayoutDesigner, layout-atlas, LayoutRender: pinned coverage selection and multi-page PDF (8 pages, 20 visible vector layers, 2 map frames) | Browser and QGIS evidence pending; full atlas expressions and arbitrary report layouts not claimed | P3 |
 | OUTPUT-05 | PDF/PNG/SVG export, print preview | P | LayoutDesigner, PrintDesigner | Kiểm tra PDF/PNG, font VN, DPI, clipping; SVG chỉ khi engine hỗ trợ | P1 |
 | OUTPUT-06 | Project/source/display CRS, reprojection, VN-2000 | P | CrsPicker, crs-display.ts; Rust regional_crs: fixture/lineage verification for approved Quang Ninh edges, native feature/viewport/reproject; unverified provinces fail closed | Phân biệt display/transform, xác nhận hệ VN-2000 theo tỉnh/kinh tuyến, control points | P1 |
 | OUTPUT-07 | Import/export GeoJSON/GPKG/SHP/CSV/DXF/raster | P | TransferTool, ExportDialog, Rust transfers | Kiểm tra từng format thực, CRS, schema/null/encoding, geometry, round-trip; không đoán parity | P1 |
