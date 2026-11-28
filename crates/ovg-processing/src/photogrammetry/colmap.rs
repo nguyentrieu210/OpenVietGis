@@ -113,6 +113,31 @@ pub fn dense_plan(layout: &Layout,c: &Config, model_index: Option<u32>, source_v
     path_arg(&mut fuse.args,"--output_path",&layout.dense().join("fused.ply"));
     Ok(vec![undistort,depth,fuse])
 }
+
+/// A bounded patch-match.cfg generated from registered, host-verified image names.
+/// Reject duplicate references and ambiguous delimiter characters; do not allow
+/// COLMAP's unbounded __all__ mode or arbitrary source paths.
+pub fn patch_match_config(names: &[String], max_source_views: u16) -> Result<String, PlanError> {
+    use std::collections::BTreeSet;
+    if names.len() < 2 || names.len() > 100_000 || max_source_views == 0 || max_source_views > 64 {
+        return Err(PlanError::InvalidSettings);
+    }
+    let mut unique = BTreeSet::new();
+    let mut result = String::new();
+    let views = usize::from(max_source_views).min(names.len() - 1);
+    for name in names {
+        if name.is_empty() || name.len() > 255 || name.starts_with('.') ||
+            !name.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b,b'.'|b'_'|b'-')) ||
+            name.starts_with("__") || !unique.insert(name) {
+            return Err(PlanError::InvalidSettings);
+        }
+        result.push_str(name);
+        result.push('\n');
+        result.push_str(&format!("__auto__, {views}\n"));
+    }
+    Ok(result)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -134,6 +159,12 @@ mod tests {
         c.device=Device::Cuda;c.gpu_index=Some(0);
         assert_eq!(dense_plan(&layout(),&c,None,8,1),Err(PlanError::MissingModel));
         assert_eq!(dense_plan(&layout(),&c,Some(0),8,1).unwrap().len(),3);
+    }
+    #[test] fn bounded_source_config() {
+        let names=vec!["a.jpg".into(),"b.jpg".into()];
+        assert_eq!(patch_match_config(&names,8).unwrap(),"a.jpg\n__auto__, 1\nb.jpg\n__auto__, 1\n");
+        assert!(patch_match_config(&["../a.jpg".into(),"b.jpg".into()],8).is_err());
+        assert!(patch_match_config(&["a.jpg".into(),"a.jpg".into()],8).is_err());
     }
     #[test] fn refuses_relative_root_and_invalid_settings() {
         assert!(Layout::from_host_root("relative".into()).is_err());
