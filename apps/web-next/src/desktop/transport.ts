@@ -19,6 +19,7 @@ function host():Host {
 export const desktop={
   capabilities:()=>host().core.invoke<Capabilities>("desktop_capabilities"),
   list:()=>host().core.invoke<Project[]>("desktop_list"),
+  restoreSnapshot:()=>host().core.invoke<Project|null>("desktop_restore_snapshot"),
   create:()=>host().core.invoke<Project>("desktop_create"),
   open:(id:string)=>host().core.invoke<Opened>("desktop_open",{id}),
   close:(handle:string)=>host().core.invoke<void>("desktop_close",{handle}),
