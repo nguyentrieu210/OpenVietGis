@@ -61,7 +61,8 @@ impl Unified{
   Store::restore_copy(path,&self.path(id),&AtomicBool::new(false)).map_err(err)?;Ok(Project{id})
  }
  pub fn shutdown(&self)->UResult<()>{let mut s=self.open.lock().map_err(|_|"SESSION_FAILED")?;for (_,store) in s.values(){store.checkpoint().map_err(err)?;}s.clear();self.assets.lock().map_err(|_|"SESSION_FAILED")?.clear();Ok(())}
- pub fn close(&self,h:Uuid)->UResult<()>{let mut s=self.open.lock().map_err(|_|"SESSION_FAILED")?;s.get(&h).ok_or("STALE_HANDLE")?.1.checkpoint().map_err(err)?;s.remove(&h);self.assets.lock().map_err(|_|"SESSION_FAILED")?.retain(|(handle,_),_|*handle!=h);Ok(())}
+ pub fn close(&self,h:Uuid)->UResult<()>{self.close_checked(h,||Ok(()))}
+ pub fn close_checked(&self,h:Uuid,check:impl FnOnce()->UResult<()>)->UResult<()>{let mut s=self.open.lock().map_err(|_|"SESSION_FAILED")?;check()?;s.get(&h).ok_or("STALE_HANDLE")?.1.checkpoint().map_err(err)?;s.remove(&h);self.assets.lock().map_err(|_|"SESSION_FAILED")?.retain(|(handle,_),_|*handle!=h);Ok(())}
  pub fn with<T>(&self,h:Uuid,f:impl FnOnce(&Store)->UResult<T>)->UResult<T>{let s=self.open.lock().map_err(|_|"SESSION_FAILED")?;f(&s.get(&h).ok_or("STALE_HANDLE")?.1)}
  pub fn attach_asset(&self,h:Uuid,path:&std::path::Path,kind:&str,epsg:Option<u32>,expected:u64)->UResult<ovg_project_store::asset_store::AssetMeta>{
   use std::io::Read;
@@ -252,7 +253,7 @@ pub(crate) async fn work<T:Send+'static>(window:WebviewWindow,u:Unified,f:impl F
 #[tauri::command]pub async fn unified_list(window:WebviewWindow,u:State<'_,Unified>)->Reply<Vec<Project>>{work(window,u.inner().clone(),|s|s.list()).await}
 #[tauri::command]pub async fn unified_create(window:WebviewWindow,u:State<'_,Unified>)->Reply<Project>{work(window,u.inner().clone(),|s|s.create()).await}
 #[tauri::command]pub async fn unified_open(window:WebviewWindow,u:State<'_,Unified>,id:Uuid)->Reply<Opened>{work(window,u.inner().clone(),move|s|s.open(id)).await}
-#[tauri::command]pub async fn unified_close(window:WebviewWindow,u:State<'_,Unified>,editors:State<'_,crate::cad_bridge::CadEditors>,handle:Uuid)->Reply<()>{let ed=editors.inner().clone();work(window,u.inner().clone(),move|s|{ed.ensure_closed(handle)?;s.close(handle)}).await}
+#[tauri::command]pub async fn unified_close(window:WebviewWindow,u:State<'_,Unified>,editors:State<'_,crate::cad_bridge::CadEditors>,handle:Uuid)->Reply<()>{let ed=editors.inner().clone();work(window,u.inner().clone(),move|s|s.close_checked(handle,||ed.ensure_closed(handle))).await}
 #[tauri::command]pub async fn unified_catalog(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid)->Reply<ovg_project_store::catalog::Catalog>{work(window,u.inner().clone(),move|s|s.with(handle,|s|s.catalog().map_err(err))).await}
 #[tauri::command]pub async fn unified_add_layer(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid,name:String,expected:String)->Reply<String>{work(window,u.inner().clone(),move|s|s.with(handle,|s|Ok(s.add_layer(Uuid::new_v4(),&name,number(&expected)?).map_err(err)?.to_string()))).await}
 #[tauri::command]pub async fn unified_add_relation(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid,source:Uuid,target:Uuid,kind:String,expected:String)->Reply<String>{work(window,u.inner().clone(),move|s|s.with(handle,|s|Ok(s.add_relation(Uuid::new_v4(),source,target,&kind,number(&expected)?).map_err(err)?.to_string()))).await}
