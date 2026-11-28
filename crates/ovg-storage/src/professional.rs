@@ -789,7 +789,10 @@ async fn topology_population(
     selection: &Selection,
 ) -> Result<(i64, i64), EditError> {
     if source.feature_count > 50_000 {
-        return Err(EditError::detail(422, "Topology supports at most 50000 source features"));
+        return Err(EditError::detail(
+            422,
+            "Topology supports at most 50000 source features",
+        ));
     }
     let row = sqlx::query(
         "SELECT count(*) AS total,
@@ -799,15 +802,28 @@ async fn topology_population(
          WHERE organization_id = $1 AND project_id = $2 AND source_id = $3
            AND (cardinality($4::text[]) = 0 OR feature_id = ANY($4))",
     )
-    .bind(scope.organization_id()).bind(scope.project_id()).bind(source.id)
-    .bind(&selection.feature_ids).bind(&source.content_revision).bind(&source.schema_revision)
-    .fetch_one(&mut **scope.tx_mut()).await.map_err(op_err)?;
+    .bind(scope.organization_id())
+    .bind(scope.project_id())
+    .bind(source.id)
+    .bind(&selection.feature_ids)
+    .bind(&source.content_revision)
+    .bind(&source.schema_revision)
+    .fetch_one(&mut **scope.tx_mut())
+    .await
+    .map_err(op_err)?;
     let total: i64 = row.try_get("total").map_err(db_err)?;
     let present: i64 = row.try_get("present").map_err(db_err)?;
     let stale: i64 = row.try_get("stale").map_err(db_err)?;
-    let expected = if selection.feature_ids.is_empty() { source.feature_count } else { selection.feature_ids.len() as i64 };
+    let expected = if selection.feature_ids.is_empty() {
+        source.feature_count
+    } else {
+        selection.feature_ids.len() as i64
+    };
     if total != expected || stale != 0 {
-        return Err(EditError::detail(409, "Topology population changed or requested features are missing"));
+        return Err(EditError::detail(
+            409,
+            "Topology population changed or requested features are missing",
+        ));
     }
     Ok((total, present))
 }
@@ -848,14 +864,23 @@ pub async fn topology(scope: &mut EditScope<'_>, req: TopologyParams) -> Result<
             ));
         }
         if target.id == src.id {
-            return Err(EditError::detail(422, "Reference boundary must be a different source"));
+            return Err(EditError::detail(
+                422,
+                "Reference boundary must be a different source",
+            ));
         }
         let (requested, present) = topology_population(scope, &target, sec).await?;
         if requested == 0 || present != requested {
-            return Err(EditError::detail(422, "Reference boundary has missing geometry or is empty"));
+            return Err(EditError::detail(
+                422,
+                "Reference boundary has missing geometry or is empty",
+            ));
         }
         if check == "gap" && skipped_count != 0 {
-            return Err(EditError::detail(422, "Gap check needs complete primary geometry"));
+            return Err(EditError::detail(
+                422,
+                "Gap check needs complete primary geometry",
+            ));
         }
         secondary_pin = json!({"source_id":target.id,"content_revision":target.content_revision,"schema_revision":target.schema_revision});
         target_src_id = Some(target.id);
