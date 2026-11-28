@@ -10,7 +10,7 @@ export function mountAiCopilot(host, {organizationId, projectId, getBridge,getMo
   host.append(node);
   const get=name=>node.querySelector('[data-ai="'+name+'"]');
   get("endpoint").textContent=location.origin+"/mcp";
-  let providerChoices=[],nativeRun=null;
+  let providerChoices=[],nativeRun=null,nativeJob=null;
   let active=null,command=null,epoch=0,disposed=false,polling=false,submitting=false,autoAllowed=false,connecting=false,history=[],seen=new Set(),lastContextEpoch=getContextEpoch();
   const context=()=>{const mode=getMode();let cad="";if(mode==="cad"&&typeof runCad==="function"){try{const state=runCad("cad_state",{});cad=JSON.stringify([state.document_id,state.version,state.dirty,state.saving])}catch{cad="unavailable"}}return {mode,epoch:getContextEpoch(),cad}};
   const note=(c,label)=>{history=recordHistory(history,{id:c.id,method:c.method,mode:c.scope?.mode??getMode(),status:label,at:Date.now()});const list=get("history-items");list.replaceChildren(...history.map(item=>{const li=document.createElement("li");li.textContent=new Date(item.at).toLocaleTimeString("vi-VN")+" · "+item.mode.toUpperCase()+" · "+item.method+" · "+item.status;return li}))};
@@ -69,17 +69,28 @@ export function mountAiCopilot(host, {organizationId, projectId, getBridge,getMo
     get("run").disabled=true;get("provider").disabled=true;get("skill").disabled=true;get("task").disabled=true;get("writes").disabled=true;
     show("cancel",true);get("provider-consent").checked=false;get("answer").textContent="Agent đang xử lý. Duyệt từng lệnh GIS khi được yêu cầu.";
     try{
-      const out=await nativeReq(s,"run",{provider:p.id,expected_model:p.model,user,skill:get("skill").value||null,consent:true,allow_writes:get("writes").checked},controller.signal);
+      const started=await nativeReq(s,"run",{provider:p.id,expected_model:p.model,user,skill:get("skill").value||null,consent:true,allow_writes:get("writes").checked},controller.signal);
+      if(active!==s||disposed||controller.signal.aborted)return;
+      if(typeof started.run_id!=="string"||started.state!=="running")throw Error("Agent job không hợp lệ");
+      nativeJob={session:s,id:started.run_id};let out=null;
+      for(let i=0;i<160;i++){
+        await new Promise(resolve=>setTimeout(resolve,2000));
+        if(active!==s||disposed||controller.signal.aborted)return;
+        const job=await nativeReq(s,"status",{run_id:started.run_id},controller.signal);
+        if(job.state==="done"&&job.report){out=job.report;break}
+        if(job.state!=="running")throw Error("Agent job không hợp lệ");
+      }
+      if(!out)throw Error("Hết hạn chờ Agent");
       if(active!==s||disposed)return;
       get("answer").textContent=(out.answer||("Trạng thái: "+out.stop))+"\nLệnh: "+out.calls+" · Vòng: "+out.model_steps+(out.uncertain_call?"\nCó lệnh chưa xác minh; không gửi lại.":"")+(out.unresolved_ticket?"\nTicket: "+out.unresolved_ticket:"");
     }catch{
       if(active===s&&!disposed){get("answer").textContent="Mất phản hồi; không chạy lại. Đóng phiên và kiểm tra lịch sử lệnh.";void close();}
     }finally{
-      if(nativeRun===controller){nativeRun=null;get("run").disabled=false;get("provider").disabled=false;get("skill").disabled=false;get("task").disabled=false;get("writes").disabled=false;show("cancel",false);}
+      if(nativeRun===controller){nativeRun=null;nativeJob=null;get("run").disabled=false;get("provider").disabled=false;get("skill").disabled=false;get("task").disabled=false;get("writes").disabled=false;show("cancel",false);}
     }
   }
   function reset(message){
-    if(nativeRun)nativeRun.abort();providerChoices=[];show("native",false);get("provider-consent").checked=false;get("writes").checked=false;
+    if(nativeRun)nativeRun.abort();if(nativeJob){const job=nativeJob;nativeJob=null;void nativeReq(job.session,"cancel",{run_id:job.id}).catch(()=>{})}providerChoices=[];show("native",false);get("provider-consent").checked=false;get("writes").checked=false;
     ++epoch;active=null;seen.clear();setAutomatic(false);setReview(null);show("connect",true);show("close",false);show("consent",false);
     get("connect").disabled=connecting;status(message);updateScope();
   }

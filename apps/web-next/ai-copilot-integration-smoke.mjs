@@ -31,8 +31,9 @@ try{
    if(path.endsWith("/providers"))return route.fulfill({json:{providers:nativeEnabled?[{id:"openai",model:"fixture",local:false}]:[]}});
    if(path.endsWith("/run")){
      nativeRequests++;assert.deepEqual(r.postDataJSON(),{provider:"openai",expected_model:"fixture",user:"Inspect map",skill:null,consent:true,allow_writes:false});
-     return route.fulfill({json:{stop:"complete",answer:"Verified fixture",calls:0,model_steps:1}});
+     return route.fulfill({status:202,json:{run_id:"fixture-run",state:"running"}});
    }
+   if(path.endsWith("/status")){assert.deepEqual(r.postDataJSON(),{run_id:"fixture-run"});return route.fulfill({json:{state:"done",report:{stop:"complete",answer:"Verified fixture",calls:0,model_steps:1}}})}
    return route.fulfill({status:404,json:{}});
  });
  await page.route("**/api/v1/**",route=>{

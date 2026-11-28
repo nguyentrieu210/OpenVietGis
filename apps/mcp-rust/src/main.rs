@@ -241,6 +241,36 @@ impl AgentSlot{
     fn acquire(subject:&str)->Result<Self,Failure>{let mut a=active_agents().lock().map_err(|_|Failure::new(503,"Agent unavailable"))?;if a.len()>=4||!a.insert(subject.into()){return Err(Failure::new(429,"Agent capacity reached"))}Ok(Self(subject.into()))}
 }
 impl Drop for AgentSlot{fn drop(&mut self){if let Ok(mut a)=active_agents().lock(){a.remove(&self.0);}}}
+// Bounded, process-local jobs. No raw GIS observations or provider-native reasoning are retained.
+struct AgentJob {owner:Owner,session:Uuid,created:Instant,cancel:tokio::sync::watch::Sender<bool>,result:Option<Value>}
+fn agent_jobs()->&'static Mutex<std::collections::HashMap<Uuid,AgentJob>>{
+    static JOBS:std::sync::OnceLock<Mutex<std::collections::HashMap<Uuid,AgentJob>>>=std::sync::OnceLock::new();
+    JOBS.get_or_init(||Mutex::new(std::collections::HashMap::new()))
+}
+fn prune_jobs(j:&mut std::collections::HashMap<Uuid,AgentJob>){
+    j.retain(|_,v|v.result.is_none()||v.created.elapsed()<Duration::from_secs(900));
+    while j.len()>=64{
+        let old=j.iter().filter(|(_,v)|v.result.is_some()).min_by_key(|(_,v)|v.created).map(|(id,_)|*id);
+        if let Some(id)=old{j.remove(&id);}else{break}
+    }
+}
+struct AgentJobGuard(Uuid);
+impl Drop for AgentJobGuard{
+    fn drop(&mut self){if let Ok(mut jobs)=agent_jobs().lock(){if let Some(job)=jobs.get_mut(&self.0){if job.result.is_none(){job.result=Some(json!({"stop":"worker_interrupted","uncertain_call":"unknown","calls":null,"model_steps":null}));}}}}
+}
+async fn agent_job_action(State(app):State<App>,Path((id,action)):Path<(Uuid,String)>,h:HeaderMap,body:Bytes)->Result<Response,Failure>{
+    let v=parse(&body,&h)?;
+    if v.as_object().is_none_or(|o|o.len()!=1||!o.contains_key("run_id")){return Err(Failure::new(422,"Invalid agent job request"))}
+    let run=uuid(&v["run_id"])?;
+    let(owner,_)=browser_identity(&app,&h,id).await?;
+    let mut jobs=agent_jobs().lock().map_err(|_|Failure::new(503,"Agent job store unavailable"))?;
+    let job=jobs.get_mut(&run).filter(|j|j.owner==owner&&j.session==id).ok_or(Failure::new(404,"Agent job not found"))?;
+    match action.as_str(){
+        "status"=>Ok(respond(200,job.result.clone().map(|r|json!({"state":"done","report":r})).unwrap_or(json!({"state":"running"})))),
+        "cancel"=>{let _=job.cancel.send(true);Ok(respond(200,json!({"state":"cancel_requested"})))},
+        _=>Err(Failure::new(404,"Unknown agent action"))
+    }
+}
 async fn browser_agent(State(app):State<App>,Path(id):Path<Uuid>,h:HeaderMap,body:Bytes)->Result<Response,Failure>{
     use openvietgis_mcp_rust::{agent::{Agent,ProviderError,ToolOutcome,from_dispatch},provider::{Provider,Config,Gateway}};
     let v=parse(&body,&h)?;let input:AgentInput=serde_json::from_value(v).map_err(|_|Failure::new(422,"Invalid agent request"))?;
@@ -258,25 +288,44 @@ async fn browser_agent(State(app):State<App>,Path(id):Path<Uuid>,h:HeaderMap,bod
         !["gis_plugin_activate","gis_plugin_disable","gis_plugin_create","gis_plugin_update","gis_plugin_records"].contains(&name)
         && (input.allow_writes||t["annotations"]["readOnlyHint"]==true)
     }).filter_map(|t|t["name"].as_str().map(str::to_owned)).collect::<Vec<_>>();
-    let mut agent=Agent::new(&app.registry,id,allowed,Duration::from_secs(300));
-    if let Some(skill)=input.skill.as_deref(){agent=agent.with_skill(skill).map_err(|_|Failure::new(422,"Unknown GIS skill"))?;}
-    let (_cancel_tx,cancel)=tokio::sync::watch::channel(false);
+    // Validate the selected skill before accepting the run.
+    if let Some(skill)=input.skill.as_deref(){if openvietgis_mcp_rust::skills::get(&json!({"name":skill})).is_none(){return Err(Failure::new(422,"Unknown GIS skill"))}}
+    let (cancel_tx,cancel)=tokio::sync::watch::channel(false);
+    let run_id=Uuid::new_v4();
+    {
+        let mut jobs=agent_jobs().lock().map_err(|_|Failure::new(503,"Agent job store unavailable"))?;
+        prune_jobs(&mut jobs);
+        if jobs.len()>=64{return Err(Failure::new(429,"Agent job capacity reached"))}
+        jobs.insert(run_id,AgentJob{owner:owner.clone(),session:id,created:Instant::now(),cancel:cancel_tx,result:None});
+    }
     let deadline=unix_now().saturating_add(300);
-    let app_ref=&app;let headers=&h;let expected=&owner;let model_gateway=&gateway;
-    let report=agent.run(input.user,cancel,|request|async move{
-        // Recheck identity before every outbound transmission, including follow-up observations.
-        if unix_now()>=deadline||!provider_allowed(&expected.subject){return Err(ProviderError::Fatal)}
-        match browser_identity(app_ref,headers,id).await{Ok((fresh,_)) if fresh==*expected=>model_gateway.complete(request).await,_=>Err(ProviderError::Fatal)}
-    },|call|async move{
-        if unix_now()>=deadline||!provider_allowed(&expected.subject){return ToolOutcome::Failed}
-        match browser_identity(app_ref,headers,id).await{
-            Ok((fresh,_)) if fresh==*expected=>match operate_subject(app_ref,&expected.subject,deadline,&call.name,&call.arguments).await{Ok(value)=>from_dispatch(&call,value),Err(_)=>ToolOutcome::Failed},
-            _=>ToolOutcome::Failed
+    // The user explicitly started this job. The worker is bounded and every GIS/model
+    // call revalidates the same browser identity. The slot lives until the worker exits.
+    tokio::spawn(async move{
+        let _slot=_slot;
+        let _job_guard=AgentJobGuard(run_id);
+        let mut agent=Agent::new(&app.registry,id,allowed,Duration::from_secs(300));
+        if let Some(skill)=input.skill.as_deref(){
+            match agent.with_skill(skill){
+                Ok(a)=>agent=a,
+                Err(_)=>{if let Ok(mut jobs)=agent_jobs().lock(){if let Some(job)=jobs.get_mut(&run_id){job.result=Some(json!({"stop":"invalid_input","calls":0,"model_steps":0}));}}return}
+            }
         }
-    }).await;
-    // Do not return raw features, provider-native thinking, or credentials. The browser sees
-    // final text and operation status only, existing review/history shows the GIS commands.
-    Ok(respond(200,json!({"stop":report.stop,"answer":report.answer,"model_steps":report.model_steps,"calls":report.calls,"unresolved_ticket":report.unresolved_ticket,"uncertain_call":report.uncertain_call})))
+        let app_ref=&app;let headers=&h;let expected=&owner;let model_gateway=&gateway;
+        let report=agent.run(input.user,cancel,|request|async move{
+            if unix_now()>=deadline||!provider_allowed(&expected.subject){return Err(ProviderError::Fatal)}
+            match browser_identity(app_ref,headers,id).await{Ok((fresh,_)) if fresh==*expected=>model_gateway.complete(request).await,_=>Err(ProviderError::Fatal)}
+        },|call|async move{
+            if unix_now()>=deadline||!provider_allowed(&expected.subject){return ToolOutcome::Failed}
+            match browser_identity(app_ref,headers,id).await{
+                Ok((fresh,_)) if fresh==*expected=>match operate_subject(app_ref,&expected.subject,deadline,&call.name,&call.arguments).await{Ok(value)=>from_dispatch(&call,value),Err(_)=>ToolOutcome::Failed},
+                _=>ToolOutcome::Failed
+            }
+        }).await;
+        let value=json!({"stop":report.stop,"answer":report.answer,"model_steps":report.model_steps,"calls":report.calls,"unresolved_ticket":report.unresolved_ticket,"uncertain_call":report.uncertain_call});
+        if let Ok(mut jobs)=agent_jobs().lock(){if let Some(job)=jobs.get_mut(&run_id){job.result=Some(value);}}
+    });
+    Ok(respond(202,json!({"run_id":run_id,"state":"running"})))
 }
 
 async fn mcp(State(app):State<App>,h:HeaderMap,body:Bytes)->Response{
@@ -320,6 +369,7 @@ fn routes(app:App)->Router{
         .route("/ai-copilot/sessions/{id}/{action}",post(browser_action))
         .route("/ai-copilot/agent/{id}/providers",post(provider_list))
         .route("/ai-copilot/agent/{id}/run",post(browser_agent))
+        .route("/ai-copilot/agent/{id}/{action}",post(agent_job_action))
         .route("/ai-copilot/sessions/{id}/commands/{cid}/{action}",post(browser_command))
         .layer(DefaultBodyLimit::max(128_000))
         .with_state(app)
@@ -417,6 +467,7 @@ async fn main()->Result<(),Box<dyn std::error::Error>>{
         assert_eq!(provider_req(sa,ta,"run",json!({"provider":"openai","expected_model":"fixture","user":"inspect","skill":null,"consent":false,"allow_writes":false})).send().await.unwrap().status(),422);
         assert_eq!(provider_req(sa,ta,"run",json!({"provider":"openai","expected_model":"fixture","user":"inspect","skill":null,"consent":true,"allow_writes":false,"api_key":"not-accepted"})).send().await.unwrap().status(),422);
         assert_eq!(provider_req(sa,ta,"providers",json!({})).send().await.unwrap().status(),200);
+        assert_eq!(provider_req(sa,ta,"status",json!({"run_id":Uuid::new_v4()})).send().await.unwrap().status(),404);
 
         let many:Value=post_rpc(&client,&url,&valid,"tools/call",json!({"name":"gis_workspaces","arguments":{}})).await.json().await.unwrap();
         assert_eq!(many["result"]["structuredContent"]["workspaces"].as_array().unwrap().len(),2);
