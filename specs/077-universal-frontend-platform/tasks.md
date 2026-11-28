@@ -12,7 +12,9 @@
 - [x] T101b Run generator drift check, Node unit tests and isolated Chromium computed-style smoke.
 - [ ] T101c Qualify Tailwind compiler integration and Flutter SDK tests on provisioned runners after W0 runtime gate; activate adapters through coordinated integration.
 ## W2 React foundation
-- [ ] T201 Candidate spike/pins/license notices; extract primitives and dialog/menu/tooltip/popover/form; focus/keyboard/portal/overflow tests; facade SPEC072.
+- [x] T201a Candidate spike, exact Base UI/React pins, isolated npm lock and runtime notices; owned primitives and dialog/menu/tooltip/popover/form; compatibility facade.
+- [x] T201b Isolated TypeScript, Vite build and Chromium Playwright 9/9; focus/keyboard/portal/overflow checks.
+- [ ] T201c Activate workspace dependency and facade re-exports after W0/W1 gates; integrate pnpm lock, app-wide visual/accessibility and map lifecycle tests, final license review.
 ## W3 workbench
 - [ ] T301 Compare Dockview adapter with DockLayout; tab/split/dock/resize/restore, versioned persistence, map lifecycle, IPC window capability; rollback.
 ## W4 GIS/CAD

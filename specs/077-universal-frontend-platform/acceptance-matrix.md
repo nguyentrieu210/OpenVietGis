@@ -18,3 +18,11 @@ Source checks alone are not runtime acceptance. Missing external branch objects 
 | SPEC072 aliases and isolated Chromium computed style, 8 checks | PASS |
 | Production Tailwind compile and integrated screenshots | pending W0/T101c |
 | Flutter analyze/test and device theme integration | pending T101c |
+
+## W2 React foundation
+| Gate | Status |
+|---|---|
+| Base UI 1.9.0 / React 19.3.1 exact pins, isolated npm lock, runtime MIT notices | PASS candidate |
+| TypeScript and Vite production demo build | PASS |
+| Playwright Chromium 9/9: dialog focus, controls, dark portal, six viewports | PASS |
+| Root pnpm integration, existing app facade switch, map interactions, final visual/accessibility and distribution review | pending T201c |

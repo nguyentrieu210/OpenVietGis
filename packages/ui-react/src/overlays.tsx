@@ -16,5 +16,5 @@ export function Popover({label,title,children}:{label:string;title:string;childr
  return <BasePopover.Root><BasePopover.Trigger render={<Button/>}>{label}</BasePopover.Trigger><BasePopover.Portal><BasePopover.Positioner className="ovg-v2-positioner" sideOffset={4}><BasePopover.Popup className="ovg-v2-popup ovg-v2-popover"><BasePopover.Title className="ovg-v2-title">{title}</BasePopover.Title>{children}</BasePopover.Popup></BasePopover.Positioner></BasePopover.Portal></BasePopover.Root>;
 }
 export function Tooltip({label,children}:{label:string;children:ReactNode}){
- return <BaseTooltip.Provider><BaseTooltip.Root><BaseTooltip.Trigger render={<Button/>}>{children}</BaseTooltip.Trigger><BaseTooltip.Portal><BaseTooltip.Positioner className="ovg-v2-positioner" sideOffset={4}><BaseTooltip.Popup className="ovg-v2-popup ovg-v2-tooltip">{label}</BaseTooltip.Popup></BaseTooltip.Positioner></BaseTooltip.Portal></BaseTooltip.Root></BaseTooltip.Provider>;
+ return <BaseTooltip.Provider><BaseTooltip.Root><BaseTooltip.Trigger render={<Button/>}>{children}</BaseTooltip.Trigger><BaseTooltip.Portal><BaseTooltip.Positioner className="ovg-v2-positioner" sideOffset={4}><BaseTooltip.Popup role="tooltip" className="ovg-v2-popup ovg-v2-tooltip">{label}</BaseTooltip.Popup></BaseTooltip.Positioner></BaseTooltip.Portal></BaseTooltip.Root></BaseTooltip.Provider>;
 }

@@ -21,3 +21,7 @@ for(const width of [360,390,768,1024,1440,1920])test('dialog overflow '+width,as
  await page.setViewportSize({width,height:640});await page.goto('/');await page.getByRole('button',{name:'Open dialog'}).click();const d=page.getByRole('dialog');await expect(d).toBeVisible();const box=await d.boundingBox();expect(box!.x).toBeGreaterThanOrEqual(0);expect(box!.x+box!.width).toBeLessThanOrEqual(width+1);await expect(d.getByRole('button',{name:'Save'})).toBeInViewport();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  const table=d.locator('.ovg-v2-table-scroll');expect(await table.evaluate(el=>el.scrollWidth>=el.clientWidth)).toBe(true);
 });
+test('dark portal tokens and actual disabled menu protection',async({page})=>{
+ await page.goto('/');await page.getByRole('button',{name:'Dark'}).click();await page.getByRole('button',{name:'Open dialog'}).click();const d=page.getByRole('dialog');await expect(d).toHaveCSS('background-color','rgb(32, 43, 52)');await page.keyboard.press('Escape');
+ await page.getByRole('button',{name:'Actions menu'}).click();const denied=page.getByRole('menuitem',{name:'Forbidden command'});await denied.focus();await page.keyboard.press('Enter');await expect(page.getByLabel('Last action')).toHaveText('none');
+});
