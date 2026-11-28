@@ -1024,7 +1024,7 @@ export function revokeSurveySignoff(client: ApiClient, orgId: string, projectId:
 }
 
 export type IssuanceState="recorded"|"printed"|"delivered"|"installed"|"void";
-export type IssuanceRecord={id:string;proposal_id:string;building_id:string;number_id:string;route_id:string;number_text:string;route_name:string;authority_name:string;decision_ref:string;certificate_ref:string;effective_date:string;template_revision:string;recorded_at:string};
+export type IssuanceRecord={id:string;proposal_id:string;building_id:string;number_id:string;route_id:string;number_text:string;route_name:string;authority_name:string;decision_ref:string;certificate_ref:string;effective_date:string;template_revision:string;recorded_at:string;replaces_issuance_id:string|null;replacement_reason:string|null};
 export type IssuanceEvent={revision:number;state:IssuanceState;evidence_ref:string;occurred_at:string};
 export type IssuanceDetail={record:IssuanceRecord;history:IssuanceEvent[]};
 export type IssuanceInput={proposal_id:string;number_id:string;authority_name:string;decision_ref:string;certificate_ref:string;effective_date:string;template_revision:string};
@@ -1042,4 +1042,13 @@ export function transitionHouseNumberingIssuance(client:ApiClient,org:string,pro
 }
 export function houseNumberingAddressLookupUrl(org:string,project:string,id:string){
  return "/api/v1"+base(org,project)+"/address-lookup/"+encodeURIComponent(id);
+}
+
+export function replaceHouseNumberingIssuance(client:ApiClient,org:string,project:string,id:string,input:Omit<IssuanceInput,"proposal_id"|"number_id">&{expected_revision:number;reason:string}){
+ return jsonMutation<IssuanceDetail>(client,base(org,project)+"/issuances/"+encodeURIComponent(id)+"/replace","POST",input);
+}
+
+export type LifecycleKpi={active_buildings:number;eligible:number;unknown:number;ineligible:number;approved_buildings:number;registered_buildings:number;installed_buildings:number;unresolved_buildings:number};
+export function getHouseNumberingLifecycleKpi(client:ApiClient,org:string,project:string){
+ return client.request<LifecycleKpi>(base(org,project)+"/lifecycle-kpi");
 }

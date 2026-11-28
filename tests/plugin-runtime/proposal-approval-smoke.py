@@ -139,8 +139,21 @@ def main():
             for rev,state in [(1,'printed'),(2,'delivered'),(3,'installed')]:stage(rev,state)
             stage(1,'void',409)
             assert expect(api.get(lookup,headers=h),200)['plate_state']=='installed'
-            stage(4,'void')
+            replacement={k:v for k,v in body.items() if k not in ('proposal_id','number_id')}
+            replacement.update(expected_revision=4,reason='Fixture replacement')
+            expect(api.post(issue+'/replace',json=replacement,headers=reviewer['csrf']),409)
+            assert expect(api.get(lookup,headers=h),200)['plate_state']=='installed'
+            replacement['certificate_ref']='TEST-CERT-2'
+            replaced=expect(api.post(issue+'/replace',json=replacement,headers=reviewer['csrf']),201)
+            new_id=replaced['record']['id']
+            assert replaced['record']['replaces_issuance_id']==iid
             expect(api.get(lookup,headers=h),404)
+            assert expect(api.get(root+'/address-lookup/'+new_id,headers=h),200)['plate_state']=='recorded'
+            replacement.update(expected_revision=5,certificate_ref='TEST-CERT-3')
+            expect(api.post(issue+'/replace',json=replacement,headers=reviewer['csrf']),409)
+            kpi=expect(api.get(root+'/lifecycle-kpi',headers=h),200)
+            assert kpi['registered_buildings']==1 and kpi['installed_buildings']==0
+            print('PASS replacement HTTP: failed replacement rollback, linked successor, old lookup denied and deduplicated KPI')
             assert len(expect(api.get(issue,headers=reviewer['csrf']),200)['history'])==5
             print('PASS issuance HTTP: external certificate registry, ordered plate states, permission, immutable history and revocation')
             print('PASS proposal: independent reviewer, stale geometry, unresolved case, changed evidence, resubmission, approved number, retained pins')

@@ -11,8 +11,10 @@ use super::{audit_actor,csrf,decode,module_manage,module_read,require_module_per
 pub(super) fn router()->Router<AppState>{
     Router::new()
         .route(&format!("{BASE}/issuances"),post(record))
+        .route(&format!("{BASE}/lifecycle-kpi"),get(kpi))
         .route(&format!("{BASE}/issuances/{{issuance_id}}"),get(detail))
         .route(&format!("{BASE}/issuances/{{issuance_id}}/transition"),post(transition))
+        .route(&format!("{BASE}/issuances/{{issuance_id}}/replace"),post(replace))
         .route(&format!("{BASE}/buildings/{{building_id}}/issuances"),get(list))
         .route(&format!("{BASE}/address-lookup/{{issuance_id}}"),get(lookup))
 }
@@ -67,4 +69,28 @@ async fn lookup(State(state):State<AppState>,auth:HumanSession,Path(params):Path
     let (org,project)=scope_ids(&params)?;let id=path_id(&params,"issuance_id")?;
     let mut read=module_read(&state,&auth,org,project).await?;
     let result=store::lookup_issuance(&mut read,id).await?;read.commit().await?;Ok(Json(result))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ReplaceBody{expected_revision:i64,authority_name:String,decision_ref:String,certificate_ref:String,effective_date:chrono::NaiveDate,template_revision:String,reason:String}
+async fn replace(State(state):State<AppState>,auth:HumanSession,headers:HeaderMap,Path(params):Path<HashMap<String,String>>,body:Bytes)->HnResult<(StatusCode,Json<Value>)>{
+    csrf(&state,&auth,&headers)?;
+    let (org,project)=scope_ids(&params)?;let id=path_id(&params,"issuance_id")?;
+    let input:ReplaceBody=decode(&body)?;
+    if input.expected_revision<1 || ![&input.authority_name,&input.decision_ref,&input.certificate_ref].iter().all(|s|text_len(s.trim(),1,200))
+        || !text_len(input.template_revision.trim(),1,100)||!text_len(input.reason.trim(),1,500){return Err(HouseNumberingError::InvalidRequest);}
+    let mut edit=module_manage(&state,&auth,org,project).await?;
+    require_module_permission(&mut edit,"ext.house_numbering.approve").await?;
+    let result=store::replace_issuance(&mut edit,audit_actor(&auth),id,store::ReplacementInput{
+        expected_revision:input.expected_revision,authority_name:input.authority_name.trim(),decision_ref:input.decision_ref.trim(),
+        certificate_ref:input.certificate_ref.trim(),effective_date:input.effective_date,template_revision:input.template_revision.trim(),reason:input.reason.trim(),
+    }).await?;
+    edit.commit().await?;Ok((StatusCode::CREATED,Json(result)))
+}
+
+async fn kpi(State(state):State<AppState>,auth:HumanSession,Path(params):Path<HashMap<String,String>>)->HnResult<Json<Value>>{
+    let (org,project)=scope_ids(&params)?;
+    let mut read=module_read(&state,&auth,org,project).await?;
+    let result=store::lifecycle_kpi(&mut read).await?;read.commit().await?;Ok(Json(result))
 }

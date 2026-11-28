@@ -3,6 +3,7 @@ import {RegistryPanel} from "./Workspace";
 import {NumberingPanel} from "./NumberingPanel";
 import {ProposalPanel} from "./ProposalPanel";
 import {ReconcilePanel} from "./ReconcilePanel";
+import {LifecycleKpi} from "./LifecycleKpi";
 import {SurveyPanel} from "./SurveyPanel";
 import {DocumentsPanel} from "./DocumentsPanel";
 import {SearchExportPanel} from "./SearchExportPanel";
@@ -30,7 +31,7 @@ export function StudioWorkbench({organizationId,projectId,initialTab="registry",
   {tab==="numbering"&&<NumberingPanel {...shared}/>}
   {tab==="proposal"&&<ProposalPanel {...shared}/>}
   {tab==="reconcile"&&<ReconcilePanel {...shared}/>}
-  {tab==="survey"&&<SurveyPanel {...shared}/>}
+  {tab==="survey"&&<><LifecycleKpi {...shared}/><SurveyPanel {...shared}/></>}
   {tab==="documents"&&<DocumentsPanel {...shared}/>}
   {tab==="search"&&<SearchExportPanel {...shared}/>}
   </div>
