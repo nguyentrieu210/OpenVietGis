@@ -294,6 +294,29 @@ def check(c,f,second,fixtures,directory):
     parcels=fixtures[0]
     duplicate=definition|{"target_source_id":parcels["source_id"],"target_schema_revision":parcels["schema_revision"]}
     post(relation,duplicate,expected=409)
+    # Definition writes outside the HTTP API are guarded too.
+    for target_source_id,target_field,kind in [
+        (parcels["source_id"],"ward","text"),
+        (target["source_id"],"metric_val","text"),
+        (target["source_id"],"code","text"),
+    ]:
+        try:
+            with psycopg.connect(OWNER) as conn:
+                conn.execute("""
+                    INSERT INTO editing.relations(id,organization_id,project_id,source_id,local_field,
+                        target_source_id,target_field,cardinality,field_type)
+                    SELECT %s,organization_id,project_id,id,'ward',%s,%s,'one',%s
+                    FROM spatial.data_sources WHERE id=%s
+                """,(uuid4(),target_source_id,target_field,kind,child["source_id"]))
+            raise AssertionError("database accepted invalid relation definition")
+        except psycopg.Error as exc:
+            assert exc.sqlstate=="OV409",(exc.sqlstate,str(exc))
+    try:
+        with psycopg.connect(OWNER) as conn:
+            conn.execute("UPDATE editing.relations SET cardinality='many' WHERE id=%s",(rule["id"],))
+        raise AssertionError("database accepted in-place relation mutation")
+    except psycopg.Error as exc:
+        assert exc.sqlstate=="OV409",(exc.sqlstate,str(exc))
     assert len(get(relation)["items"])==1
     assert post(relation+"/"+rule["id"]+"/delete",{},expected=200)["deleted"]
     assert rule["id"] not in {r["id"] for r in get(relation)["items"]}
