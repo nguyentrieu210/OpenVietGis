@@ -1,6 +1,5 @@
 import {useCallback,useEffect,useRef,useState} from "react";
-import maplibregl from "maplibre-gl";
-import "maplibre-gl/dist/maplibre-gl.css";
+import LocalWorkbench from "./LocalWorkbench";
 import {desktop,type Capabilities,type Project,type Opened} from "./transport";
 import "./desktop.css";
 
@@ -15,7 +14,6 @@ export default function DesktopEntry(){
   const active=useRef<Opened|undefined>(undefined);
   const running=useRef(false);
   const mounted=useRef(true);
-  const canvas=useRef<HTMLDivElement>(null);
   const job=useRef<{handle:string;id:string}|undefined>(undefined);
   const refresh=useCallback(async()=>setProjects(await desktop.list()),[]);
   const execute=useCallback(async (f:()=>Promise<void>)=>{
@@ -44,13 +42,6 @@ export default function DesktopEntry(){
       .then(fn=>{if(disposed)fn();else unlisten=fn}).catch(e=>setMessage(String(e)));
     return()=>{disposed=true;mounted.current=false;unlisten?.();const w=active.current;if(w)void desktop.close(w.handle).catch(()=>{})};
   },[execute,refresh,create,close]);
-  useEffect(()=>{
-    if(!canvas.current)return;
-    let map:maplibregl.Map|undefined;
-    try{map=new maplibregl.Map({container:canvas.current,style:{version:8,sources:{},layers:[{id:"background",type:"background",paint:{"background-color":"#e8edf0"}}]},center:[106.7,11],zoom:5,attributionControl:false});map.addControl(new maplibregl.NavigationControl(),"top-right")}
-    catch(e){setMessage(String(e))}
-    return()=>map?.remove();
-  },[]);
   const transform=()=>execute(async()=>{
     const w=active.current;if(!w)return;setResult("");
     const id=await desktop.transform(w.handle,4326,3857,[106.7,11]);
@@ -71,7 +62,7 @@ export default function DesktopEntry(){
     try{await desktop.cancel(j.handle,j.id)}catch(e){setMessage(String(e))}
   };
   return <div className="ovg-desktop">
-    <header><strong>OpenVietGIS Desktop</strong><span>Standalone · Wave 1</span></header>
+    <header><strong>OpenVietGIS Desktop</strong><span>Standalone · Wave 2</span></header>
     <div className="ovg-desktop-body">
       <aside aria-label="Không gian làm việc">
         <h2>Dự án cục bộ</h2>
@@ -80,12 +71,12 @@ export default function DesktopEntry(){
         <ul>{projects.map(p=><li key={p.id}><button title={p.id} disabled={busy} aria-current={opened?.id===p.id} onClick={()=>void execute(()=>open(p.id))}>{p.id.slice(0,8)}</button></li>)}</ul>
         <button disabled={!opened||busy} onClick={()=>void execute(close)}>Đóng dự án</button>
         <h2>Khả năng</h2>
-        <p>Cloud, đồng bộ và tile dữ liệu: chưa kích hoạt.</p>
+        <p>Cloud, đồng bộ và MVT/raster tile: chưa kích hoạt.</p>
         <button disabled={!opened||busy||!caps?.transform} onClick={()=>void transform()}>Thử chuyển CRS 4326 → 3857</button>
         <button disabled={!jobActive} onClick={()=>void cancel()}>Hủy tác vụ</button>
         {result&&<output>{result}</output>}
       </aside>
-      <main><div ref={canvas} className="ovg-desktop-map" aria-label="Khung bản đồ"/><p>Khung bản đồ offline; hiển thị layer dự án được triển khai ở Wave 2.</p></main>
+      <main>{opened&&caps?.local_edit&&caps.viewport?<LocalWorkbench key={opened.handle} handle={opened.handle}/>:<p>Chọn hoặc tạo dự án để mở bản đồ cục bộ.</p>}</main>
     </div>
     <footer role="status">{message|| (busy?"Đang xử lý…":opened? "Đang mở "+opened.id:"Chọn hoặc tạo dự án, không cần tài khoản.")}</footer>
   </div>;
