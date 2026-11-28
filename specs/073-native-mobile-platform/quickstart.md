@@ -1,0 +1,10 @@
+# Developer quickstart — planned workflow (not executable yet)
+1. Checkout isolated SPEC branch/worktree from reconciled main. Read Constitution and SPEC 073; run baseline existing Web/Rust tests relevant to changed crates. Capture git SHA and cargo dependency graph.
+2. Install locked Flutter/Dart, Android SDK/NDK/CMake, Rust targets and platform SDKs from toolchain manifest created in W0. Do not install unpinned dependencies in production. Android ARM64 physical device first; iOS build on macOS runner.
+3. Build native libraries with checked-in build scripts and selected GDAL/PROJ/GEOS drivers/assets; verify symbols/ABI and SBOM. Generate Dart FFI and API bindings; fail if generated output stale.
+4. Once implementation exists: cd apps/mobile-flutter; flutter pub get; flutter analyze; flutter test; flutter run on approved Android device. Verify standalone map; turn airplane mode on; share local fixture TAB/SHP/GPKG, inspect CRS, edit, measure, export, restart and compare in QGIS.
+5. Launch isolated existing Rust API/PostGIS test profile (not live), use synthetic org/projects, login through PKCE, download scoped package, edit offline, reconnect, resolve conflict; compare Web results and revocation behavior.
+6. Load signed reference house-numbering plugin and generic sample through existing developer/catalog flow, verify activation, form, map tool, lifecycle, permissions and unsupported platform behavior.
+7. Run targeted native tests and device integration per wave. Before release: full Rust/Web/API + Flutter regression on pinned candidate, physical-device benchmark, signed Android build, verify source/NOTICE/SBOM, independent review. iOS later on its own verified runner.
+ 
+Evidence directory records exact SHA, commands, fixture hashes, devices/OS, ABI/library versions, expected vs observed results and blockers. No steps in this file have been executed yet; commands refer to planned paths.
