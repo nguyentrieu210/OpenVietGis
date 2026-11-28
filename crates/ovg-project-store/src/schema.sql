@@ -12,3 +12,8 @@ CREATE TABLE edge(relation TEXT NOT NULL REFERENCES relation(id),source_layer TE
 CREATE INDEX edge_reverse ON edge(relation,target_id,source_id);
 CREATE TABLE receipt(operation TEXT PRIMARY KEY,digest BLOB NOT NULL CHECK(length(digest)=32),revision INTEGER NOT NULL,reply TEXT NOT NULL);
 CREATE TABLE journal(revision INTEGER PRIMARY KEY,operation TEXT NOT NULL UNIQUE REFERENCES receipt(operation),before_json TEXT NOT NULL,after_json TEXT NOT NULL);
+CREATE INDEX feature_layer_fid ON feature(layer,fid);
+CREATE TABLE legacy_source(layer TEXT PRIMARY KEY REFERENCES layer(id),sha256 TEXT NOT NULL CHECK(length(sha256)=64),source_bytes INTEGER NOT NULL,live_count INTEGER NOT NULL,tombstone_count INTEGER NOT NULL);
+CREATE TABLE legacy_receipt(layer TEXT NOT NULL REFERENCES layer(id),operation TEXT NOT NULL,feature TEXT NOT NULL,digest BLOB NOT NULL CHECK(length(digest)=32),revision INTEGER NOT NULL,payload BLOB NOT NULL,PRIMARY KEY(layer,operation));
+CREATE TABLE legacy_history(layer TEXT NOT NULL REFERENCES layer(id),seq INTEGER NOT NULL,command TEXT NOT NULL,before_json TEXT NOT NULL,after_json TEXT NOT NULL,applied INTEGER NOT NULL CHECK(applied IN(0,1)),PRIMARY KEY(layer,seq));
+CREATE TABLE legacy_command(layer TEXT NOT NULL REFERENCES layer(id),command TEXT NOT NULL,PRIMARY KEY(layer,command));
