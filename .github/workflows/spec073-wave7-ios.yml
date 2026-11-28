@@ -51,12 +51,16 @@ jobs:
           p=Path("rust/Cargo.toml")
           root=os.environ["GITHUB_WORKSPACE"]
           deps='\n'.join(f'{n} = {{ path = "{root}/crates/{n}" }}' for n in ["ovg-mobile-engine","ovg-local-storage"])
-          p.write_text(p.read_text().replace("[dependencies]", "[dependencies]\n"+deps+'\nuuid = { version = "1", features = ["v4"] }\nserde_json = "1"',1))
+          text=p.read_text().replace("[dependencies]", "[dependencies]\n"+deps+'\nuuid = { version = "1", features = ["v4"] }\nserde_json = "1"',1)
+          text=text.replace("[dependencies]", '[dependencies]\novg-project-store = { git = "https://github.com/nguyentrieu210/OpenVietGis", rev = "9ecf7cb83fd6fc2da01285bc4e2032fe228d5b47" }',1)
+          text+='\n[patch."https://github.com/nguyentrieu210/OpenVietGis"]\n'+'\n'.join(f'{n} = {{ path = "{root}/crates/{n}" }}' for n in ["ovg-mobile-engine","ovg-local-storage","ovg-spatial"])+'\n'
+          p.write_text(text)
           p=Path("ios/Runner/Info.plist")
           data=plistlib.loads(p.read_bytes())
           data["NSLocationWhenInUseUsageDescription"]="Record foreground survey position when you choose GPS survey."
           p.write_bytes(plistlib.dumps(data))
           PY
+          python3 "$GITHUB_WORKSPACE/infra/mobile/install-media-provider.py" "$GITHUB_WORKSPACE" "$PWD"
           flutter pub get
           flutter_rust_bridge_codegen generate
           flutter analyze lib test
