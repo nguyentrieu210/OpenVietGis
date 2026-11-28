@@ -630,6 +630,53 @@ mod native_vn2000_tests {
         assert!(project_native_vn2000(4756, 3405, Coord2D::new(109.0, 11.0)).is_err());
         assert!(project_native_vn2000(4756, 9212, Coord2D::new(105.0, 11.5)).is_err());
     }
+
+    #[test]
+    fn epsg_5899_matches_independent_quang_ninh_projected_controls_in_both_directions() {
+        // Published in the Quang Ninh transshipment EIA, Table 1.4 (see
+        // specs/003-spatial-catalog-crs/vn2000-control-evidence.md). The source
+        // labels X as northing and Y as easting, so API coordinates are (Y, X).
+        let controls = [
+            (20, 42, 42.09, 107, 9, 32.44, 438_442.69, 2_291_039.83),
+            (20, 43, 9.30, 107, 9, 15.56, 437_957.55, 2_291_878.33),
+            (20, 43, 19.41, 107, 9, 47.82, 438_891.96, 2_292_185.83),
+            (20, 42, 53.22, 107, 10, 4.30, 439_365.92, 2_291_378.72),
+        ];
+
+        let dms = |degrees: u32, minutes: u32, seconds: f64| {
+            f64::from(degrees) + f64::from(minutes) / 60.0 + seconds / 3600.0
+        };
+        let geodesic_distance_m = |a: Coord2D, b: Coord2D| {
+            let radius_m = 6_371_008.8;
+            let lat_a = a.y.to_radians();
+            let lat_b = b.y.to_radians();
+            let d_lat = lat_b - lat_a;
+            let d_lon = (b.x - a.x).to_radians();
+            let h = (d_lat / 2.0).sin().powi(2)
+                + lat_a.cos() * lat_b.cos() * (d_lon / 2.0).sin().powi(2);
+            2.0 * radius_m * h.sqrt().asin()
+        };
+
+        for (lat_d, lat_m, lat_s, lon_d, lon_m, lon_s, easting, northing) in controls {
+            let published_geographic =
+                Coord2D::new(dms(lon_d, lon_m, lon_s), dms(lat_d, lat_m, lat_s));
+            let published_projected = Coord2D::new(easting, northing);
+
+            let projected = project_native_vn2000(4756, 5899, published_geographic).unwrap();
+            assert!(
+                (projected.x - published_projected.x).hypot(projected.y - published_projected.y)
+                    <= 1.0,
+                "forward control mismatch for {published_geographic:?}: {projected:?}"
+            );
+
+            let geographic =
+                project_native_vn2000(5899, 4756, published_projected).unwrap();
+            assert!(
+                geodesic_distance_m(geographic, published_geographic) <= 1.0,
+                "inverse control mismatch for {published_projected:?}: {geographic:?}"
+            );
+        }
+    }
 }
 
 #[cfg(test)]
