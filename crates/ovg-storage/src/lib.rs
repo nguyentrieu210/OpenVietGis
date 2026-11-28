@@ -12,6 +12,7 @@ pub mod field_packages;
 pub mod gis_access;
 pub mod house_numbering;
 pub mod identity;
+pub mod mobile_identity;
 pub mod integration_hub;
 mod native_projection;
 pub mod pool;
