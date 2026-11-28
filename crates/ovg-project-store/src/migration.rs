@@ -6,7 +6,7 @@ const MAX_SOURCE:u64=512*1024*1024;
 #[derive(Clone,Debug)]
 pub struct Source{pub layer:Uuid,pub name:String,pub snapshot:PathBuf}
 #[derive(Debug,Serialize)]
-pub struct Migrated{pub layer:Uuid,pub live:u64,pub tombstones:u64,pub journal:u64,pub history:u64,pub sha256:String}
+pub struct Migrated{pub layer:Uuid,pub live:u64,pub tombstones:u64,pub journal:u64,pub history:u64,pub tracks:u64,pub fixes:u64,pub sha256:String}
 fn check_cancel(c:&AtomicBool)->Result<()>{if c.load(Ordering::Acquire){Err(Error::Conflict)}else{Ok(())}}
 fn copy_source(src:&Path,dst:&Path,cancel:&AtomicBool)->Result<(u64,String)>{
  let meta=fs::symlink_metadata(src).map_err(|_|Error::Storage)?;
@@ -36,10 +36,7 @@ fn copy_layer(tx:&rusqlite::Transaction<'_>,source:&Source,legacy:&Connection,ha
  let fields:Option<String>=legacy.query_row("SELECT fields_json FROM ovg_attribute_schema WHERE singleton=1",[],|r|r.get(0)).optional()?;
  if let Some(f)=&fields{attributes::validate_schema(&decode::<Vec<Field>>(f)?).map_err(|_|Error::Invalid)?;}
  tx.execute("INSERT INTO layer VALUES(?1,?2,?3)",params![l,source.name,fields])?;
- // Refuse survey data until its canonical representation is migrated; never silently discard it.
- let survey:i64=legacy.query_row("SELECT count(*) FROM ovg_survey_track",[],|r|r.get(0))?;
- let fixes:i64=legacy.query_row("SELECT count(*) FROM ovg_survey_fix",[],|r|r.get(0))?;
- if survey!=0||fixes!=0{return Err(Error::Unsupported)}
+ let (tracks,fixes)=survey::migrate_layer(tx,source.layer,legacy,cancel)?;
  let mut live=0u64;let mut tombstones=0u64;
  let mut q=legacy.prepare("SELECT r.stable_id,r.revision,r.deleted,f.revision,f.geom,f.attributes FROM ovg_feature_revision r LEFT JOIN features f ON f.stable_id=r.stable_id ORDER BY r.stable_id")?;
  let mut rows=q.query([])?;
@@ -91,7 +88,7 @@ fn copy_layer(tx:&rusqlite::Transaction<'_>,source:&Source,legacy:&Connection,ha
   tx.execute("INSERT INTO legacy_command VALUES(?1,?2)",params![l,row.get::<_,String>(0)?])?;
  }
  tx.execute("INSERT INTO legacy_source VALUES(?1,?2,?3,?4,?5)",params![l,hash,size,live,tombstones])?;
- Ok(Migrated{layer:source.layer,live,tombstones,journal,history,sha256:hash.into()})
+ Ok(Migrated{layer:source.layer,live,tombstones,journal,history,tracks,fixes,sha256:hash.into()})
 }
 /// Migrate exact-version, checkpointed snapshots into a new SQLite candidate.
 /// Caller must keep legacy source backups. No activation or legacy deletion.
