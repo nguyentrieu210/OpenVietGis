@@ -1,4 +1,6 @@
 # Tasks — 066
+
+Partial T008 E07 retained-route evidence: evidence/t008-e07-retained-gateway.md. T008 remains open.
 Implementation in progress; only fully verified tasks checked. See evidence/implementation-01.md evidence/implementation-02.md evidence/implementation-03.md evidence/implementation-04.md evidence/implementation-05.md evidence/implementation-06.md evidence/implementation-07.md evidence/implementation-08.md evidence/implementation-09.md and evidence/implementation-10.md evidence/implementation-11.md and evidence/implementation-12.md and evidence/implementation-13.md and evidence/implementation-14.md and evidence/implementation-15.md and evidence/implementation-16.md and evidence/implementation-17.md and evidence/implementation-18.md and evidence/implementation-19.md and evidence/implementation-20.md and evidence/implementation-21.md for partial work. W1 precedes W2–W7. W2 retirement depends on 062/064 parity/ADR acceptance; W3/W4 share cache/session contract; W5/W6 depend on W4 revision contract; W7 may start in parallel after W1; W8 depends on all mandatory work. P0 = hard gate, P1 = optimization. Each task requires exact file list (expand directory references during audit), commit, tests and evidence. No marks until verification.
 
 ## W1 audit
