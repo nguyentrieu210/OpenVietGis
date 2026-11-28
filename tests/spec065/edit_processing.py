@@ -84,6 +84,33 @@ def check_processing(post,get,foreign,fixtures):
     return {"buffer":buffer_metrics,"clip":clip_metrics,
             "dissolve_zone":{"features":dissolve_metrics["features"],"areas_m2":areas}}
 
+def verify_processing_fixture(fixtures,directory):
+    import hashlib
+
+    spec=importlib.util.spec_from_file_location("spec065_reference_fixture",ROOT/"fixtures/qgis-parity/generate.py")
+    gen=importlib.util.module_from_spec(spec);spec.loader.exec_module(gen)
+    root=directory/"processing-reference";gen.generate(root)
+    with psycopg.connect(OWNER) as conn:
+        for name, layer in zip(("parcels","clip","point"),fixtures,strict=True):
+            expected=json.loads((root/(name+".geojson")).read_text())["features"]
+            n=conn.execute(
+                "SELECT count(*) FROM spatial.reference_features WHERE source_id=%s",
+                (layer["source_id"],),
+            ).fetchone()[0]
+            assert n==len(expected),(name,n)
+            for feature in expected:
+                fid="pt" if name=="point" else feature["id"]
+                matched=conn.execute(
+                    "SELECT ST_Equals(geometry,ST_SetSRID(ST_GeomFromGeoJSON(%s),3857)),attributes->>'ward' "
+                    "FROM spatial.reference_features WHERE source_id=%s AND feature_id=%s AND ST_SRID(geometry)=3857",
+                    (json.dumps(feature["geometry"]),layer["source_id"],fid),
+                ).fetchone()
+                assert matched and matched[0],(name,fid,"geometry mismatch")
+                if name=="parcels":
+                    assert matched[1]==feature["properties"]["zone"],(name,fid,"group mismatch")
+    return hashlib.sha256((root/"SHA256SUMS.txt").read_bytes()).hexdigest()
+
+
 def processing_only(c,f,fixtures):
     auth=session_headers(f["session_a_token"], **{"x-openvietgis-csrf":f["csrf_a_token"]})
     foreign=session_headers(f["session_b_token"], **{"x-openvietgis-csrf":f["csrf_b_token"]})
@@ -313,10 +340,11 @@ def main():
                 if args.suite=="integrated":
                     check(c,f,second,fixtures,directory)
                 elif args.suite=="processing":
+                    fixture_sha256=verify_processing_fixture(fixtures,directory)
                     actual=processing_only(c,f,fixtures)
                     if args.evidence:
                         with args.evidence.open("x",encoding="utf-8") as output:
-                            json.dump({"crs":"EPSG:3857","actual":actual},output,ensure_ascii=False,indent=2)
+                            json.dump({"crs":"EPSG:3857","fixture_sha256":fixture_sha256,"actual":actual},output,ensure_ascii=False,indent=2)
                 elif args.suite=="native-import":
                     from native_import import check_native_import
                     check_native_import(c,f)
