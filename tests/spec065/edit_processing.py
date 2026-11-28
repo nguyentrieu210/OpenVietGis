@@ -77,11 +77,11 @@ def check_processing(post,get,foreign,fixtures):
         ).fetchall()
         assert overlay_ids == [("clip",)]
     print("PASS Difference/Intersection area and feature provenance",difference_metrics,intersection_metrics,flush=True)
-    union, union_metrics = result(job("union",parcels,{},clip),5,30000)
-    joined, join_metrics = result(job("spatial_join",parcels,{"predicate":"contains","join_type":"left","match_mode":"all"},point),3,30000)
+    union, _ = result(job("union",parcels,{},clip),5,30000)
+    joined, _ = result(job("spatial_join",parcels,{"predicate":"contains","join_type":"left","match_mode":"all"},point),3,30000)
     result(job("spatial_join",parcels,{"predicate":"contains","join_type":"inner","match_mode":"first"},point),1,10000)
     result(job("spatial_join",point,{"predicate":"within","join_type":"inner","match_mode":"all"},parcels),1,0)
-    reprojected, reproject_metrics = result(job("reproject",point,{"target_srid":4326}),1,0)
+    reprojected, _ = result(job("reproject",point,{"target_srid":4326}),1,0)
     assert reprojected["output_crs"]==4326
     with psycopg.connect(OWNER) as conn:
         union_rows=conn.execute(
@@ -126,9 +126,9 @@ def check_processing(post,get,foreign,fixtures):
             registered=post("/spatial/sources",{"reference_key":f"reference_points_{src}_{region}","name":f"SPEC065 {region} {src}"})
             sid=registered["resource_id"]
             layer=post("/layers",{"source_id":sid,"name":f"SPEC065 {region} {src} layer"})
-            pin=pinned_layer(layer["resource_id"],sid)
-            assert pin["feature_count"]==3
-            transformed,_=result(job("reproject",pin,{"target_srid":dst}),3,0)
+            regional_pin=pinned_layer(layer["resource_id"],sid)
+            assert regional_pin["feature_count"]==3
+            transformed,_=result(job("reproject",regional_pin,{"target_srid":dst}),3,0)
             assert transformed["output_crs"]==dst
     # Whole-layer same-datum projection with attributes and feature IDs unchanged.
     extended,_=result(job("reproject",regional,{"target_srid":3405}),regional["feature_count"],0)

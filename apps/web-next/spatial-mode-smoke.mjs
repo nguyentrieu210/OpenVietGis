@@ -51,7 +51,8 @@ try{
  await search.waitFor();
  assert.ok(await search.evaluate(e=>e===document.activeElement));
  await search.fill("BUFFER");
- assert.equal(await page.locator(".core-menu-items button").count(),1);
+ const activeMenu=search.locator("xpath=ancestor::*[@role=\"region\"][1]");
+ assert.equal(await activeMenu.locator(".core-menu-items button").count(),1);
  await search.press("Escape");
  await page.locator(".core-ribbon-menu-fixed").waitFor({state:"detached"});
  assert.ok(await find.evaluate(e=>e===document.activeElement));

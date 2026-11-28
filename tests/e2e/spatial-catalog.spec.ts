@@ -1,20 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
+import { signInOwner } from "./frontend-auth-helpers";
 
 // Synthetic OIDC identities and job-local data only; do not retain secret-bearing surfaces.
 test.use({ trace: "off", screenshot: "off", video: "off" });
 
 async function signIn(page: Page) {
-  await page.goto("/login");
-  await page
-    .getByRole("link", {
-      name: "Đăng nhập với OpenVietGIS Development",
-      exact: true
-    })
-    .click();
-  await page.locator("#username").fill("owner-a");
-  await page.locator("#password").fill("openvietgis-test-owner-a");
-  await page.locator("#kc-login").click();
-  await expect(page.locator(".ovg-app-shell")).toBeVisible();
+  await signInOwner(page);
 }
 
 async function setup(page: Page, suffix: string) {
