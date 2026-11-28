@@ -89,13 +89,21 @@ impl Host {
         let mut s=self.lock()?;let w=s.open.get_mut(&handle).ok_or("STALE_HANDLE")?;
         w.raster=None;Ok(())
     }
+    #[cfg(test)]
     pub fn vector_tile(&self,handle:Uuid,id:Uuid,revision:u64,z:u8,x:u32,y:u32)->Result<Vec<u8>>{
+        self.vector_tile_cancel(handle,id,revision,z,x,y,&std::sync::atomic::AtomicBool::new(false))
+    }
+    pub fn vector_tile_cancel(&self,handle:Uuid,id:Uuid,revision:u64,z:u8,x:u32,y:u32,cancel:&std::sync::atomic::AtomicBool)->Result<Vec<u8>>{
+        use std::sync::atomic::Ordering;
+        if cancel.load(Ordering::Acquire){return Err("CANCELLED")}
         if id!=handle{return Err("STALE_HANDLE")}
         let mut s=self.lock()?;let w=s.open.get_mut(&handle).ok_or("STALE_HANDLE")?;
         if revision!=w.generation{return Err("STALE_REVISION")}
         let key=ovg_mobile_engine::viewport::Key{workspace:handle.to_string(),layer:id.to_string(),revision,style:0,zoom:z,x,y};
+        if cancel.load(Ordering::Acquire){return Err("CANCELLED")}
         if let Some(b)=w.cache.get(&key){return Ok(b.to_vec())}
-        let data=crate::mvt::tile(&w._store,z,x,y)?;
+        let data=crate::mvt::tile(&w._store,z,x,y,cancel)?;
+        if cancel.load(Ordering::Acquire){return Err("CANCELLED")}
         let epoch=w.cache.next_epoch().map_err(err)?;
         w.cache.insert(epoch,key,Arc::from(data.clone())).map_err(err)?;
         Ok(data)
