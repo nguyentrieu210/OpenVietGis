@@ -446,7 +446,7 @@ impl ProjectRead<'_> {
             .ok_or_else(|| AppError::internal("ready source requires native CRS"))?;
         let reference = reference_coordinate_wire(4326)
             .ok_or_else(|| AppError::internal("EPSG:4326 must be readable"))?;
-        let transformation = match native {
+        let mut transformation = match native {
             4326 => None,
             _ => Some(
                 reference_transformation(native, 4326).ok_or_else(unsupported_transformation)?,
@@ -477,14 +477,9 @@ impl ProjectRead<'_> {
                 return Err(out_of_area());
             }
             let org = self.tx.organization_id();
-            crate::catalog::regional_crs::verify_regional_source(
-                self.tx.tx_mut(),
-                org,
-                self.project_id,
-                source_id,
-                edge,
-            )
-            .await?;
+            transformation=Some(crate::catalog::regional_crs::verify_regional_source(
+                self.tx.tx_mut(),org,self.project_id,source_id,edge,
+            ).await?);
         }
         let extent = source["extent"].as_object().and_then(|e| {
             Some([

@@ -1,9 +1,9 @@
 //! Regional CRS evidence is derived from immutable reference fixtures and
 //! independently checked one-hop reprojections, never caller assertions.
 use super::db_error;
-use super::fixtures::{materialize_fixture, Provenance};
+use super::fixtures::{materialize_fixture, regional_controls, Provenance};
 use crate::editing::domain::sha256_py_json;
-use ovg_core::crs::{reference_transformation, FixtureRequirement, TransformationProfile};
+use ovg_core::crs::{reference_transformation, regional_datum_transformation, FixtureRequirement, TransformationProfile};
 use ovg_core::AppError;
 use serde_json::{json, Value};
 use sqlx::{Postgres, Row, Transaction};
@@ -22,7 +22,27 @@ fn satisfies(p: Provenance, r: FixtureRequirement) -> bool {
             matches!(p, Provenance::QuangNinhCircular | Provenance::QuangNinhHvs)
         }
         FixtureRequirement::QuangNinhHvs => p == Provenance::QuangNinhHvs,
+        FixtureRequirement::DaNangCircular => p == Provenance::DaNangCircular,
+        FixtureRequirement::HaiPhongCircular => p == Provenance::HaiPhongCircular,
     }
+}
+fn trusted(p:Provenance)->bool {
+    matches!(p,Provenance::QuangNinhCircular|Provenance::QuangNinhHvs|Provenance::DaNangCircular|Provenance::HaiPhongCircular)
+}
+fn effective_profile(p:Provenance,base:&'static TransformationProfile)->Result<&'static TransformationProfile,AppError>{
+    if satisfies(p,base.fixture_requirement){return Ok(base)}
+    let requirement=match p{Provenance::DaNangCircular=>FixtureRequirement::DaNangCircular,Provenance::HaiPhongCircular=>FixtureRequirement::HaiPhongCircular,_=>return Err(outside())};
+    regional_datum_transformation(base.source_code,base.target_code,requirement).ok_or_else(outside)
+}
+async fn check_independent_controls(tx:&mut Transaction<'_,Postgres>,p:Provenance,profile:&TransformationProfile)->Result<(),AppError>{
+    let Some(controls)=regional_controls(p) else{return Ok(())};
+    let input=if profile.source_code==4756{"ST_SetSRID(ST_MakePoint(v.x,v.y),4756)"}else{"ST_SetSRID(ST_MakePoint(v.wx,v.wy),4326)"};
+    let expected=if profile.target_code==4326{"ST_MakePoint(v.wx,v.wy)"}else{"ST_MakePoint(v.x,v.y)"};
+    let expression=profile_expression(profile,input);
+    let pairs=json!(controls.iter().map(|(a,b)|json!({"x":a.0,"y":a.1,"wx":b.0,"wy":b.1})).collect::<Vec<_>>());
+    let sql=format!("SELECT bool_and(ST_Distance(ST_SetSRID({expression},4326)::geography,ST_SetSRID({expected},4326)::geography)<=$2) FROM jsonb_to_recordset($1::jsonb) v(x double precision,y double precision,wx double precision,wy double precision)");
+    let valid:Option<bool>=sqlx::query_scalar(&sql).bind(pairs).bind(profile.tolerance).fetch_one(&mut **tx).await.map_err(db_error)?;
+    if valid!=Some(true){return Err(outside())}Ok(())
 }
 // Geometry expression is an internal SQL alias, and every operation is static.
 pub(crate) fn profile_expression(profile: &TransformationProfile, geometry: &str) -> String {
@@ -134,7 +154,7 @@ async fn verify_reference(
     let content: String = row.try_get("content_revision").map_err(db_error)?;
     let schema: String = row.try_get("schema_revision").map_err(db_error)?;
     if mat.validation_state != "ready"
-        || !satisfies(mat.spec.provenance, FixtureRequirement::QuangNinh)
+        || !trusted(mat.spec.provenance)
         || row
             .try_get::<String, _>("fixture_version")
             .map_err(db_error)?
@@ -196,10 +216,10 @@ pub(crate) async fn verify_regional_source(
     org: Uuid,
     project: Uuid,
     source: Uuid,
-    profile: &TransformationProfile,
-) -> Result<(), AppError> {
+    profile: &'static TransformationProfile,
+) -> Result<&'static TransformationProfile, AppError> {
     if profile.fixture_requirement == FixtureRequirement::None {
-        return Ok(());
+        return Ok(profile);
     }
     let row = sqlx::query(
         "SELECT kind,stored_crs,content_revision,schema_revision,manifest_digest,feature_count
@@ -280,9 +300,8 @@ pub(crate) async fn verify_regional_source(
             profile.source_code,
         )
         .ok_or_else(outside)?;
-        if !satisfies(verified.provenance, prior.fixture_requirement) {
-            return Err(outside());
-        }
+        let prior=effective_profile(verified.provenance,prior)?;
+        check_independent_controls(tx,verified.provenance,prior).await?;
         check_domain(tx, org, project, origin, prior).await?;
         let expr = profile_expression(prior, "f.geometry");
         let sql=format!("WITH expected AS(SELECT f.feature_id,f.attributes,{expr} AS geometry FROM spatial.reference_features f
@@ -314,10 +333,10 @@ pub(crate) async fn verify_regional_source(
     } else {
         return Err(outside());
     };
-    if !satisfies(provenance, profile.fixture_requirement) {
-        return Err(outside());
-    }
-    check_domain(tx, org, project, source, profile).await
+    let profile=effective_profile(provenance,profile)?;
+    check_independent_controls(tx,provenance,profile).await?;
+    check_domain(tx, org, project, source, profile).await?;
+    Ok(profile)
 }
 #[cfg(test)]
 mod tests {

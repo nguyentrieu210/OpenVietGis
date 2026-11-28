@@ -879,7 +879,7 @@ async fn approved_reproject(
                 return Err(EditError::validation("TRANSFORMATION_OUT_OF_AREA","Regional output requires original verified reference fixture; multi-hop regional provenance is not supported"));
             }
         }
-        crate::catalog::regional_crs::verify_regional_source(tx, org, project, source, profile)
+        let profile=crate::catalog::regional_crs::verify_regional_source(tx, org, project, source, profile)
             .await
             .map_err(|error| EditError::Platform {
                 status: error.status_code(),

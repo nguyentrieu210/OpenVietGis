@@ -150,6 +150,11 @@ impl ProjectRead<'_> {
         } else if request.response_crs.is_some() {
             return Err(invalid_request("response CRS requires geometry"));
         }
+        if let Some(candidate)=edge.filter(|e|e.fixture_requirement!=FixtureRequirement::None){
+            if self.gis_scoped{return Err(out_of_area())}
+            let org=self.tx.organization_id();
+            edge=Some(super::regional_crs::verify_regional_source(self.tx.tx_mut(),org,self.project_id,source_id,candidate).await?);
+        }
         let fields = wire["schema"]["fields"]
             .as_array()
             .into_iter()
@@ -187,23 +192,6 @@ impl ProjectRead<'_> {
         request: &FeatureRequest<'_>,
         selection: Selection<'_>,
     ) -> Result<Vec<Value>, AppError> {
-        if let Some(edge) = snapshot
-            .edge
-            .filter(|edge| edge.fixture_requirement != FixtureRequirement::None)
-        {
-            if self.gis_scoped {
-                return Err(out_of_area());
-            }
-            let org = self.tx.organization_id();
-            super::regional_crs::verify_regional_source(
-                self.tx.tx_mut(),
-                org,
-                self.project_id,
-                snapshot.source_id,
-                edge,
-            )
-            .await?;
-        }
         let steps = snapshot.edge.map_or(&[][..], |edge| edge.steps);
         let mut response = if steps.is_empty() {
             "NULL::geometry".to_owned()

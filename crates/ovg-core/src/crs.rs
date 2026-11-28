@@ -310,6 +310,8 @@ pub enum FixtureRequirement {
     None,
     QuangNinh,
     QuangNinhHvs,
+    DaNangCircular,
+    HaiPhongCircular,
 }
 
 /// Fixed PROJ operation strings, identical to the Python reference. Reads run
@@ -484,6 +486,36 @@ static REFERENCE_TRANSFORMATIONS: &[TransformationProfile] = &[
         ..TM3_FORWARD
     },
 ];
+
+// These narrowly bounded alternatives share the datum operation but not the
+// evidence or permitted region. They are selected only after immutable source
+// verification. Keep the legacy R003 registry shape for existing clients.
+const DA_NANG_FORWARD: TransformationProfile = TransformationProfile {
+    validated_area: "Trusted Da Nang bay points DN1-DN3, Circular 46/2025/TT-BXD; not a province boundary or survey claim.",
+    evidence_id: "circular-46-2025-tt-bxd-da-nang",
+    geographic_bounds: CoordinateBounds::new(108.20,16.17,108.29,16.24),
+    tolerance: 3.0,
+    fixture_requirement: FixtureRequirement::DaNangCircular,
+    ..DATUM_FORWARD
+};
+const HAI_PHONG_FORWARD: TransformationProfile = TransformationProfile {
+    validated_area: "Trusted Hai Phong port points HP1-HP3, Circular 49/2025/TT-BXD; not a province boundary or survey claim.",
+    evidence_id: "circular-49-2025-tt-bxd-hai-phong",
+    geographic_bounds: CoordinateBounds::new(106.73,20.62,106.82,20.79),
+    tolerance: 5.0,
+    fixture_requirement: FixtureRequirement::HaiPhongCircular,
+    ..DATUM_FORWARD
+};
+static REGIONAL_DATUM_TRANSFORMATIONS: &[TransformationProfile] = &[
+    DA_NANG_FORWARD,
+    TransformationProfile {source_code:4326,target_code:4756,operation_id:"epsg-6960-inverse",method:"inverse EPSG:6960",steps:&[DATUM_INVERSE_STEP],..DA_NANG_FORWARD},
+    HAI_PHONG_FORWARD,
+    TransformationProfile {source_code:4326,target_code:4756,operation_id:"epsg-6960-inverse",method:"inverse EPSG:6960",steps:&[DATUM_INVERSE_STEP],..HAI_PHONG_FORWARD},
+];
+#[must_use]
+pub fn regional_datum_transformation(source:u32,target:u32,requirement:FixtureRequirement)->Option<&'static TransformationProfile>{
+    REGIONAL_DATUM_TRANSFORMATIONS.iter().find(|p|p.source_code==source&&p.target_code==target&&p.fixture_requirement==requirement)
+}
 
 /// Look up a directed operation. Identity reads and inferred paths are excluded.
 #[must_use]
