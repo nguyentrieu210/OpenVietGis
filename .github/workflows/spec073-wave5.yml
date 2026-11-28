@@ -1,0 +1,41 @@
+name: SPEC 073 W5 plugin contracts
+on:
+  push:
+    branches: ["073-native-mobile-platform"]
+    paths: ["packages/flutter-plugin-sdk/**", "apps/api-rust/src/extensions/mobile_v2.rs", "modules/house_numbering/mobile/**", "modules/mobile_reference_sample/**", ".github/workflows/spec073-wave5.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sdk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Pinned Dart SDK
+        run: |
+          git init "$RUNNER_TEMP/flutter"
+          git -C "$RUNNER_TEMP/flutter" remote add origin https://github.com/flutter/flutter.git
+          git -C "$RUNNER_TEMP/flutter" fetch --depth=1 origin refs/tags/3.50.0:refs/tags/3.50.0
+          git -C "$RUNNER_TEMP/flutter" checkout --detach refs/tags/3.50.0
+          test "$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)" = ab2912035e160d9cad6306df307576da6128ebdb
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - name: Plugin SDK validation and adversarial tests
+        working-directory: packages/flutter-plugin-sdk
+        run: |
+          dart pub get
+          dart analyze
+          dart test
+  server:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: V1 unchanged and V2 independent fixture
+        run: |
+          cargo test --locked -p openvietgis-api-rust --lib extensions::mobile_v2::tests
+          cargo test --locked -p openvietgis-api-rust --lib extensions::validation::tests
