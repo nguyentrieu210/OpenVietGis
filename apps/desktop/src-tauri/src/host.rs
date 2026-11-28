@@ -19,7 +19,7 @@ pub struct Opened { pub id: Uuid, pub handle: Uuid }
 #[derive(Serialize)]
 #[serde(tag="status", rename_all="snake_case")]
 pub enum Poll { Pending, Complete { xy: Vec<f64> } }
-struct Open { engine: Workspace, _store: LocalStore, project: Uuid, generation: u64, raster: Option<(Uuid,ovg_local_storage::mbtiles::Archive)> }
+struct Open { engine: Workspace, _store: LocalStore, project: Uuid, generation: u64, cache: ovg_mobile_engine::viewport::Cache, raster: Option<(Uuid,ovg_local_storage::mbtiles::Archive)> }
 struct TrackedJob { handle: Uuid, job: Job }
 struct State { session: Session, open: HashMap<Uuid,Open>, jobs: HashMap<Uuid,TrackedJob> }
 #[derive(Clone)]
@@ -59,7 +59,7 @@ impl Host {
     fn mutate<T>(&self,handle:Uuid,f:impl FnOnce(&LocalStore)->Result<T>)->Result<T>{
         let mut s=self.lock()?;let w=s.open.get_mut(&handle).ok_or("STALE_HANDLE")?;
         let next=w.generation.checked_add(1).ok_or("RESOURCE_LIMIT")?;
-        let out=f(&w._store)?;w.generation=next;Ok(out)
+        let out=f(&w._store)?;w.generation=next;w.cache.invalidate_layer(&handle.to_string(),&handle.to_string());Ok(out)
     }
     // Session-scoped, explicitly selected raster archive. No persistent path grants.
     pub fn open_raster(&self,handle:Uuid,path:&Path)->Result<Raster>{
@@ -85,6 +85,29 @@ impl Host {
     pub fn close_raster(&self,handle:Uuid)->Result<()>{
         let mut s=self.lock()?;let w=s.open.get_mut(&handle).ok_or("STALE_HANDLE")?;
         w.raster=None;Ok(())
+    }
+    pub fn vector_tile(&self,handle:Uuid,id:Uuid,revision:u64,z:u8,x:u32,y:u32)->Result<Vec<u8>>{
+        if id!=handle{return Err("STALE_HANDLE")}
+        let mut s=self.lock()?;let w=s.open.get_mut(&handle).ok_or("STALE_HANDLE")?;
+        if revision!=w.generation{return Err("STALE_REVISION")}
+        let key=ovg_mobile_engine::viewport::Key{workspace:handle.to_string(),layer:id.to_string(),revision,style:0,zoom:z,x,y};
+        if let Some(b)=w.cache.get(&key){return Ok(b.to_vec())}
+        let data=crate::mvt::tile(&w._store,z,x,y)?;
+        let epoch=w.cache.next_epoch().map_err(err)?;
+        w.cache.insert(epoch,key,Arc::from(data.clone())).map_err(err)?;
+        Ok(data)
+    }
+    pub fn tilejson(&self,handle:Uuid,id:Uuid,revision:u64)->Result<Vec<u8>>{
+        if id!=handle{return Err("STALE_HANDLE")}
+        self.read(handle,|w|{
+            if revision!=w.generation{return Err("STALE_REVISION")}
+            serde_json::to_vec(&json!({"tilejson":"3.0.0","name":"local","minzoom":0,"maxzoom":22,
+              "tiles":[format!("ovg://v1/workspaces/{handle}/layers/{id}/revisions/{revision}/tiles/{{z}}/{{x}}/{{y}}.mvt")],
+              "vector_layers":[{"id":"local","fields":{"stable_id":"String"},"minzoom":0,"maxzoom":22}]})).map_err(|_|"INVALID_LOCAL_DATA")
+        })
+    }
+    pub fn import_gpkg(&self,handle:Uuid,path:&Path)->Result<u32>{
+        self.mutate(handle,|s|crate::gpkg_import::import(s,path))
     }
     pub fn generation(&self,handle:Uuid)->Result<String>{self.read(handle,|w|Ok(w.generation.to_string()))}
     pub fn viewport(&self,handle:Uuid,bbox:[f64;4])->Result<Viewport>{
@@ -219,7 +242,7 @@ impl Host {
         let store=LocalStore::open(&path,QUOTA).map_err(|_|"STORAGE_UNAVAILABLE")?;
         let workspace=self.engine.open_workspace(s.session).map_err(err)?;
         let handle=Uuid::new_v4();
-        s.open.insert(handle,Open{engine:workspace,_store:store,project:id,generation:0,raster:None});
+        s.open.insert(handle,Open{engine:workspace,_store:store,project:id,generation:0,cache:ovg_mobile_engine::viewport::Cache::new(16*1024*1024).map_err(err)?,raster:None});
         Ok(Opened{id,handle})
     }
     pub fn close(&self,handle:Uuid)->Result<()> {
