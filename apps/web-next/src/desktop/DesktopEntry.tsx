@@ -68,6 +68,8 @@ export default function DesktopEntry(){
         <h2>Dự án cục bộ</h2>
         <button disabled={!caps||busy} onClick={()=>void execute(create)}>Tạo dự án</button>
         <button disabled={!caps||busy} onClick={()=>void execute(async()=>{const p=await desktop.restoreSnapshot();if(p){await refresh();await open(p.id)}})}>Khôi phục bản sao GPKG</button>
+        <button disabled={!caps||busy} onClick={()=>void execute(async()=>{const p=await desktop.restoreProject();if(p){await refresh();await open(p.id)}})}>Khôi phục dự án nhiều lớp</button>
+        <button disabled={!opened||busy} onClick={()=>void execute(async()=>{if(opened)await desktop.backupProject(opened.handle)})}>Sao lưu toàn bộ dự án</button>
         <button disabled={!caps||busy} onClick={()=>void execute(refresh)}>Làm mới</button>
         <ul>{projects.map(p=><li key={p.id}><button title={p.id} disabled={busy} aria-current={opened?.id===p.id} onClick={()=>void execute(()=>open(p.id))}>{p.id.slice(0,8)}</button></li>)}</ul>
         <button disabled={!opened||busy} onClick={()=>void execute(close)}>Đóng dự án</button>
