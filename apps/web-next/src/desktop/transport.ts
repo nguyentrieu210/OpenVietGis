@@ -2,7 +2,7 @@ export type Capabilities = {protocol_version:number; standalone:boolean; managed
 export type Project = {id:string};
 export type Opened = {id:string; handle:string};
 export type Poll = {status:"pending"} | {status:"complete";xy:number[]};
-export type AssetInfo={id:string;kind:"cad"|"las"|"glb";count:number;epsg:number|null};
+export type AssetInfo={id:string;kind:"cad"|"las"|"laz"|"copc"|"glb";count:number;epsg:number|null};
 export type Attributes = Record<string,unknown>;
 export type FeatureRow = {fid:string;id:string;revision:string;attributes:Attributes};
 export type FeatureRecord = {id:string;revision:string;attributes:Attributes;geometry:unknown};
@@ -50,7 +50,7 @@ export const desktop={
   importGPKG:(handle:string)=>host().core.invoke<number|null>("desktop_import_gpkg",{handle}),
   importGeoJSON:(handle:string)=>host().core.invoke<number|null>("desktop_import_geojson",{handle}),
   exportFile:(handle:string,format:"geojson"|"gpkg")=>host().core.invoke<boolean>("desktop_export",{handle,format}),
-  openAsset:(handle:string,kind:"cad"|"las"|"glb",epsg:number|null)=>host().core.invoke<AssetInfo|null>("desktop_open_asset",{handle,kind,epsg}),
+  openAsset:(handle:string,kind:"cad"|"las"|"laz"|"copc"|"glb",epsg:number|null)=>host().core.invoke<AssetInfo|null>("desktop_open_asset",{handle,kind,epsg}),
   cadViewport:async(handle:string,id:string,bbox:[number,number,number,number]):Promise<GeoJSON.FeatureCollection>=>{
     const raw=await host().core.invoke<ArrayBuffer|number[]>("desktop_cad_viewport",{handle,id,bbox});
     const b=raw instanceof ArrayBuffer?new Uint8Array(raw):Uint8Array.from(raw);
@@ -58,6 +58,12 @@ export const desktop={
     const v=JSON.parse(new TextDecoder("utf-8",{fatal:true}).decode(b)) as GeoJSON.FeatureCollection;
     if(v.type!=="FeatureCollection"||!Array.isArray(v.features)||v.features.length>512)throw Error("INVALID_VIEWPORT");
     return v;
+  },
+  copcQuery:async(handle:string,id:string,bounds:[number,number,number,number,number,number],level:number)=>{
+    const raw=await host().core.invoke<ArrayBuffer|number[]>("desktop_copc_query",{handle,id,bounds,level});
+    const b=raw instanceof ArrayBuffer?raw:Uint8Array.from(raw).buffer;
+    if(b.byteLength>2048*24||b.byteLength%24)throw Error("INVALID_POINT_CHUNK");
+    return b;
   },
   closeAsset:(handle:string,id:string)=>host().core.invoke<void>("desktop_close_asset",{handle,id}),
   openRaster:(handle:string)=>host().core.invoke<{id:string;attribution:string}|null>("desktop_open_raster",{handle}),
