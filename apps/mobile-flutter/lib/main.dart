@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'native_map.dart';
+import 'export_cache.dart';
 import 'survey_page.dart';
 import 'attribute_page.dart';
 import 'processing_page.dart';
@@ -38,7 +39,15 @@ final router=GoRouter(routes:[
 ]);
 void main(){
   WidgetsFlutterBinding.ensureInitialized();
+  unawaited(cleanOldExports());
   runApp(const ProviderScope(child:OpenVietGis()));
+}
+Future<void> cleanOldExports() async {
+  try {
+    await pruneExportCache(await getTemporaryDirectory());
+  } catch (_) {
+    // Cache cleanup must not prevent local workspace startup.
+  }
 }
 class OpenVietGis extends StatelessWidget {
   const OpenVietGis({super.key});
@@ -141,12 +150,11 @@ Future<void> exportFile(BuildContext context,WorkspaceController c)async{
     if(confirm!=true)return;
     if(c.selected!=workspace)throw StateError('WORKSPACE_CHANGED');
     final json=await c.exportGeojson();
-    final dir=await (await getTemporaryDirectory()).createTemp('ovg-export-');
-    final f=await File('${dir.path}/workspace.geojson').writeAsString(json,flush:true);
+    final f=await stageGeojsonExport(await getTemporaryDirectory(),json);
     // Share is explicit; platform-specific recipient copies are outside app ownership.
     await Share.shareXFiles([XFile(f.path,mimeType:'application/geo+json')]);
   }catch(_){if(context.mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(tr(vi,'Không thể xuất bộ dữ liệu này','Unable to export this dataset'))));}
-  // Do not delete while the share target may still be reading; OS cache cleanup.
+  // A share target may still be reading. Prune app-owned cache on a later launch.
 }
 
 class SurveyRoute extends ConsumerWidget{

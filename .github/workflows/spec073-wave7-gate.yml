@@ -1,0 +1,28 @@
+name: SPEC 073 W7 gate audit
+on:
+  push:
+    branches: ["073-native-mobile-platform"]
+    paths: ["infra/mobile/release/**", ".github/workflows/spec073-wave7-gate.yml", "specs/073-native-mobile-platform/execution-matrix.md"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - run: python3 -m unittest discover -s infra/mobile/release -p 'test_*.py'
+      - name: Verify fail-closed candidate status
+        run: |
+          mkdir -p "$RUNNER_TEMP/w7-audit"
+          rc=0
+          python3 infra/mobile/release/check_gate.py --root specs/073-native-mobile-platform --sha "$GITHUB_SHA" --out "$RUNNER_TEMP/w7-audit/gate.json" || rc=$?
+          test "$rc" = 2
+          python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); assert r["release_authorized"] is False; assert r["android_evidence_complete"] is False; print("Gate fails closed as expected")' "$RUNNER_TEMP/w7-audit/gate.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: w7-audit-not-release
+          path: ${{ runner.temp }}/w7-audit

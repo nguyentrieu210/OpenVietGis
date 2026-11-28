@@ -118,3 +118,6 @@ See [W5 checkpoint](w5-implementation-checkpoint.md). SDK/host Rust v1/v2 and ho
 
 ## W6 source implementation
 See [W6 checkpoint](w6-implementation-checkpoint.md). Scoped SDK and entitlement server tests passed. Local Rust and Flutter candidate builds still pending. No parent or leaf accepted.
+
+## W7 release candidate
+See [W7 checkpoint](w7-implementation-checkpoint.md). Gate audit PASS; release intentionally blocked. No acceptance checked.

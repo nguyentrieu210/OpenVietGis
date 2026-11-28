@@ -74,7 +74,9 @@ class WorkspaceController extends ChangeNotifier{
   }
   Future<String> exportGeojson()async{
     final w=_workspace;if(w==null||busy||!ready)throw StateError('WORKSPACE_UNAVAILABLE');
-    return w.exportGeojson();
+    busy=true;error=null;_notify();
+    try{return await w.exportGeojson();}
+    finally{busy=false;_notify();}
   }
   NativeWorkspace get local{final w=_workspace;if(w==null||!ready)throw StateError('NO_WORKSPACE');return w;}
   Future<String> draw(String kind,List<double> xy,Map<String,dynamic> attributes)async{
