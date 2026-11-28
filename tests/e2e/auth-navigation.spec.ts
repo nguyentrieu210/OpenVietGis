@@ -14,6 +14,12 @@ test("public landing and login modal are separate surfaces", async ({ page }) =>
   const auth = await popupPromise;
   await expect(page.getByRole("dialog", { name: "Tài khoản OpenVietGIS" })).toBeVisible();
   await expect(auth.locator("#username")).toBeVisible();
+  const apiPort =
+    process.env.OPENVIETGIS_E2E_API_PORT ??
+    process.env.OVG_E2E_API_PORT ??
+    "8000";
+  const expectedCallback = `http://127.0.0.1:${apiPort}/api/v1/auth/callback/keycloak`;
+  expect(new URL(auth.url()).searchParams.get("redirect_uri")).toBe(expectedCallback);
   await auth.close();
   await expect(page).toHaveURL("/");
 });
