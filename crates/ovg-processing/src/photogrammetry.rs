@@ -5,6 +5,7 @@ pub mod governor;
 pub mod quality;
 pub mod hardware;
 pub mod tiles;
+pub mod admission;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
