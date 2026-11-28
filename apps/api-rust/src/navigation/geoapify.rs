@@ -1,5 +1,5 @@
 //! Hosted backend adapter. Never return provider request metadata or raw errors.
-use super::{invalid, point, request, unavailable, ApiError};
+use super::{invalid, point, request_status, unavailable, ApiError, UpstreamError};
 use axum::Json;
 use serde_json::{json, Value};
 use std::{
@@ -17,6 +17,8 @@ struct Limits {
     count: u32,
     day: u64,
     daily: u32,
+    auth_blocked: [Option<Instant>; 2],
+    quota_blocked: Option<Instant>,
     cache: HashMap<String, (Instant, Value)>,
 }
 static LIMITS: LazyLock<Mutex<Limits>> = LazyLock::new(|| {
@@ -25,6 +27,8 @@ static LIMITS: LazyLock<Mutex<Limits>> = LazyLock::new(|| {
         count: 0,
         day: 0,
         daily: 0,
+        auth_blocked: [None; 2],
+        quota_blocked: None,
         cache: HashMap::new(),
     })
 });
@@ -39,18 +43,23 @@ pub(super) fn enabled() -> Result<bool, ApiError> {
         _ => Err(unavailable()),
     }
 }
-fn key() -> Result<String, ApiError> {
-    let raw = if let Some(path) = std::env::var("OVG_GEOAPIFY_API_KEY_FILE")
-        .ok()
-        .filter(|p| !p.is_empty())
-    {
+fn key(slot: usize) -> Result<String, ApiError> {
+    let (file_var, env_var) = if slot == 0 {
+        ("OVG_GEOAPIFY_API_KEY_FILE", "OVG_GEOAPIFY_API_KEY")
+    } else {
+        (
+            "OVG_GEOAPIFY_BACKUP_API_KEY_FILE",
+            "OVG_GEOAPIFY_BACKUP_API_KEY",
+        )
+    };
+    let raw = if let Some(path) = std::env::var(file_var).ok().filter(|p| !p.is_empty()) {
         let meta = std::fs::metadata(&path).map_err(|_| unavailable())?;
         if !meta.is_file() || meta.len() > 1024 {
             return Err(unavailable());
         }
         std::fs::read_to_string(path).map_err(|_| unavailable())?
     } else {
-        std::env::var("OVG_GEOAPIFY_API_KEY").map_err(|_| unavailable())?
+        std::env::var(env_var).map_err(|_| unavailable())?
     };
     let key = raw.trim();
     if key.is_empty()
@@ -83,40 +92,83 @@ fn admit(limits: &mut Limits, now: Instant, day: u64, daily_max: u32, cost: u32)
     limits.daily += cost;
     true
 }
-async fn fetch(mut url: Url, route: bool) -> Result<Json<Value>, ApiError> {
-    // Cache keys are generated before adding credentials; only normalized data is retained.
+fn eligible(limits: &Limits, slot: usize, now: Instant) -> bool {
+    !limits.auth_blocked[slot].is_some_and(|until| until > now)
+}
+fn record_failure(limits: &mut Limits, slot: usize, status: u16, now: Instant) {
+    match status {
+        401 => limits.auth_blocked[slot] = Some(now + Duration::from_secs(300)),
+        429 => limits.quota_blocked = Some(now + Duration::from_secs(60)),
+        _ => {}
+    }
+}
+fn quota_open(limits: &Limits, now: Instant) -> bool {
+    !limits.quota_blocked.is_some_and(|until| until > now)
+}
+async fn fetch(url: Url, route: bool) -> Result<Json<Value>, ApiError> {
+    // Shared across both credentials: no quota-based key rotation.
     let cache_key = url.as_str().to_owned();
-    let now = Instant::now();
-    let secret = key()?;
     {
         let mut limits = LIMITS.lock().map_err(|_| unavailable())?;
+        let now = Instant::now();
         limits.cache.retain(|_, (expires, _)| *expires > now);
         if let Some((_, value)) = limits.cache.get(&cache_key) {
             return Ok(Json(value.clone()));
         }
-        let day = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|_| unavailable())?
-            .as_secs()
-            / 86400;
-        let daily_max = std::env::var("OVG_GEOAPIFY_MAX_REQUESTS_PER_DAY")
-            .ok()
-            .and_then(|n| n.parse::<u32>().ok())
-            .unwrap_or(2000)
-            .min(2000);
-        let cost = if route { 10 } else { 1 };
-        if !admit(&mut limits, now, day, daily_max, cost) {
-            return Err(ovg_core::AppError::rate_limited(Some(1)).into());
+        if !quota_open(&limits, now) {
+            return Err(ovg_core::AppError::rate_limited(Some(60)).into());
         }
     }
-    url.query_pairs_mut().append_pair("apiKey", &secret);
-    let raw = request(url).await?;
-    let value = if route {
-        normalize_route(&raw)?
-    } else {
-        normalize_places(&raw)?
-    };
-    {
+    let primary = key(0).ok();
+    let standby = key(1).ok().filter(|s| Some(s) != primary.as_ref());
+    let daily_max = std::env::var("OVG_GEOAPIFY_MAX_REQUESTS_PER_DAY")
+        .ok()
+        .and_then(|n| n.parse::<u32>().ok())
+        .unwrap_or(2000)
+        .min(2000);
+    let day = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| unavailable())?
+        .as_secs()
+        / 86400;
+    let cost = if route { 10 } else { 1 };
+    for (slot, secret) in [primary, standby].into_iter().enumerate() {
+        let Some(secret) = secret else { continue };
+        {
+            let mut limits = LIMITS.lock().map_err(|_| unavailable())?;
+            let now = Instant::now();
+            if !quota_open(&limits, now) {
+                return Err(ovg_core::AppError::rate_limited(Some(60)).into());
+            }
+            if !eligible(&limits, slot, now) {
+                continue;
+            }
+            if !admit(&mut limits, now, day, daily_max, cost) {
+                return Err(ovg_core::AppError::rate_limited(Some(1)).into());
+            }
+        }
+        let mut target = url.clone();
+        target.query_pairs_mut().append_pair("apiKey", &secret);
+        let raw = match request_status(target).await {
+            Ok(v) => v,
+            Err(UpstreamError::Http(status)) => {
+                {
+                    let mut limits = LIMITS.lock().map_err(|_| unavailable())?;
+                    record_failure(&mut limits, slot, status, Instant::now());
+                }
+                if status == 401 {
+                    continue;
+                }
+                // 429 is ambiguous (rate or daily quota) and never rotates credentials.
+                return Err(UpstreamError::Http(status).into_api());
+            }
+            Err(e) => return Err(e.into_api()),
+        };
+        let value = if route {
+            normalize_route(&raw)?
+        } else {
+            normalize_places(&raw)?
+        };
         let mut limits = LIMITS.lock().map_err(|_| unavailable())?;
         if limits.cache.len() >= CACHE_CAPACITY {
             limits.cache.clear();
@@ -126,8 +178,9 @@ async fn fetch(mut url: Url, route: bool) -> Result<Json<Value>, ApiError> {
             cache_key,
             (Instant::now() + Duration::from_secs(ttl), value.clone()),
         );
+        return Ok(Json(value));
     }
-    Ok(Json(value))
+    Err(unavailable())
 }
 pub(super) async fn places(
     path: &str,
@@ -398,6 +451,8 @@ mod tests {
             count: 0,
             day: 10,
             daily: 0,
+            auth_blocked: [None; 2],
+            quota_blocked: None,
             cache: HashMap::new(),
         };
         for _ in 0..4 {
@@ -407,5 +462,28 @@ mod tests {
         assert!(admit(&mut limits, now + Duration::from_secs(1), 10, 5, 1));
         assert!(!admit(&mut limits, now + Duration::from_secs(2), 10, 5, 1));
         assert!(admit(&mut limits, now + Duration::from_secs(2), 11, 5, 1));
+    }
+    #[test]
+    fn auth_failure_blocks_only_failed_key_but_quota_blocks_both() {
+        let now = Instant::now();
+        let mut limits = Limits {
+            second: now,
+            count: 0,
+            day: 10,
+            daily: 0,
+            auth_blocked: [None; 2],
+            quota_blocked: None,
+            cache: HashMap::new(),
+        };
+        record_failure(&mut limits, 0, 401, now);
+        assert!(!eligible(&limits, 0, now));
+        assert!(eligible(&limits, 1, now));
+        assert!(quota_open(&limits, now));
+        assert!(eligible(&limits, 0, now + Duration::from_secs(301)));
+        record_failure(&mut limits, 1, 429, now);
+        assert!(!quota_open(&limits, now));
+        assert!(quota_open(&limits, now + Duration::from_secs(61)));
+        assert!(admit(&mut limits, now, 10, 1, 1));
+        assert!(!admit(&mut limits, now + Duration::from_secs(1), 10, 1, 1));
     }
 }

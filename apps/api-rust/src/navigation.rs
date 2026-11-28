@@ -43,7 +43,29 @@ fn endpoint(env: &str, path: &str) -> Result<Url, ApiError> {
     url.set_path(path);
     Ok(url)
 }
+#[derive(Debug)]
+enum UpstreamError {
+    Http(u16),
+    Transport(ApiError),
+}
+impl From<ApiError> for UpstreamError {
+    fn from(e: ApiError) -> Self {
+        Self::Transport(e)
+    }
+}
+impl UpstreamError {
+    fn into_api(self) -> ApiError {
+        match self {
+            Self::Http(429) => AppError::rate_limited(Some(60)).into(),
+            Self::Http(_) => unavailable(),
+            Self::Transport(e) => e,
+        }
+    }
+}
 async fn request(url: Url) -> Result<Value, ApiError> {
+    request_status(url).await.map_err(UpstreamError::into_api)
+}
+async fn request_status(url: Url) -> Result<Value, UpstreamError> {
     let _permit = REQUESTS
         .try_acquire()
         .map_err(|_| ApiError::from(AppError::rate_limited(Some(1))))?;
@@ -51,7 +73,6 @@ async fn request(url: Url) -> Result<Value, ApiError> {
         .args([
             "-q",
             "--silent",
-            "--fail",
             "--globoff",
             "--proto",
             "=http,https",
@@ -61,6 +82,8 @@ async fn request(url: Url) -> Result<Value, ApiError> {
             "8",
             "--max-filesize",
             "2097152",
+            "--write-out",
+            "\n%{http_code}",
             "--config",
             "-",
         ])
@@ -99,7 +122,18 @@ async fn request(url: Url) -> Result<Value, ApiError> {
     .map_err(|_| unavailable())?
     .map_err(|_| unavailable())?
     .ok_or_else(unavailable)?;
-    serde_json::from_slice(&data).map_err(|_| unavailable())
+    let split = data.len().checked_sub(4).ok_or_else(unavailable)?;
+    if data[split] != b'\n' {
+        return Err(unavailable().into());
+    }
+    let status = std::str::from_utf8(&data[split + 1..])
+        .ok()
+        .and_then(|s| s.parse::<u16>().ok())
+        .ok_or_else(unavailable)?;
+    if !(200..300).contains(&status) {
+        return Err(UpstreamError::Http(status));
+    }
+    serde_json::from_slice(&data[..split]).map_err(|_| unavailable().into())
 }
 #[derive(Deserialize)]
 struct Search {
