@@ -57,6 +57,33 @@ const MODULES: &[(&str, &str)] = &[
     ),
 ];
 
+/// The production runtime intentionally uses Debian bookworm's system Python 3.11
+/// for the isolated format worker. Canonical Python sources are developed on a
+/// newer interpreter and may contain PEP 695 type aliases. The worker only
+/// needs those names for postponed annotations, so generate a syntax-compatible
+/// private copy without weakening the canonical source tree.
+fn worker_python_311_source(source: &str) -> String {
+    source
+        .lines()
+        .map(|line| {
+            let Some(alias) = line.strip_prefix("type ") else {
+                return line.to_owned();
+            };
+            let Some((name, rhs)) = alias.split_once(" = ") else {
+                return line.to_owned();
+            };
+            if name == "CoordinateTree" {
+                // Recursive alias syntax cannot be evaluated by Python 3.11;
+                // every use in the embedded domain module is annotation-only.
+                format!("{name} = tuple")
+            } else {
+                format!("{name} = {rhs}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 const PACKAGE_INITS: &[&str] = &[
     "openvietgis_api/__init__.py",
     "openvietgis_api/domains/__init__.py",
@@ -256,7 +283,7 @@ async fn create_scratch() -> Result<WorkerScratch, WorkerError> {
                 .await
                 .map_err(|_| unavailable("offline scratch write failed"))?;
         }
-        tokio::fs::write(&file, source)
+        tokio::fs::write(&file, worker_python_311_source(source))
             .await
             .map_err(|_| unavailable("offline scratch write failed"))?;
     }
@@ -433,6 +460,17 @@ pub(crate) async fn validate_ops(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn embedded_sources_are_python_311_syntax_compatible() {
+        for (_, source) in MODULES {
+            let compatible = worker_python_311_source(source);
+            assert!(!compatible.lines().any(|line| line.starts_with("type ")));
+            if source.contains("type CoordinateTree =") {
+                assert!(compatible.lines().any(|line| line == "CoordinateTree = tuple"));
+            }
+        }
+    }
 
     #[tokio::test]
     async fn build_and_validate_offline_package_round_trip() {

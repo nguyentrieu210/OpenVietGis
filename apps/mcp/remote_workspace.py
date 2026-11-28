@@ -1,13 +1,14 @@
 """Same-origin GIS session validation and live-workspace ownership, no database access."""
 from __future__ import annotations
+
 import asyncio
-import secrets
 import time
-from dataclasses import dataclass,field
+from dataclasses import dataclass, field
 from uuid import UUID
 
 import httpx
-from live_bridge import BridgeStore, BridgeError
+from live_bridge import BridgeError, BridgeStore
+
 
 @dataclass(frozen=True)
 class Owner:
@@ -57,11 +58,12 @@ class OwnedSession:
     owner: Owner
     ai_key: str = field(repr=False)
     full_workspace: int = 0
+    mode: str = "gis"
     last_receipt: tuple[str, dict] | None = field(default=None, repr=False)
 
 
 class OwnedBridge:
-    """At most one live tab per linked identity. Pair secrets never leave server."""
+    """Bounded live tabs per identity. Pair secrets never leave server."""
     def __init__(self, store=None):
         self.store=store or BridgeStore()
         self.owned:dict[str,OwnedSession]={}
@@ -72,16 +74,15 @@ class OwnedBridge:
             if sid not in self.store.sessions:
                 del self.owned[sid]
 
-    def create(self, owner, full_workspace=False):
+    def create(self, owner, full_workspace=False, mode="gis"):
+        if mode not in {"gis","cad","3d"}:
+            raise BridgeError(422,"Invalid workspace mode")
         with self.store.lock:
             self._prune()
-            # A fresh explicit connection replaces the old tab for this identity.
-            for sid,record in list(self.owned.items()):
-                if record.owner.subject==owner.subject:
-                    del self.owned[sid]
-                    del self.store.sessions[sid]
+            if sum(1 for record in self.owned.values() if record.owner.subject==owner.subject)>=8:
+                raise BridgeError(429,"Workspace capacity reached")
             data=self.store.create()
-            self.owned[data["session_id"]]=OwnedSession(owner,data.pop("ai_token"),full_workspace)
+            self.owned[data["session_id"]]=OwnedSession(owner,data.pop("ai_token"),full_workspace,mode)
             return data
 
     def owned_by(self,sid,owner,browser_token):
@@ -102,18 +103,51 @@ class OwnedBridge:
                 raise BridgeError(404,"Workspace not connected")
             return record.owner
 
-    def for_subject(self,subject):
+    def for_subject(self,subject,target=None):
         with self.store.lock:
             self._prune()
+            if target is not None:
+                try:
+                    target=str(UUID(str(target)))
+                except (ValueError,TypeError,AttributeError):
+                    raise BridgeError(422,"Invalid workspace session") from None
+                record=self.owned.get(target)
+                if not record or record.owner.subject!=subject:
+                    raise BridgeError(404,"Workspace not connected")
+                return target,record.ai_key
             matches=[(sid,r.ai_key) for sid,r in self.owned.items() if r.owner.subject==subject]
-            if len(matches)!=1:
+            if not matches:
                 raise BridgeError(404,"Open and connect your GIS workspace first")
+            if len(matches)!=1:
+                raise BridgeError(409,"Multiple workspaces connected; supply session_id")
             return matches[0]
 
-    def operation_status(self,subject,ticket):
+    def list_subject(self,subject):
+        with self.store.lock:
+            self._prune();now=self.store.clock();rows=[]
+            for sid,record in self.owned.items():
+                if record.owner.subject!=subject: continue
+                session=self.store.sessions.get(sid)
+                if session:
+                    rows.append({"session_id":sid,"organization_id":record.owner.organization_id,
+                        "project_id":record.owner.project_id,"workspace_version":int(record.full_workspace),
+                        "mode":record.mode,"expires_in":max(0,round(session.expires-now))})
+            return sorted(rows,key=lambda row:row["session_id"])
+
+    def set_mode(self,sid,owner,browser_token,mode):
+        if mode not in {"gis","cad","3d"}: raise BridgeError(422,"Invalid workspace mode")
+        self.owned_by(sid,owner,browser_token).mode=mode
+
+    @staticmethod
+    def mode_allows(mode,method):
+        if method.startswith("cad_"): return mode=="cad"
+        if method.startswith("map_"): return mode=="gis"
+        return mode!="cad"
+
+    def operation_status(self,subject,ticket,target=None):
         from advanced_tools import LONG
         with self.store.lock:
-            sid,key=self.for_subject(subject)
+            sid,key=self.for_subject(subject,target)
             session=self.store._get(sid,key,"ai")
             record=self.owned[sid]
             if record.last_receipt and record.last_receipt[0]==ticket:
@@ -125,16 +159,19 @@ class OwnedBridge:
                 record.last_receipt=(ticket,result)
             return result
 
-    async def execute(self,subject,method,params,token_expiry):
+    async def execute(self,subject,method,params,token_expiry,target=None):
         with self.store.lock:
-            sid,key=self.for_subject(subject)
+            sid,key=self.for_subject(subject,target)
             if token_expiry<=time.time():
                 raise BridgeError(401,"OAuth token expired")
+            record=self.owned[sid]
+            if not self.mode_allows(record.mode,method):
+                raise BridgeError(409,"Tool is not available in the active workspace mode")
             from workspace_tools import METHODS as WORKSPACE_METHODS
-            if method in WORKSPACE_METHODS and (sid not in self.owned or not self.owned[sid].full_workspace):
+            if method in WORKSPACE_METHODS and (sid not in self.owned or not record.full_workspace):
                 raise BridgeError(409,"Update the GIS tab to connect full workspace tools")
-            from advanced_tools import TOOLS,LONG
-            if method in TOOLS and self.owned[sid].full_workspace<2:
+            from advanced_tools import LONG, TOOLS
+            if (method in TOOLS or method.startswith("cad_")) and record.full_workspace<2:
                 raise BridgeError(409,"Update the GIS tab to connect advanced workspace tools")
             cid=self.store.submit(sid,key,method,params)["command_id"]
             c=self.store.sessions[sid].command

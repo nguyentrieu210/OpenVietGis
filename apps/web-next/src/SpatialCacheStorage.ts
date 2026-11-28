@@ -5,7 +5,7 @@ const DB="ovg-spatial-cache-v1", STORE="layers";
 const MAX_AGE=24*60*60*1000, MAX_ROWS=20000, MAX_BYTES=24*1024*1024, TOTAL_BYTES=96*1024*1024;
 export type CacheScope={account:string;org:string;project:string};
 export type CachedRow=Pick<StudioRow,"feature"|"geometry">;
-export type CacheEntry={key:string;scope:CacheScope;layer:SpatialLayer;rows:CachedRow[];saved:number;bytes:number};
+export type CacheEntry={key:string;scope:CacheScope;layer:SpatialLayer;rows:CachedRow[];saved:number;bytes:number;permissionKey?:string};
 const key=(s:CacheScope,l:string)=>JSON.stringify([s.account,s.org,s.project,l]);
 let opening:Promise<IDBDatabase>|undefined;
 function db(){
@@ -30,14 +30,14 @@ export async function readCache(scope:CacheScope,layerId:string):Promise<CacheEn
 }
 let queue:Promise<unknown>=Promise.resolve();
 function serialized(fn:()=>Promise<void>){const task=queue.then(fn,fn);queue=task.catch(()=>{});return task.catch(()=>{})}
-export function writeCache(scope:CacheScope,layer:SpatialLayer,rows:CachedRow[]){
-  if(rows.length!==layer.source.feature_count||rows.length>MAX_ROWS)return Promise.resolve();
+export function writeCache(scope:CacheScope,layer:SpatialLayer,rows:CachedRow[],permissionKey:string){
+  if(!permissionKey||layer.organization_id!==scope.org||layer.project_id!==scope.project||rows.length!==layer.source.feature_count||rows.length>MAX_ROWS)return Promise.resolve();
   return serialized(async()=>{
     const payload=rows;
     // Measure off the input event path. An oversized snapshot is never persisted.
     const bytes=new Blob([JSON.stringify(payload)]).size;
     if(bytes>MAX_BYTES)return;
-    const entry:CacheEntry={key:key(scope,layer.id),scope,layer,rows:payload,saved:Date.now(),bytes};
+    const entry:CacheEntry={key:key(scope,layer.id),scope,layer,rows:payload,saved:Date.now(),bytes,permissionKey};
     const d=await db();
     await new Promise<void>((resolve,reject)=>{
       const tx=d.transaction(STORE,"readwrite"),store=tx.objectStore(STORE),cursor=store.openCursor(),meta:Pick<CacheEntry,"key"|"saved"|"bytes">[]=[];

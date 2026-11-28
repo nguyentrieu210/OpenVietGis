@@ -83,7 +83,7 @@ export function makeConfig(bootstrap = false) {
       // Reuse the exact Node runtime already running Playwright. Corepack is not
       // bundled with Node 26 and an old global shim can select a different Node.
       command: `"${execPath}" node_modules/vite/bin/vite.js build && "${execPath}" scripts/build-offline-shell.mjs && "${execPath}" node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port ${webPort} --strictPort`,
-      cwd: "./apps/web",
+      cwd: "./apps/web-next",
       // Ensure the SPA proxy can reach the ready API before any real login.
       url: webBase + "/api/v1/health/ready",
       reuseExistingServer: false,

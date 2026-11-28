@@ -13,7 +13,7 @@ const RESOURCE:&str="https://openvietgis.cloud/mcp";
 const CORE:&str="http://127.0.0.1:8019/api/v1";
 const JWKS:&str="http://127.0.0.1:18080/realms/openvietgis/protocol/openid-connect/certs";
 const CLIENTS:[&str;2]=["openvietgis-mcp-chatgpt","openvietgis-mcp-claude"];
-const PROTOCOLS:[&str;3]=["2025-03-26","2025-06-18","2025-11-25"];
+const PROTOCOLS:[&str;4]=["2025-03-26","2025-06-18","2025-11-25","2026-07-28"];
 #[derive(Clone)]
 struct App {store:Arc<Mutex<Store>>,registry:Arc<Registry>,http:reqwest::Client,clock:Instant,jwks:Arc<tokio::sync::Mutex<Option<(Instant,JwkSet)>>>,core:String,jwks_url:String}
 impl App{
@@ -210,7 +210,7 @@ async fn mcp(State(app):State<App>,h:HeaderMap,body:Bytes)->Response{
     let version=hdr(&h,"mcp-protocol-version");
     if !version.is_empty()&&!PROTOCOLS.contains(&version){return respond(400,json!({"error":"Unsupported MCP protocol version"}))}
     match method{
-        "initialize"=>{let requested=v["params"]["protocolVersion"].as_str().unwrap_or("");let protocol=if PROTOCOLS.contains(&requested){requested}else{PROTOCOLS[2]};rpc(id,json!({"protocolVersion":protocol,"serverInfo":{"name":"OpenVietGIS Live Rust","version":"0.2.0"},"capabilities":{"tools":{"listChanged":false}},"instructions":"Select an explicit workspace when several are connected. All persistent writes require browser approval; never retry a pending operation."}))},
+        "initialize"=>{let requested=v["params"]["protocolVersion"].as_str().unwrap_or("");let protocol=if PROTOCOLS.contains(&requested){requested}else{PROTOCOLS[3]};rpc(id,json!({"protocolVersion":protocol,"serverInfo":{"name":"OpenVietGIS Live Rust","version":"0.2.0"},"capabilities":{"tools":{"listChanged":false}},"instructions":"Select an explicit workspace when several are connected. All persistent writes require browser approval; never retry a pending operation."}))},
         "ping"=>rpc(id,json!({})),
         "tools/list"=>rpc(id,json!({"tools":app.registry.list()})),
         "tools/call"=>{let name=v["params"]["name"].as_str().unwrap_or("");let args=v["params"].get("arguments").cloned().unwrap_or(json!({}));
@@ -302,8 +302,10 @@ async fn main()->Result<(),Box<dyn std::error::Error>>{
         let mut wrong=claims("alice");wrong["azp"]=json!("openvietgis-web");
         assert_eq!(post_rpc(&client,&url,&sign(&key,wrong),"tools/list",json!({})).await.status(),401);
         assert_eq!(post_rpc(&client,&url,"invalid","tools/list",json!({})).await.status(),401);
-        let init:Value=post_rpc(&client,&url,&valid,"initialize",json!({"protocolVersion":"2025-11-25"})).await.json().await.unwrap();
-        assert_eq!(init["result"]["protocolVersion"],"2025-11-25");
+        let init:Value=post_rpc(&client,&url,&valid,"initialize",json!({"protocolVersion":"2026-07-28"})).await.json().await.unwrap();
+        assert_eq!(init["result"]["protocolVersion"],"2026-07-28");
+        let legacy:Value=post_rpc(&client,&url,&valid,"initialize",json!({"protocolVersion":"2025-11-25"})).await.json().await.unwrap();
+        assert_eq!(legacy["result"]["protocolVersion"],"2025-11-25");
         let listed:Value=post_rpc(&client,&url,&valid,"tools/list",json!({})).await.json().await.unwrap();
         assert_eq!(listed["result"]["tools"].as_array().unwrap().len(),39);
         let denied=browser(&client,&url,"",None,json!({"organization_id":org,"project_id":Uuid::new_v4(),"workspace_version":2})).await;

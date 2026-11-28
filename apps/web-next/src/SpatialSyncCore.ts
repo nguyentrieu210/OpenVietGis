@@ -21,18 +21,113 @@ export async function parallelBounded<T>(items:readonly T[],concurrency:number,r
 
 
 type RenderFeature={id?:string|number;geometry:unknown;properties:Record<string,unknown>|null};
+// The render pipeline recreates plain scalar style objects on each selection.
+// Avoid allocating two JSON strings for every unchanged feature. Fall back to
+// the previous serialization semantics for nested values or differing keys.
+function sameRenderProperties(a:RenderFeature["properties"],b:RenderFeature["properties"]):boolean{
+  if(a===b)return true;
+  if(a&&b&&Object.getPrototypeOf(a)===Object.prototype&&Object.getPrototypeOf(b)===Object.prototype){
+    const keys=Object.keys(a),other=Object.keys(b);
+    if(keys.length===other.length&&keys.every((k,i)=>{
+      const x=a[k];
+      return k===other[i]&&(x===null||typeof x==="string"||typeof x==="number"||typeof x==="boolean")&&x===b[k];
+    }))return true;
+  }
+  return JSON.stringify(a)===JSON.stringify(b);
+}
+const verifiedUniqueRenderArrays=new WeakSet<object>();
+
+function uniqueDefinedRenderIds(rows:readonly RenderFeature[]):boolean{
+  if(verifiedUniqueRenderArrays.has(rows as object))return true;
+  const ids=new Set<string|number>();
+  for(const row of rows){
+    if(row.id===undefined||ids.has(row.id))return false;
+    ids.add(row.id);
+  }
+  verifiedUniqueRenderArrays.add(rows as object);
+  return true;
+}
+
+function renderUpdate<T extends RenderFeature>(previous:T,f:T,id:string|number){
+  if(previous===f)return null;
+  const geometryChanged=previous.geometry!==f.geometry&&JSON.stringify(previous.geometry)!==JSON.stringify(f.geometry);
+  const propertiesChanged=!sameRenderProperties(previous.properties,f.properties);
+  if(!geometryChanged&&!propertiesChanged)return null;
+  return {id,...(geometryChanged?{newGeometry:f.geometry}:{}),...(propertiesChanged?{
+    removeProperties:Object.keys(previous.properties??{}).filter(key=>!(key in (f.properties??{}))),
+    addOrUpdateProperties:Object.entries(f.properties??{}).map(([key,value])=>({key,value}))
+  }:{})};
+}
+
 export function renderDiff<T extends RenderFeature>(before:readonly T[],after:readonly T[]){
+  const remove:(string|number)[]=[],add:T[]=[],update:{id:string|number;newGeometry?:T["geometry"];removeProperties?:string[];addOrUpdateProperties?:{key:string;value:unknown}[]}[]=[];
+
+  // Selection/style refreshes preserve feature order and object identity for
+  // almost every row. Validate uniqueness once for the prior array, inherit it
+  // when the ID sequence is identical, then skip unchanged objects without
+  // allocating million-entry Maps.
+  if(before.length===after.length){
+    let ordered=true;
+    for(let i=0;i<before.length;i++){
+      if(before[i]!.id!==after[i]!.id){ordered=false;break}
+    }
+    if(ordered){
+      if(!uniqueDefinedRenderIds(before))return null;
+      verifiedUniqueRenderArrays.add(after as object);
+      for(let i=0;i<after.length;i++){
+        const id=after[i]!.id!;
+        const change=renderUpdate(before[i]!,after[i]!,id);
+        if(change)update.push(change);
+      }
+      return {remove,add,update};
+    }
+  }
+
   const old=new Map(before.map(f=>[f.id,f])),next=new Map(after.map(f=>[f.id,f]));
   if(old.size!==before.length||next.size!==after.length||old.has(undefined)||next.has(undefined))return null;
-  const remove:(string|number)[]=[],add:T[]=[],update:{id:string|number;newGeometry?:T["geometry"];removeProperties?:string[];addOrUpdateProperties?:{key:string;value:unknown}[]}[]=[];
+  verifiedUniqueRenderArrays.add(before as object);
+  verifiedUniqueRenderArrays.add(after as object);
   for(const id of old.keys())if(!next.has(id))remove.push(id!);
   for(const [id,f] of next){
     const previous=old.get(id);
     if(!previous){add.push(f);continue;}
-    const geometryChanged=previous.geometry!==f.geometry&&JSON.stringify(previous.geometry)!==JSON.stringify(f.geometry);
-    const propertiesChanged=JSON.stringify(previous.properties)!==JSON.stringify(f.properties);
+    const change=renderUpdate(previous,f,id!);
     // Never removeAllProperties: geojson-vt 6.3.3 then returns {} and ignores addOrUpdateProperties, so the feature loses layerId and vanishes until reload.
-    if(geometryChanged||propertiesChanged)update.push({id:id!,...(geometryChanged?{newGeometry:f.geometry}:{}),...(propertiesChanged?{removeProperties:Object.keys(previous.properties??{}).filter(key=>!(key in (f.properties??{}))),addOrUpdateProperties:Object.entries(f.properties??{}).map(([key,value])=>({key,value}))}:{})});
+    if(change)update.push(change);
   }
   return {remove,add,update};
+}
+
+export type WakeTimer = ReturnType<typeof setTimeout>;
+/**
+ * Coalesce arbitrary realtime/focus/reconnect wakeups into at most one active
+ * sync plus one pending rerun. The callback may request a delayed retry by
+ * calling trigger again while it is running.
+ */
+export function createCoalescedWake(
+  run:()=>Promise<void>,
+  timers:{
+    set:(callback:()=>void,delay:number)=>WakeTimer;
+    clear:(timer:WakeTimer)=>void;
+  }={set:(callback,delay)=>setTimeout(callback,delay),clear:timer=>clearTimeout(timer)}
+){
+  let stopped=false,running=false,pending=false,timer:WakeTimer|undefined;
+  const drain=async()=>{
+    if(stopped||running||!pending)return;
+    pending=false;running=true;
+    try{await run()}finally{
+      running=false;
+      if(pending&&!stopped&&timer===undefined)trigger();
+    }
+  };
+  const trigger=(delay=250)=>{
+    pending=true;
+    if(stopped||running||timer!==undefined)return;
+    timer=timers.set(()=>{timer=undefined;void drain()},Math.max(0,delay));
+  };
+  const stop=()=>{
+    stopped=true;pending=false;
+    if(timer!==undefined){timers.clear(timer);timer=undefined}
+  };
+  return {trigger,stop,isRunning:()=>running};
 }

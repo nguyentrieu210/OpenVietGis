@@ -19,3 +19,16 @@ test("rename moves sub-groups; ungroup goes one level up", () => {
   assert.equal(parentPath("A/B"), "A");
   assert.equal(parentPath("A"), null);
 });
+
+import {visibleLayerIds,layerRange,groupVisibilityChanges} from "./src/layer-tree.ts";
+test("keyboard and shift ranges exclude collapsed and filtered layers",()=>{
+ const tree=buildLayerTree(["a","b","c","d"],id=>id==="b"||id==="c"?"G":undefined);
+ assert.deepEqual(visibleLayerIds(tree,()=>false,()=>true),["a","d"]);
+ assert.deepEqual(visibleLayerIds(tree,()=>true,id=>id!=="b"),["a","c","d"]);
+ assert.deepEqual(layerRange(["a","c","d"],"a","d"),["a","c","d"]);
+ assert.deepEqual(layerRange(["a","c","d"],"b","d"),["d"]);
+});
+test("mixed group checkbox shows only hidden layers, then hides all",()=>{
+ assert.deepEqual(groupVisibilityChanges(["a","b"],new Set(["b"])),["b"]);
+ assert.deepEqual(groupVisibilityChanges(["a","b"],new Set()),["a","b"]);
+});

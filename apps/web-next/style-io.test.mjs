@@ -26,3 +26,8 @@ test("QML: renderer types and category / range lists", () => {
   const grad = toQML({ ...base, renderer: "graduated", field: "dt", classes: [{ min: 1, max: 2, color: "#000000" }] });
   assert.match(grad, /<range lower="1" upper="2" symbol="0"/);
 });
+
+test("SLD uses non-overlapping lower boundaries after first class",()=>{
+ const s=toSLD("L",{...base,renderer:"graduated",field:"x",classes:[{min:0,max:10,color:"#000000"},{min:10,max:20,color:"#ffffff"}]});
+ assert.match(s,/<ogc:PropertyIsGreaterThan><ogc:PropertyName>x<\/ogc:PropertyName><ogc:Literal>10<\/ogc:Literal>/);
+});

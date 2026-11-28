@@ -3,22 +3,22 @@
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Annotated, Any
 from urllib.parse import urlsplit
+from uuid import UUID
 
 from bridge_http import body
+from gis_engineering_policy import GIS_INSTRUCTIONS
 from live_bridge import BridgeError
 from mcp.server import MCPServer
-from gis_engineering_policy import GIS_INSTRUCTIONS
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
-from pydantic import AnyHttpUrl
+from pydantic import AnyHttpUrl, Field
 from remote_oauth import SCOPE, KeycloakVerifier, OidcConfig
 from remote_workspace import GisIdentity, OwnedBridge
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
@@ -68,13 +68,13 @@ def create_remote(
             "status": error.status,
         }
 
-    async def operate(method, params):
+    async def operate(method, params, session_id=None):
         token = get_access_token()
         if token is None or not token.subject or not token.expires_at:
             raise ValueError("OAuth authentication required")
         try:
             return await workspace.execute(
-                token.subject, method, params, token.expires_at
+                token.subject, method, params, token.expires_at, session_id
             )
         except BridgeError as e:
             return bridge_failure(e)
@@ -83,28 +83,28 @@ def create_remote(
         annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False),
         structured_output=True,
     )
-    async def gis_live_view() -> dict[str, Any]:
+    async def gis_live_view(session_id: UUID | None = None) -> dict[str, Any]:
         """Read the connected live GIS viewport after user approval."""
-        return await operate("map_view", {})
+        return await operate("map_view", {}, session_id)
 
     @mcp.tool(
         annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False),
         structured_output=True,
     )
-    async def gis_live_selection() -> dict[str, Any]:
+    async def gis_live_selection(session_id: UUID | None = None) -> dict[str, Any]:
         """Read the current selected geometry, WGS84, after GIS user approval."""
-        return await operate("map_selection", {})
+        return await operate("map_selection", {}, session_id)
 
     @mcp.tool(
         annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False),
         structured_output=True,
     )
     async def gis_live_navigate(
-        longitude: float, latitude: float, zoom: float
+        longitude: float, latitude: float, zoom: float, session_id: UUID | None = None
     ) -> dict[str, Any]:
         """Move the connected live camera with approval. No persistent changes."""
         return await operate(
-            "map_navigate", {"longitude": longitude, "latitude": latitude, "zoom": zoom}
+            "map_navigate", {"longitude": longitude, "latitude": latitude, "zoom": zoom}, session_id
         )
 
     if full_tools:
@@ -116,7 +116,39 @@ def create_remote(
             annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False),
             structured_output=True,
         )
-        async def gis_operation_status(operation_ticket: str) -> dict[str, Any]:
+        async def gis_workspaces() -> dict[str, Any]:
+            """List connected workspaces for the authenticated OAuth subject."""
+            token = get_access_token()
+            if token is None or not token.subject or not token.expires_at:
+                raise ValueError("OAuth authentication required")
+            return {"workspaces": workspace.list_subject(token.subject)}
+
+        @mcp.tool(
+            annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False),
+            structured_output=True,
+        )
+        async def cad_state(session_id: UUID | None = None) -> dict[str, Any]:
+            """Read the exact open CAD document/version after browser approval."""
+            return await operate("cad_state", {}, session_id)
+
+        @mcp.tool(
+            annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False),
+            structured_output=True,
+        )
+        async def cad_select_handle(
+            document_id: UUID,
+            version: Annotated[int, Field(ge=1, le=20)],
+            handle: Annotated[str, Field(pattern=r"^[0-9a-fA-F]{1,16}$")],
+            session_id: UUID | None = None,
+        ) -> dict[str, Any]:
+            """Select a handle on the exact open CAD document/version after approval."""
+            return await operate("cad_select_handle", {"document_id":str(document_id),"version":version,"handle":handle}, session_id)
+
+        @mcp.tool(
+            annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False),
+            structured_output=True,
+        )
+        async def gis_operation_status(operation_ticket: UUID, session_id: UUID | None = None) -> dict[str, Any]:
             """Read state/result of an advanced operation ticket. Most recent terminal receipt can be read again in the same live workspace. Never resubmit a timed-out write without inspecting GIS."""
             token = get_access_token()
             if (
@@ -127,7 +159,7 @@ def create_remote(
             ):
                 raise ValueError("OAuth authentication required")
             try:
-                return workspace.operation_status(token.subject, operation_ticket)
+                return workspace.operation_status(token.subject, str(operation_ticket), session_id)
             except BridgeError as e:
                 return bridge_failure(e)
 
@@ -161,11 +193,12 @@ def create_remote(
                     and data.get("workspace_version") in (1, 2)
                     else 0
                 ),
+                data.get("workspace_mode", "gis"),
             ),
             status_code=201,
         )
 
-    async def current(request):
+    async def current(request, data=None):
         cookie = browser_guard(request)
         sid = request.path_params["sid"]
         key = pass_key(request)
@@ -173,25 +206,37 @@ def create_remote(
         # Current cookie, project authorization and identity are verified every browser request.
         owner = await identity.owner(cookie, stored.organization_id, stored.project_id)
         workspace.owned_by(sid, owner, key)
+        if isinstance(data, dict) and "workspace_mode" in data:
+            workspace.set_mode(sid, owner, key, data["workspace_mode"])
         return sid, key
 
+    async def optional_body(request):
+        if request.headers.get("content-type", "").split(";")[0] != "application/json":
+            return {}
+        if request.headers.get("content-length") == "0":
+            return {}
+        return await body(request)
+
     async def poll(request):
-        sid, key = await current(request)
+        data = await optional_body(request)
+        sid, key = await current(request, data)
         return JSONResponse(workspace.store.poll(sid, key))
 
     async def ping(request):
-        sid, key = await current(request)
+        data = await optional_body(request)
+        sid, key = await current(request, data)
         return JSONResponse(workspace.store.ping(sid, key))
 
     async def prepare(request):
-        sid, key = await current(request)
+        data = await optional_body(request)
+        sid, key = await current(request, data)
         return JSONResponse(
             workspace.store.check_claimed(sid, key, request.path_params["cid"])
         )
 
     async def ack(request):
-        sid, key = await current(request)
         data = await body(request)
+        sid, key = await current(request, data)
         return JSONResponse(
             workspace.store.ack(
                 sid, key, request.path_params["cid"], data.get("ok"), data.get("result")
@@ -199,8 +244,18 @@ def create_remote(
         )
 
     async def close(request):
-        sid, key = await current(request)
+        data = await optional_body(request)
+        sid, key = await current(request, data)
         return JSONResponse(workspace.store.close(sid, key))
+
+    # The MCP SDK-generated argument models allow unknown top-level fields by
+    # default. Rust rejects them. Keep discovery and runtime fail-closed on both
+    # implementations without changing the typed request models themselves.
+    from pydantic import ConfigDict
+    for tool in mcp._tool_manager._tools.values():
+        tool.parameters["additionalProperties"] = False
+        tool.fn_metadata.arg_model.model_config = ConfigDict(extra="forbid")
+        tool.fn_metadata.arg_model.model_rebuild(force=True)
 
     app = mcp.streamable_http_app(
         stateless_http=True,

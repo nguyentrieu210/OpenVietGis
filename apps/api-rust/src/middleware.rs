@@ -1,10 +1,11 @@
 //! Request ID correlation and HTTP metrics middleware.
 
 use axum::extract::{Request, State};
-use axum::http::HeaderName;
+use axum::http::{header, HeaderName, HeaderValue, StatusCode};
 use axum::middleware::Next;
 use axum::response::Response;
 use uuid::Uuid;
+use std::time::Instant;
 
 use crate::state::AppState;
 
@@ -29,8 +30,20 @@ pub async fn request_id_and_metrics(
         .unwrap_or_else(|| Uuid::new_v4().to_string());
 
     req.extensions_mut().insert(RequestId(req_id.clone()));
+    let started = Instant::now();
     let mut response = next.run(req).await;
-    state.metrics.record_request(response.status().as_u16());
+    state.metrics.record_request(response.status().as_u16(), started.elapsed());
+
+    if matches!(
+        response.status(),
+        StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN | StatusCode::NOT_FOUND
+    ) && !response.headers().contains_key(header::CACHE_CONTROL)
+    {
+        response.headers_mut().insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("private, no-store"),
+        );
+    }
 
     if let Ok(val) = req_id.parse() {
         response

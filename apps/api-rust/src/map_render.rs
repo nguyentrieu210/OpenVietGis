@@ -15,6 +15,7 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::identity::HumanSession;
+use crate::tile_cache::{TileCacheKey, TileCacheLookup};
 use crate::AppState;
 
 pub(crate) fn router() -> Router<AppState> {
@@ -130,9 +131,51 @@ async fn vector_tile(
     if z > MAX_TILE_ZOOM || x >= 1 << z || y >= 1 << z {
         return Err(RenderError::InvalidRequest);
     }
-    let mut read = project_read(&state, &auth, organization_id, project_id).await?;
-    let (body, complete) = read.vector_tile(layer_id, &pins, z, x, y).await?;
-    read.commit().await?;
+    loop {
+        // Authorization is intentionally opened before any cache lookup.  A
+        // waiter releases its transaction, waits, then loops through this same
+        // authorization path again before consuming the completed entry.
+        let mut read = project_read(&state, &auth, organization_id, project_id).await?;
+        let Some(cache_scope) = read.tile_cache_scope(layer_id, &pins).await? else {
+            let (body, complete) = read.vector_tile(layer_id, &pins, z, x, y).await?;
+            read.commit().await?;
+            return Ok(tile_response(body.into(), complete));
+        };
+        let key = TileCacheKey::authorized(
+            cache_scope,
+            pins.content_revision,
+            pins.schema_revision,
+            z,
+            x,
+            y,
+        );
+        match state.tile_cache.lookup_or_reserve(key) {
+            TileCacheLookup::Hit(value) => {
+                read.commit().await?;
+                return Ok(tile_response(value.body, value.complete));
+            }
+            TileCacheLookup::Wait(mut completion) => {
+                read.commit().await?;
+                let _ =
+                    tokio::time::timeout(std::time::Duration::from_secs(5), completion.changed())
+                        .await;
+            }
+            TileCacheLookup::Bypass => {
+                let (body, complete) = read.vector_tile(layer_id, &pins, z, x, y).await?;
+                read.commit().await?;
+                return Ok(tile_response(body.into(), complete));
+            }
+            TileCacheLookup::Leader(lease) => {
+                let (body, complete) = read.vector_tile(layer_id, &pins, z, x, y).await?;
+                read.commit().await?;
+                let value = lease.finish(body, complete);
+                return Ok(tile_response(value.body, value.complete));
+            }
+        }
+    }
+}
+
+fn tile_response(body: axum::body::Bytes, complete: bool) -> Response {
     let headers = [
         (header::CONTENT_TYPE, "application/vnd.mapbox-vector-tile"),
         (header::CACHE_CONTROL, "private, no-store"),
@@ -141,7 +184,7 @@ async fn vector_tile(
             if complete { "true" } else { "false" },
         ),
     ];
-    Ok((headers, body).into_response())
+    (headers, body).into_response()
 }
 
 fn no_store(body: Value) -> Response {

@@ -47,3 +47,17 @@ export function renameGroup(groups: Readonly<Record<string, string>>, from: stri
 
 /** Parent path of a group ("A/B" → "A", "A" → null): ungrouping moves members one level up. */
 export const parentPath = (path: string) => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : null);
+
+/** Shift selection and keyboard navigation operate on visible rows, never collapsed/filtered rows. */
+export function visibleLayerIds(nodes:readonly LayerTreeNode[], expanded:(path:string)=>boolean, included:(id:string)=>boolean):string[]{
+ return nodes.flatMap(node=>node.kind==="layer"?(included(node.id)?[node.id]:[]):expanded(node.path)?visibleLayerIds(node.children,expanded,included):[]);
+}
+export function layerRange(ids:readonly string[],anchor:string,target:string):string[]{
+ const a=ids.indexOf(anchor),b=ids.indexOf(target);
+ return a<0||b<0?(b<0?[]:[target]):ids.slice(Math.min(a,b),Math.max(a,b)+1);
+}
+/** Mixed checkbox makes the whole group visible; fully visible checkbox hides it. */
+export function groupVisibilityChanges(ids:readonly string[],hidden:ReadonlySet<string>):string[]{
+ const invisible=ids.filter(id=>hidden.has(id));
+ return invisible.length?invisible:[...ids];
+}

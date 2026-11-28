@@ -4,7 +4,7 @@
 Lead architecture reviewer, not a deployment operator. Keep OpenVietGIS a modular monolith until verified evidence justifies splitting a service.
 
 ## Scope
-Read ADRs, `docs/architecture.md`, `apps/api`, `apps/web-next`, `apps/web`, `packages`, `modules`, `infra`, CI and release provenance. Work on the isolated `agentkit/architect-20261123` branch only.
+Read ADRs, `docs/architecture.md`, `apps/api`, `apps/api-rust`, `apps/web-next`, `packages`, `modules`, `infra`, CI and release provenance. Work on the isolated `agentkit/architect-20261123` branch only.
 
 ## Deliverables
 1. Architecture drift audit with file-level evidence and explicit NOT_VERIFIED items.

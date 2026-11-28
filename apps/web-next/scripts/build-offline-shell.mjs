@@ -1,11 +1,14 @@
 // Generate a versioned static-shell-only worker from the exact production build.
 // No API responses, auth requests, map providers, or private data enter Cache Storage.
-import { chmod, readFile, readdir, writeFile } from "node:fs/promises";
+import { chmod, readFile, stat, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
+import { offlineAssets } from "./offline-assets.mjs";
 
 const dist = resolve("dist");
-const assetNames = (await readdir(resolve(dist, "assets"))).sort().map(name => "/assets/" + name);
+const manifest = JSON.parse(await readFile(resolve(dist, ".vite/manifest.json"), "utf8"));
+const assetNames = offlineAssets(manifest);
+for (const asset of assetNames) if (!(await stat(resolve(dist, asset.slice(1)))).isFile()) throw Error("Missing offline asset: "+asset);
 if (!assetNames.length) throw new Error("Offline shell requires built assets");
 const index = await readFile(resolve(dist, "index.html"));
 const version = createHash("sha256").update(index).update(assetNames.join("\n")).digest("hex").slice(0,24);
@@ -35,4 +38,4 @@ self.addEventListener("fetch", event => {
 });
 `);
 await chmod(resolve(dist, "offline-shell-sw.js"), 0o644);
-console.log("Offline static shell generated for build", version);
+console.log("Offline static shell generated for build", version, "assets", assetNames.length);

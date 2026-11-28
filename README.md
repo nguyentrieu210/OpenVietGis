@@ -184,10 +184,10 @@ pnpm dev:web
 
 Mặc định: web `http://127.0.0.1:5173`; API `http://127.0.0.1:8000`; readiness endpoint `/api/v1/health/ready`.
 
-Frontend chính thức là **`apps/web-next`**, được chạy bằng `pnpm dev:web`
-và đóng gói bằng `pnpm build:web`. `apps/web` chỉ còn là frontend legacy phục vụ
-các bộ kiểm thử Playwright cũ; chưa xóa cho đến khi chuyển và xác nhận tương đương
-các kịch bản này trên frontend chính.
+Frontend chính thức là **apps/web-next**, được chạy bằng pnpm dev:web
+và đóng gói bằng pnpm build:web. Frontend legacy apps/web đã được retire sau
+khi chuyển workspace, Docker, CI và Playwright sang frontend chính; bằng chứng
+tương đương được lưu trong Spec 062 và Spec 066.
 
 Backend Rust nằm tại `apps/api-rust` và các crate trong Cargo workspace.
 FastAPI tại `apps/api` vẫn phục vụ migration, kiểm thử tương đương và cấu hình

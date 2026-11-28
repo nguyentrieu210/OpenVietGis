@@ -37,8 +37,8 @@ on:
       - "tools/benchmark/rust-platform/**"
 
 concurrency:
-  group: rust-platform-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -312,6 +312,13 @@ jobs:
           uv run --project apps/api python tests/rust-parity/e10_cad_dxf.py \
             --candidate target/debug/openvietgis-api-rust \
             2>&1 | tee dist/parity/e10-cad-dxf.log
+
+      - name: Verify private tile cache authorization and current revisions
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          uv run --project apps/api python tests/rust-parity/e05_cache_security.py \
+            --candidate target/debug/openvietgis-api-rust \
+            --output dist/parity/e05-cache-security.json
 
       - name: Record PostGIS version
         if: always()

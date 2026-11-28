@@ -868,6 +868,38 @@ fn write_coord(buf: &mut Vec<u8>, c: Coord<f64>) -> Result<(), SpatialError> {
     Ok(())
 }
 
+// Borrow nested geometry directly. Encoding does not modify the source and
+// copying every coordinate of each member is unnecessary.
+fn write_wkb_linestring(
+    ls: &LineString<f64>,
+    srid: Option<u32>,
+    buf: &mut Vec<u8>,
+) -> Result<(), SpatialError> {
+    write_wkb_header(buf, 2, srid);
+    buf.extend_from_slice(&(ls.0.len() as u32).to_le_bytes());
+    for &c in &ls.0 {
+        write_coord(buf, c)?;
+    }
+    Ok(())
+}
+
+fn write_wkb_polygon(
+    poly: &Polygon<f64>,
+    srid: Option<u32>,
+    buf: &mut Vec<u8>,
+) -> Result<(), SpatialError> {
+    write_wkb_header(buf, 3, srid);
+    let ring_count = (1 + poly.interiors().len()) as u32;
+    buf.extend_from_slice(&ring_count.to_le_bytes());
+    for ring in std::iter::once(poly.exterior()).chain(poly.interiors()) {
+        buf.extend_from_slice(&(ring.0.len() as u32).to_le_bytes());
+        for &c in &ring.0 {
+            write_coord(buf, c)?;
+        }
+    }
+    Ok(())
+}
+
 fn write_wkb_inner(
     geom: &Geometry<f64>,
     srid: Option<u32>,
@@ -884,28 +916,8 @@ fn write_wkb_inner(
             write_coord(buf, l.start)?;
             write_coord(buf, l.end)?;
         }
-        Geometry::LineString(ls) => {
-            write_wkb_header(buf, 2, srid);
-            buf.extend_from_slice(&(ls.0.len() as u32).to_le_bytes());
-            for &c in &ls.0 {
-                write_coord(buf, c)?;
-            }
-        }
-        Geometry::Polygon(poly) => {
-            write_wkb_header(buf, 3, srid);
-            let ring_count = (1 + poly.interiors().len()) as u32;
-            buf.extend_from_slice(&ring_count.to_le_bytes());
-            buf.extend_from_slice(&(poly.exterior().0.len() as u32).to_le_bytes());
-            for &c in &poly.exterior().0 {
-                write_coord(buf, c)?;
-            }
-            for ring in poly.interiors() {
-                buf.extend_from_slice(&(ring.0.len() as u32).to_le_bytes());
-                for &c in &ring.0 {
-                    write_coord(buf, c)?;
-                }
-            }
-        }
+        Geometry::LineString(ls) => write_wkb_linestring(ls, srid, buf)?,
+        Geometry::Polygon(poly) => write_wkb_polygon(poly, srid, buf)?,
         Geometry::MultiPoint(mp) => {
             write_wkb_header(buf, 4, srid);
             buf.extend_from_slice(&(mp.0.len() as u32).to_le_bytes());
@@ -917,14 +929,14 @@ fn write_wkb_inner(
             write_wkb_header(buf, 5, srid);
             buf.extend_from_slice(&(mls.0.len() as u32).to_le_bytes());
             for ls in &mls.0 {
-                write_wkb_inner(&Geometry::LineString(ls.clone()), None, buf)?;
+                write_wkb_linestring(ls, None, buf)?;
             }
         }
         Geometry::MultiPolygon(mpoly) => {
             write_wkb_header(buf, 6, srid);
             buf.extend_from_slice(&(mpoly.0.len() as u32).to_le_bytes());
             for poly in &mpoly.0 {
-                write_wkb_inner(&Geometry::Polygon(poly.clone()), None, buf)?;
+                write_wkb_polygon(poly, None, buf)?;
             }
         }
         Geometry::GeometryCollection(gc) => {
@@ -964,6 +976,49 @@ mod tests {
         assert_eq!(decoded.srid, Some(4326));
         assert_eq!(decoded.geometry, geom);
         assert_eq!(to_geojson(&decoded.geometry), poly_json);
+    }
+
+    #[test]
+    fn multipart_encoding_preserves_child_bytes_and_parent_srid() {
+        let limits = ValidationLimits::default();
+        for input in [
+            json!({"type":"MultiLineString","coordinates":[[[1.0,2.0],[3.0,4.0]],[[5.0,6.0],[7.0,8.0]]]}),
+            json!({"type":"MultiPolygon","coordinates":[[[[0.0,0.0],[3.0,0.0],[3.0,3.0],[0.0,0.0]],[[1.0,1.0],[2.0,1.0],[2.0,2.0],[1.0,1.0]]],[[[4.0,4.0],[5.0,4.0],[5.0,5.0],[4.0,4.0]]]]}),
+        ] {
+            let geom = parse_geojson(&input, &limits).unwrap();
+            let (kind, children): (u32, Vec<Geometry<f64>>) = match &geom {
+                Geometry::MultiLineString(lines) => (
+                    5,
+                    lines.0.iter().cloned().map(Geometry::LineString).collect(),
+                ),
+                Geometry::MultiPolygon(polygons) => (
+                    6,
+                    polygons.0.iter().cloned().map(Geometry::Polygon).collect(),
+                ),
+                _ => unreachable!(),
+            };
+            for srid in [None, Some(4326)] {
+                let mut expected = Vec::new();
+                write_wkb_header(&mut expected, kind, srid);
+                expected.extend_from_slice(&(children.len() as u32).to_le_bytes());
+                for child in &children {
+                    expected.extend(encode_wkb(child, None).unwrap());
+                }
+                let encoded = encode_wkb(&geom, srid).unwrap();
+                assert_eq!(encoded, expected);
+                let decoded = parse_wkb(&encoded, &limits).unwrap();
+                assert_eq!(decoded.geometry, geom);
+                assert_eq!(decoded.srid, srid);
+            }
+        }
+        let nonfinite = Geometry::MultiLineString(MultiLineString(vec![LineString(vec![
+            Coord { x: f64::NAN, y: 0.0 },
+            Coord { x: 1.0, y: 1.0 },
+        ])]));
+        assert_eq!(
+            encode_wkb(&nonfinite, None).unwrap_err(),
+            SpatialError::NonFiniteCoordinate
+        );
     }
 
     #[test]

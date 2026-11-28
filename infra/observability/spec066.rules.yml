@@ -1,0 +1,22 @@
+groups:
+  - name: ovg066_aggregate
+    rules:
+      - record: ovg:http_latency:p95_5m
+        expr: histogram_quantile(0.95, sum by (le) (rate(ovg_http_request_duration_seconds_bucket[5m])))
+      - record: ovg:http_latency:p99_5m
+        expr: histogram_quantile(0.99, sum by (le) (rate(ovg_http_request_duration_seconds_bucket[5m])))
+      - record: ovg:http_errors:ratio_5m
+        expr: sum(rate(ovg_http_requests_5xx_total[5m])) / clamp_min(sum(rate(ovg_http_requests_total[5m])), 0.001)
+      - record: ovg:tile_cache:hit_ratio_5m
+        expr: sum(rate(ovg_tile_cache_hits_total[5m])) / clamp_min(sum(rate(ovg_tile_cache_hits_total[5m])) + sum(rate(ovg_tile_cache_misses_total[5m])) + sum(rate(ovg_tile_cache_waits_total[5m])) + sum(rate(ovg_tile_cache_bypasses_total[5m])), 0.001)
+      - record: ovg:tile_cache:capacity_ratio
+        expr: sum(ovg_tile_cache_bytes) / clamp_min(sum(ovg_tile_cache_capacity_bytes), 1)
+      - record: ovg:api:resident_memory_bytes
+        expr: sum(ovg_process_resident_memory_bytes)
+      - alert: OpenVietGISApiMemoryHigh
+        expr: ovg:api:resident_memory_bytes > 1073741824
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: API resident memory exceeds the provisional one-GiB threshold

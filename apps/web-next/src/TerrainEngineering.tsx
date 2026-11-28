@@ -8,6 +8,7 @@ import {NativeDemWindow} from "./NativeDemWindow";
 import {eligibleDem} from "./Spatial3DSettings";
 import {rasterPath,type StoredRaster} from "./ProjectRaster";
 import type {StudioRow} from "./studio-contract";
+import {bindTerrainFlowWorker} from "./terrain-flow-client";
 const sourceId="ovg-engineering-result",fillId=sourceId+"-fill",lineId=sourceId+"-line";
 const fmt=(n:number)=>n.toLocaleString("vi-VN",{maximumFractionDigits:2});
 const modes={elevation:"Màu cao độ",contour:"Đường đồng mức",slope:"Độ dốc",aspect:"Hướng dốc",cutfill:"Đào / đắp",compare:"Đào / đắp hai DEM",flow:"Hướng dòng chảy D8",conditioned:"D8 hiệu chỉnh hố trũng",flood:"Vùng thấp dưới mực nước",connected:"Vùng ngập kết nối biên",hydraulic:"Dòng chảy mặt theo thời gian"} as const;
@@ -82,19 +83,13 @@ export function TerrainEngineering({client,org,pid,map,rows,rasters,canWrite,onB
   const worker=new Worker(new URL("./terrain-flow.worker.ts",import.meta.url),{type:"module"});
   flowWorker.current=worker;
   setBusy(true);setFrames([]);setOutput(null);setSummary("");
-  const finish=()=>{
-   worker.terminate();flowWorker.current=null;setBusy(false);
-  };
-  worker.onmessage=({data}:MessageEvent<{frames?:ReturnType<typeof simulateSurfaceFlow>;error?:string}>)=>{
-   if(flowWorker.current!==worker)return;
-   finish();
-   if(data.frames){setFrames(data.frames);showFrame(data.frames,data.frames.length-1)}
-   else void fail(data.error??"Mô phỏng thất bại.");
-  };
-  worker.onerror=()=>{
-   if(flowWorker.current!==worker)return;
-   finish();void fail("Không khởi động được mô phỏng thủy lực.");
-  };
+  bindTerrainFlowWorker<ReturnType<typeof simulateSurfaceFlow>>(worker,{
+   current:()=>flowWorker.current,
+   clear:w=>{if(flowWorker.current===w)flowWorker.current=null},
+   busy:setBusy,
+   success:next=>{setFrames(next);showFrame(next,next.length-1)},
+   failure:message=>void fail(message),
+  });
   worker.postMessage({grid,options:hydraulic});
  };
  const run=async()=>{if(!grid||busy)return;try{setError("");const z=Number(level);if(mode==="hydraulic"){runHydraulic();return;}if((mode==="cutfill"||mode==="flood")&&(!level.trim()||!Number.isFinite(z)||z< -12000||z>10000))throw Error("Nhập cao độ mét hợp lệ.");if(mode==="compare"){
