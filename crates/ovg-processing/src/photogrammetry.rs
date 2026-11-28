@@ -37,6 +37,7 @@ pub mod pipeline;
 pub mod colmap_model;
 pub mod ingest;
 pub mod local_worker;
+pub mod windows_worker;
 pub mod jpeg;
 pub mod exif;
 pub mod jpeg_source;
