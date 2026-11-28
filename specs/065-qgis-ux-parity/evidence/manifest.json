@@ -259,9 +259,10 @@
         "apps/web-next/src/rule-style.test.ts",
         "apps/web-next/src/LiveApp.tsx",
         "apps/web-next/src/QgisWorkspace.tsx",
-        "apps/web-next/src/layout-legend.ts"
+        "apps/web-next/src/layout-legend.ts",
+        "apps/web-next/style-io.test.mjs"
       ],
-      "blocker": "Ordered first-match typed single-field rules, fallback color, max 12 rules, loaded vector render and legend; browser preview/apply and unit checks. No multi-symbol layers, arbitrary expressions, server tile rule evaluation, QML/SLD rule exchange or QGIS pairing."
+      "blocker": "Ordered first-match typed single-field rules, fallback color, max 12 rules, loaded vector render and legend; browser preview/apply and unit checks. No multi-symbol layers, arbitrary expressions, server tile rule evaluation, QML/SLD rule exchange or QGIS pairing. Two-layer single line casing with on-map rendering, preview and bounded SLD/QML exchange. Arbitrary multilayer symbols, renderer expressions, tile parity and independent QGIS visual evidence remain missing; new tests not executed."
     },
     {
       "id": "STYLE-04",
@@ -298,9 +299,10 @@
         "apps/web-next/src/style-io.ts",
         "apps/web-next/style-io.test.mjs",
         "apps/web-next/src/LayerProperties.tsx",
-        "apps/web-next/src/graduated.ts"
+        "apps/web-next/src/graduated.ts",
+        "apps/web-next/src/LiveApp.tsx"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; contiguous graduated subset, not arbitrary QML/SLD"
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; contiguous graduated subset, not arbitrary QML/SLD Two-layer single line casing with on-map rendering, preview and bounded SLD/QML exchange. Arbitrary multilayer symbols, renderer expressions, tile parity and independent QGIS visual evidence remain missing; new tests not executed."
     },
     {
       "id": "STYLE-07",

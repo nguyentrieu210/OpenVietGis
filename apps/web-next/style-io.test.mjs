@@ -125,3 +125,13 @@ test("SLD round-trip imports categorized values and class colours", () => {
   assert.equal(parsed.field, spec.field);
   assert.deepEqual(parsed.classes.map(({ value, color }) => ({ value, color })), spec.classes);
 });
+
+test("two-layer line casing round-trips through SLD and QML",()=>{
+ const spec={...base,family:"LineString",renderer:"single",classes:[],casing:{color:"#101010",extraWidth:4}};
+ for(const xml of [toSLD("Road",spec),toQML(spec)]){
+  const p=parseStyle(xml,domParser());
+  assert.equal(p.family,"LineString");assert.equal(p.color,spec.color);assert.equal(p.width,spec.width);
+  assert.equal(p.casing.color,spec.casing.color);assert.ok(Math.abs(p.casing.extraWidth-4)<1e-9);
+ }
+ assert.throws(()=>parseStyle('<!DOCTYPE qgis [<!ENTITY x SYSTEM "file:///etc/passwd">]><qgis/>',domParser()));
+});
