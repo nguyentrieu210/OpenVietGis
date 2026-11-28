@@ -108,7 +108,8 @@ class _UnifiedPageState extends State<UnifiedPage>{
   }
   Future<void> _mediaInventory()async{
     final p=_project,l=_layer,r=_revision;if(p==null||l==null||r==null)return;
-    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>_MediaInventoryPage(project:p,layer:l,revision:r)));
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>_MediaInventoryPage(project:p,layer:l,revision:r,legacyRoot:_legacyRoot!)));
+    if(mounted)await _refresh();
   }
   Future<void> _survey()async{
     final p=_project,l=_layer,r=_revision;if(p==null||l==null||r==null)return;
@@ -248,26 +249,52 @@ class _SurveyReadPageState extends State<_SurveyReadPage>{
 }
 
 class _MediaInventoryPage extends StatefulWidget{
- final NativeUnifiedProject project;final String layer,revision;
- const _MediaInventoryPage({required this.project,required this.layer,required this.revision});
+ final NativeUnifiedProject project;final String layer,revision,legacyRoot;
+ const _MediaInventoryPage({required this.project,required this.layer,required this.revision,required this.legacyRoot});
  @override State<_MediaInventoryPage> createState()=>_MediaInventoryPageState();
 }
 class _MediaInventoryPageState extends State<_MediaInventoryPage>{
- List<Map<String,dynamic>> _rows=[];String? _next,_error;bool _busy=false;
- @override void initState(){super.initState();unawaited(_load(''));}
- Future<void> _load(String after)async{
+ List<Map<String,dynamic>> _rows=[];String? _next,_error,_message;bool _busy=false,_provider=false,_key=false;
+ late String _revision;
+ @override void initState(){super.initState();_revision=widget.revision;unawaited(_run(()=>_load('')));}
+ Future<void> _run(Future<void> Function() f)async{
   if(_busy)return;setState(()=>_busy=true);
-  try{
-   final v=jsonDecode(await widget.project.mediaInventory(layerId:widget.layer,after:after,expected:widget.revision)) as Map<String,dynamic>;
-   final rows=(v['items'] as List).cast<Map<String,dynamic>>();
-   if(mounted)setState((){_rows=rows;_next=rows.length==100?rows.last['id'].toString():null;_error=null;});
-  }catch(e){if(mounted)setState(()=>_error=e.toString());}finally{if(mounted)setState(()=>_busy=false);}
+  try{await f();if(mounted)setState(()=>_error=null);}
+  catch(e){if(mounted)setState(()=>_error=e.toString());}finally{if(mounted)setState(()=>_busy=false);}
  }
- @override Widget build(BuildContext context)=>PopScope(canPop:!_busy,child:Scaffold(appBar:AppBar(title:const Text('Media mã hóa · đang khóa')),body:ListView(padding:const EdgeInsets.all(16),children:[
-  const Text('Chỉ danh mục ciphertext đã nhập. Không chứa khóa giải mã. Cần tích hợp bộ cấp khóa nền tảng trước khi nhập hoặc mở ảnh. Media cũ chưa tự động chuyển.'),
-  if(_busy)const LinearProgressIndicator(),if(_error!=null)Text(_error!),
+ Future<void> _load(String after)async{
+  final v=jsonDecode(await widget.project.mediaInventory(layerId:widget.layer,after:after,expected:_revision)) as Map<String,dynamic>;
+  final status=jsonDecode(await widget.project.mediaKeyStatus(layerId:widget.layer,expected:_revision)) as Map;
+  final rows=(v['items'] as List).cast<Map<String,dynamic>>();
+  if(mounted)setState((){_rows=rows;_next=rows.length==100?rows.last['id'].toString():null;_provider=status['provider_available']==true;_key=status['key_available']==true;});
+ }
+ Future<void> _import()async{
+  final pick=await FilePicker.platform.pickFiles(type:FileType.custom,allowedExtensions:['json'],withData:false);
+  if(pick==null||!mounted)return;
+  final path=pick.files.single.path;if(path==null)throw StateError('INVALID_MANIFEST');
+  final f=File(path);final data=<int>[];
+  await for(final b in f.openRead()){if(data.length+b.length>65536)throw StateError('RESOURCE_LIMIT');data.addAll(b);}
+  final raw=utf8.decode(data);final v=jsonDecode(raw) as Map;
+  final items=v['items'];if(v['version']!=1||items is! List||items.isEmpty||items.length>16)throw StateError('INVALID_MANIFEST');
+  if(!mounted)return;
+  final ok=await showDialog<bool>(context:context,builder:(d)=>AlertDialog(title:const Text('Sao chép media mã hóa?'),content:Text('Nguồn: ${v["source_scope"]}\n${items.length} liên kết. Chỉ thực hiện khi khóa nguồn đã được cấp trên thiết bị; không thay đổi file nguồn. Kiểm tra danh sách đối tượng trước khi xác nhận.'),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('Hủy')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('Nhập'))]));
+  if(ok!=true||!mounted)return;
+  final r=jsonDecode(await widget.project.migrateMediaManifest(legacyRoot:widget.legacyRoot,manifestJson:raw,expected:_revision)) as Map;
+  _revision=r['revision'].toString();await _load('');
+  if(mounted)setState(()=>_message='Đã nhập ${r["count"]} media vào revision $_revision.');
+ }
+ Future<void> _verify(String id)async{
+  final ok=await widget.project.verifyMediaUnlock(attachmentId:id,expected:_revision);
+  if(mounted)setState(()=>_message=ok?'Xác thực AEAD thành công; nội dung không xuất qua Flutter.':'Không xác thực được.');
+ }
+ @override Widget build(BuildContext context)=>PopScope(canPop:!_busy,child:Scaffold(appBar:AppBar(title:const Text('Media mã hóa')),body:ListView(padding:const EdgeInsets.all(16),children:[
+  Text(_provider?'Bộ cấp khóa native có mặt':'Bộ cấp khóa native chưa sẵn sàng'),
+  Text(_key?'Có khóa miền đích trên thiết bị':'Miền đích chưa có khóa khả dụng'),
+  const Text('Nhập qua manifest liên kết đã xác thực nguồn. Không gửi khóa hoặc ảnh giải mã qua Flutter. Backup không mang theo khóa; không tự tạo khóa thay thế khi khóa cũ mất.'),
+  OutlinedButton(onPressed:_busy||!_provider?null:()=>unawaited(_run(_import)),child:const Text('Nhập manifest media (tối đa 16)')),
+  if(_busy)const LinearProgressIndicator(),if(_error!=null)Text(_error!),if(_message!=null)Text(_message!),
   if(!_busy&&_rows.isEmpty&&_error==null)const Text('Không có media mã hóa trong trang này.'),
-  for(final row in _rows)ListTile(leading:const Icon(Icons.lock_outline),title:Text(row['id'].toString()),subtitle:Text('Đối tượng: ${row["feature"]}\n${row["cipher_bytes"]} byte ciphertext')),
-  if(_next!=null)OutlinedButton(onPressed:_busy?null:()=>unawaited(_load(_next!)),child:const Text('Trang tiếp'))
+  for(final row in _rows)ListTile(leading:Icon(_key?Icons.verified_user:Icons.lock_outline),title:Text(row['id'].toString()),subtitle:Text('Đối tượng: ${row["feature"]}\n${row["cipher_bytes"]} byte ciphertext'),trailing:TextButton(onPressed:_busy||!_key?null:()=>unawaited(_run(()=>_verify(row['id'].toString()))),child:const Text('Xác thực'))),
+  if(_next!=null)OutlinedButton(onPressed:_busy?null:()=>unawaited(_run(()=>_load(_next!))),child:const Text('Trang tiếp'))
  ])));
 }
