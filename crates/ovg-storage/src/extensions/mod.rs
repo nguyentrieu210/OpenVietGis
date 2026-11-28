@@ -1,7 +1,13 @@
 //! E14 extension platform storage repository over canonical RLS tables.
 
 pub mod marketplace;
+pub mod trust;
+pub mod entitlement;
+pub mod commerce;
+pub mod installation;
+pub mod processing;
 pub mod partner;
+pub mod runtime_v2;
 pub mod records;
 pub mod validation;
 
@@ -960,7 +966,7 @@ pub async fn deactivate(
     let now = Utc::now();
     let row = sqlx::query(
         "UPDATE extensions.project_activations
-         SET status='disabled',updated_at=$4
+         SET status='disabled',revision=revision+1,updated_at=$4
          WHERE id=$3 AND organization_id=$1 AND project_id=$2
          RETURNING *",
     )
@@ -1022,7 +1028,7 @@ pub async fn transition(
     let now = Utc::now();
     let row = sqlx::query(
         "UPDATE extensions.project_activations
-         SET manifest_id=$4,updated_at=$5
+         SET manifest_id=$4,revision=revision+1,updated_at=$5
          WHERE organization_id=$1 AND project_id=$2 AND id=$3 AND manifest_id=$6
          RETURNING *",
     )

@@ -1,0 +1,1 @@
+{"slot":"workspace","widgets":[{"kind":"text","id":"title","text":"Thông tin môi trường GIS"},{"kind":"button","id":"run","label":"Xem thông tin SDK","action":"context"}],"actions":[{"id":"context","command_id":"host_context","permission":"ext.partner_fixture_context.host_context","consent":"read","timeout_ms":1000,"input":{}}]}

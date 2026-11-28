@@ -3,6 +3,16 @@
 //! Constitutional rule (I): `ovg-module-sdk` and all core crates MUST have zero
 //! compile-time dependencies on any vertical module (`house_numbering`, `land_asset`, etc.).
 
+pub mod release_v2;
+pub mod trust;
+pub mod declarative;
+pub mod host_profile;
+pub mod commerce;
+pub mod settlement;
+pub mod payment_offer;
+pub mod license;
+pub mod entitlement;
+
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 

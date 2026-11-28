@@ -1,0 +1,239 @@
+{
+  "operator_public_key": "GX9rI+FshTLGq8g4+s1ep4m+DHaykgM0A5v6iz02jWE=",
+  "v1": {
+    "payload": {
+      "publishers": [
+        {
+          "id": "fixture",
+          "name": "Fixture publisher",
+          "public_key": "+kg0FH9uaQw2k+/2EzYEZAPNiuKhTzGzxAc1hWkjlWU="
+        }
+      ],
+      "releases": [
+        {
+          "manifest": {
+            "api_compatibility": "1.x",
+            "capabilities": [
+              "host_context"
+            ],
+            "commands": [],
+            "description": "Synthetic test only",
+            "display_name": "Fixture context",
+            "entity_schemas": {},
+            "extension_key": "partner_fixture_context",
+            "permissions": [],
+            "ui_contributions": [
+              {
+                "id": "partner_panel",
+                "label": "Fixture context",
+                "route_suffix": "/partner",
+                "runtime": "sandboxed_iframe",
+                "sdk_version": "1.0",
+                "slot": "project_panel",
+                "url": "https://example.com/context/"
+              }
+            ],
+            "version": "1.0.0"
+          },
+          "publisher_id": "fixture",
+          "signature": "1xIMijdf/pXK9/gYo46WuMhd4PhPFijLwTAnuxBngIuCzlE0PE3wJUu8JQzjgjLsQP3NZrE0t8D0I2Kg/fSTDA=="
+        },
+        {
+          "manifest": {
+            "api_compatibility": "1.x",
+            "capabilities": [
+              "host_notice"
+            ],
+            "commands": [],
+            "description": "Synthetic test only",
+            "display_name": "Fixture notice",
+            "entity_schemas": {},
+            "extension_key": "partner_fixture_notice",
+            "permissions": [],
+            "ui_contributions": [
+              {
+                "id": "partner_panel",
+                "label": "Fixture notice",
+                "route_suffix": "/partner",
+                "runtime": "sandboxed_iframe",
+                "sdk_version": "1.0",
+                "slot": "project_panel",
+                "url": "https://example.com/notice/"
+              }
+            ],
+            "version": "1.0.0"
+          },
+          "publisher_id": "fixture",
+          "signature": "mwI6rwKgkFrpvwGG5EL7vm5ByeEDWzCMO6OXxDlgWZJsTkfB0wSu+LVtRPFRuptd4caNpKTIVUPn0q0K7ZYFCg=="
+        },
+        {
+          "manifest": {
+            "api_compatibility": "1.x",
+            "capabilities": [
+              "map_view"
+            ],
+            "commands": [],
+            "description": "Synthetic test only",
+            "display_name": "Fixture layers",
+            "entity_schemas": {},
+            "extension_key": "partner_fixture_layers",
+            "permissions": [],
+            "ui_contributions": [
+              {
+                "id": "partner_panel",
+                "label": "Fixture layers",
+                "route_suffix": "/partner",
+                "runtime": "sandboxed_iframe",
+                "sdk_version": "1.0",
+                "slot": "project_panel",
+                "url": "https://example.com/layers/"
+              }
+            ],
+            "version": "1.0.0"
+          },
+          "publisher_id": "fixture",
+          "signature": "BDxfnhXvbm8VNPbqFhLscOVZVHM7l2TiGKDMVkDQK/3bGaPcnFJWXHzSPOOAX+RiZwJ3iFmZfw2Vs8S8SblLCA=="
+        },
+        {
+          "manifest": {
+            "api_compatibility": "1.x",
+            "capabilities": [
+              "map_view"
+            ],
+            "commands": [],
+            "description": "Synthetic test only",
+            "display_name": "Fixture processing",
+            "entity_schemas": {},
+            "extension_key": "partner_fixture_processing",
+            "permissions": [],
+            "ui_contributions": [
+              {
+                "id": "partner_panel",
+                "label": "Fixture processing",
+                "route_suffix": "/partner",
+                "runtime": "sandboxed_iframe",
+                "sdk_version": "1.0",
+                "slot": "project_panel",
+                "url": "https://example.com/processing/"
+              }
+            ],
+            "version": "1.0.0"
+          },
+          "publisher_id": "fixture",
+          "signature": "/s54Ukj870g1L5Br34wJOovnBQtx8Sm8M/PLnK4gdW0dJMQHPCprWJF3G6dXzPGJvu79LGzv9R4tvqAEt+BWAw=="
+        }
+      ],
+      "schema": "openvietgis.marketplace.v1"
+    },
+    "signature": "UBvsoiriZfNSzJhlAvha6pqUL/5gHkY6EsBYCvVHgaAT6NuyAvW5iVhGwafIgqsiy+AyGWs/ujURqq2eZry8DA=="
+  },
+  "v2": {
+    "catalog_signature": "0DXUp8e9LO+rDNGZHzmpEKiQsah+iCKSJT6+3qDzpb1wYwTMVMw8TW+sxPw6uZs1sHwcltSFAclqPAmeT9sMDg==",
+    "epoch": 2,
+    "releases": [
+      {
+        "assets": {},
+        "contribution": "eyJzbG90Ijoid29ya3NwYWNlIiwid2lkZ2V0cyI6W3sia2luZCI6InRleHQiLCJpZCI6InRpdGxlIiwidGV4dCI6IlRow7RuZyB0aW4gbcO0aSB0csaw4budbmcgR0lTIn0seyJraW5kIjoiYnV0dG9uIiwiaWQiOiJydW4iLCJsYWJlbCI6IlhlbSB0aMO0bmcgdGluIFNESyIsImFjdGlvbiI6ImNvbnRleHQifV0sImFjdGlvbnMiOlt7ImlkIjoiY29udGV4dCIsImNvbW1hbmRfaWQiOiJob3N0X2NvbnRleHQiLCJwZXJtaXNzaW9uIjoiZXh0LnBhcnRuZXJfZml4dHVyZV9jb250ZXh0Lmhvc3RfY29udGV4dCIsImNvbnNlbnQiOiJyZWFkIiwidGltZW91dF9tcyI6MTAwMCwiaW5wdXQiOnt9fV19Cg==",
+        "envelope": {
+          "assets": [],
+          "contribution_digest": "ab6dfe87a5e2d19e39bb99a9da681def7203ad20bb6b3f325adbe4a345b38895",
+          "extension_key": "partner_fixture_context",
+          "host_api_range": "^1",
+          "issued_at": "2026-11-29T00:00:00Z",
+          "key_id": "f31f5d967197f8859f3fb184cee0857fd4c36bf520b4389b1cbc6b4e1b14ab04",
+          "manifest_digest": "75aee718ab115abd1661389360e5f2e58bc7056e2c96871bc97bb78278f28cdd",
+          "permissions": [
+            "ext.partner_fixture_context.host_context"
+          ],
+          "platforms": [
+            "web"
+          ],
+          "publisher_id": "fixture",
+          "schema_version": 2,
+          "version": "1.0.0"
+        },
+        "operator_signature": "bgd9ZOyxCXO18k2E5FjvTCNRDwtVQEIOXG6Gm7maurkPO9SStGUr6T8pYi3U74MOKrH/jnAghu4pbx5lf30bAQ==",
+        "publisher_signature": "HlDQQNc9nBSsPWKGqFbitIAJIPIKpoyNOlceKdbBN5i+wXiPFkFBQmu5XsgjXfyt+7Jqj5E6p/nTFkvkd+dLCg=="
+      },
+      {
+        "assets": {},
+        "contribution": "eyJzbG90IjoiZm9ybSIsIndpZGdldHMiOlt7ImtpbmQiOiJpbnB1dCIsImlkIjoibm90aWNlIiwibGFiZWwiOiJO4buZaSBkdW5nIHRow7RuZyBiw6FvIiwiZmllbGQiOiJ0ZXh0In0seyJraW5kIjoiYnV0dG9uIiwiaWQiOiJzaG93IiwibGFiZWwiOiJIaeG7g24gdGjhu4siLCJhY3Rpb24iOiJub3RpY2UifV0sImFjdGlvbnMiOlt7ImlkIjoibm90aWNlIiwiY29tbWFuZF9pZCI6Imhvc3Rfbm90aWNlIiwicGVybWlzc2lvbiI6ImV4dC5wYXJ0bmVyX2ZpeHR1cmVfbm90aWNlLmhvc3Rfbm90aWNlIiwiY29uc2VudCI6InJlYWQiLCJ0aW1lb3V0X21zIjoxMDAwLCJpbnB1dCI6eyJ0ZXh0Ijp7ImtpbmQiOiJ0ZXh0IiwicmVxdWlyZWQiOnRydWV9fX1dfQo=",
+        "envelope": {
+          "assets": [],
+          "contribution_digest": "5d52438eede3415ec89ccfe8fd9717f1f09c88dcac0567500f5e4488ea6628df",
+          "extension_key": "partner_fixture_notice",
+          "host_api_range": "^1",
+          "issued_at": "2026-11-29T00:00:00Z",
+          "key_id": "f31f5d967197f8859f3fb184cee0857fd4c36bf520b4389b1cbc6b4e1b14ab04",
+          "manifest_digest": "7ecfc878bcdf52325dfcbd9897797621bfc542034f6faa282e17e3409fc0379c",
+          "permissions": [
+            "ext.partner_fixture_notice.host_notice"
+          ],
+          "platforms": [
+            "web"
+          ],
+          "publisher_id": "fixture",
+          "schema_version": 2,
+          "version": "1.0.0"
+        },
+        "operator_signature": "DmMhtHq/nXVW+Zs5d7koZvYVF46bAi34MZZxr8IFSlHThx3Yv3lIEN21uxPp2suk+AiTnUSd1fUYq7KgBxocBw==",
+        "publisher_signature": "1sUr1XCf1odfQ3ZYXF58GuzzjRqSRG7hcw3rRCXWYNJjOgMxuMOsTPGBUz7HauxD+qt1Ndr6BOXkqxJdQdimAg=="
+      },
+      {
+        "assets": {},
+        "contribution": "eyJzbG90Ijoid29ya3NwYWNlIiwid2lkZ2V0cyI6W3sia2luZCI6InRleHQiLCJpZCI6InRpdGxlIiwidGV4dCI6IkRhbmggbeG7pWMgbOG7m3AgR0lTIGPhu6dhIGThu7Egw6FuIn0seyJraW5kIjoiaW5wdXQiLCJpZCI6ImN1cnNvciIsImxhYmVsIjoiTcOjIGzhu5twIGN14buRaSB0cmFuZyB0csaw4bubYyAoa2jDtG5nIGLhuq90IGJ14buZYykiLCJmaWVsZCI6ImFmdGVyX2lkIn0seyJraW5kIjoiYnV0dG9uIiwiaWQiOiJsaXN0IiwibGFiZWwiOiJU4bqjaSBkYW5oIG3hu6VjIGzhu5twIiwiYWN0aW9uIjoibGlzdCJ9LHsia2luZCI6ImlucHV0IiwiaWQiOiJsYXllciIsImxhYmVsIjoiTcOjIGzhu5twIGPhuqduIHhlbSIsImZpZWxkIjoibGF5ZXJfaWQifSx7ImtpbmQiOiJidXR0b24iLCJpZCI6ImRldGFpbCIsImxhYmVsIjoiWGVtIHRow7RuZyB0aW4gbOG7m3AiLCJhY3Rpb24iOiJkZXRhaWwifV0sImFjdGlvbnMiOlt7ImlkIjoibGlzdCIsImNvbW1hbmRfaWQiOiJnaXNfbGF5ZXJzIiwicGVybWlzc2lvbiI6ImV4dC5wYXJ0bmVyX2ZpeHR1cmVfbGF5ZXJzLm1hcF92aWV3IiwiY29uc2VudCI6InJlYWQiLCJ0aW1lb3V0X21zIjozMDAwMCwiaW5wdXQiOnsiYWZ0ZXJfaWQiOnsia2luZCI6InRleHQiLCJyZXF1aXJlZCI6ZmFsc2V9fX0seyJpZCI6ImRldGFpbCIsImNvbW1hbmRfaWQiOiJnaXNfbGF5ZXIiLCJwZXJtaXNzaW9uIjoiZXh0LnBhcnRuZXJfZml4dHVyZV9sYXllcnMubWFwX3ZpZXciLCJjb25zZW50IjoicmVhZCIsInRpbWVvdXRfbXMiOjMwMDAwLCJpbnB1dCI6eyJsYXllcl9pZCI6eyJraW5kIjoidGV4dCIsInJlcXVpcmVkIjp0cnVlfX19XX0K",
+        "envelope": {
+          "assets": [],
+          "contribution_digest": "e1b2dbfe8899d3d16c48ecfa8afc8c07c36646e73b82349a1f40b986ee705297",
+          "dependencies": [
+            {
+              "key": "partner_fixture_context",
+              "range": "^1.0.0"
+            }
+          ],
+          "extension_key": "partner_fixture_layers",
+          "host_api_range": "^1",
+          "issued_at": "2026-11-29T00:00:00Z",
+          "key_id": "f31f5d967197f8859f3fb184cee0857fd4c36bf520b4389b1cbc6b4e1b14ab04",
+          "manifest_digest": "081fd160afdcc93cc3e71c1b25139b562f459ce0121e7c170020c0225ffa27c5",
+          "permissions": [
+            "ext.partner_fixture_layers.map_view"
+          ],
+          "platforms": [
+            "web"
+          ],
+          "publisher_id": "fixture",
+          "schema_version": 2,
+          "version": "1.0.0"
+        },
+        "operator_signature": "HBoRMZcnCB5Hf7qwp3Gr5Ahhkc8NHZlhvzkiuJSHKFNJMaWpxs6if73TM2VwFez8IrJ2vEeiuDBobHlDC5pvDQ==",
+        "publisher_signature": "5MK6jelyNvn4+yBrsvRcFwyPWvxbOKnAmtduiowLzb+xrZ+uErvv44Pv2MIBxu/x6mSLu7gdDTbzehNaIuPNCg=="
+      },
+      {
+        "assets": {},
+        "contribution": "eyJzbG90Ijoid29ya3NwYWNlIiwid2lkZ2V0cyI6W3sia2luZCI6InRleHQiLCJpZCI6InRpdGxlIiwidGV4dCI6IsSQ4buBIHh14bqldCB44butIGzDvSBHSVMuIE5o4bqtcCBKU09OIHnDqnUgY+G6p3UsIHhlbSB0csaw4bubYyB2w6AgeMOhYyBuaOG6rW4gdOG6oWkgaG9zdC4ifSx7ImtpbmQiOiJpbnB1dCIsImlkIjoicmVxdWVzdCIsImZpZWxkIjoicmVxdWVzdCIsImxhYmVsIjoiWcOqdSBj4bqndSB0aHXhuq10IHRvw6FuIEpTT04ifSx7ImtpbmQiOiJidXR0b24iLCJpZCI6InByZXZpZXciLCJsYWJlbCI6IlhlbSB0csaw4bubYyB44butIGzDvSIsImFjdGlvbiI6InByZXZpZXcifV0sImFjdGlvbnMiOlt7ImlkIjoicHJldmlldyIsImNvbW1hbmRfaWQiOiJnaXNfcHJvY2Vzc2luZ19wbGFuIiwicGVybWlzc2lvbiI6ImV4dC5wYXJ0bmVyX2ZpeHR1cmVfcHJvY2Vzc2luZy5wcm9jZXNzaW5nX3BsYW4iLCJjb25zZW50IjoicmVhZCIsInRpbWVvdXRfbXMiOjMwMDAwLCJpbnB1dCI6eyJyZXF1ZXN0Ijp7ImtpbmQiOiJ0ZXh0IiwicmVxdWlyZWQiOnRydWV9fX1dfQo=",
+        "envelope": {
+          "assets": [],
+          "contribution_digest": "4420d57cf6bbb913555a2bb00696a873e99202b6dccfc77749f01a79b9d4634c",
+          "extension_key": "partner_fixture_processing",
+          "host_api_range": "^1",
+          "issued_at": "2026-11-29T00:00:00Z",
+          "key_id": "f31f5d967197f8859f3fb184cee0857fd4c36bf520b4389b1cbc6b4e1b14ab04",
+          "manifest_digest": "a3e0d4585d657d1a40e397a448f04c72e2d436103049f86f790df09dffa49a52",
+          "permissions": [
+            "ext.partner_fixture_processing.processing_plan"
+          ],
+          "platforms": [
+            "web"
+          ],
+          "publisher_id": "fixture",
+          "schema_version": 2,
+          "version": "1.0.0"
+        },
+        "operator_signature": "wH6dy71oiOiNU/27wRPNu4/u8nVVU+5Qirp8EryPoye6AC5kn/ZpE5Uu/8bXZtAlqnzgS/xEewQ8goUP6mT+Dg==",
+        "publisher_signature": "uyMVDnc9W2lc+WdJ40vGQNed5YtnFS48aHWSPI8ftIjqFSeJQD269sYXKryAGnmjZpmAdtK5XiJfO5j56v/eCQ=="
+      }
+    ],
+    "schema": "openvietgis.marketplace.v2"
+  }
+}

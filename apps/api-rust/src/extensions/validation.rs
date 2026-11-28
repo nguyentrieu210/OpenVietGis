@@ -19,6 +19,7 @@ pub const MARKETPLACE_SCHEMA: &str = "openvietgis.marketplace.v1";
 pub struct CatalogRelease {
     pub publisher_id: String,
     pub publisher_name: String,
+    pub publisher_public_key: String,
     pub manifest: Value,
     pub signature: String,
 }
@@ -100,7 +101,7 @@ pub fn validate_catalog(payload: &Value) -> Result<Vec<CatalogRelease>, AppError
     }
     let publishers_raw = obj["publishers"].as_array().ok_or_else(invalid)?;
     let releases_raw = obj["releases"].as_array().ok_or_else(invalid)?;
-    if publishers_raw.len() > 100 || releases_raw.len() > 500 {
+    if publishers_raw.len() > 100 || releases_raw.len() > 1000 {
         return Err(invalid());
     }
 
@@ -193,6 +194,7 @@ pub fn validate_catalog(payload: &Value) -> Result<Vec<CatalogRelease>, AppError
         releases.push(CatalogRelease {
             publisher_id: pid.to_owned(),
             publisher_name: pub_name.clone(),
+            publisher_public_key: pub_key.clone(),
             manifest: r["manifest"].clone(),
             signature: signature.to_owned(),
         });

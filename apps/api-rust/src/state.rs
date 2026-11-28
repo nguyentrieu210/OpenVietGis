@@ -19,6 +19,7 @@ pub struct AppState {
     pub broadcaster: SyncBroadcaster,
     pub jobs: JobExecutor,
     pub tile_cache: TileCache,
+    pub(crate) plugin_catalog_snapshot: crate::extensions::marketplace_v2::SnapshotCache,
 }
 
 impl AppState {
@@ -39,6 +40,7 @@ impl AppState {
             broadcaster: SyncBroadcaster::new(256),
             jobs,
             tile_cache: TileCache::new(),
+            plugin_catalog_snapshot: Default::default(),
         })
     }
 }

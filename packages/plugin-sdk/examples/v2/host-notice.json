@@ -1,0 +1,1 @@
+{"slot":"form","widgets":[{"kind":"input","id":"notice","label":"Nội dung thông báo","field":"text"},{"kind":"button","id":"show","label":"Hiển thị","action":"notice"}],"actions":[{"id":"notice","command_id":"host_notice","permission":"ext.partner_fixture_notice.host_notice","consent":"read","timeout_ms":1000,"input":{"text":{"kind":"text","required":true}}}]}

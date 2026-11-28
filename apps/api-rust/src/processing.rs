@@ -96,7 +96,7 @@ fn app_to_edit_error(err: AppError) -> EditError {
     }
 }
 
-const fn algorithm_str(id: AlgorithmId) -> &'static str {
+pub(crate) const fn algorithm_str(id: AlgorithmId) -> &'static str {
     match id {
         AlgorithmId::Buffer => "buffer",
         AlgorithmId::Clip => "clip",

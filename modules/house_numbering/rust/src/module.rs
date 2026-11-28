@@ -111,4 +111,41 @@ mod tests {
         assert_eq!(res.output["proposals"][0]["house_number"], "8B/2");
         assert_eq!(res.output["proposals"][1]["house_number"], "8B/4");
     }
+    #[test]
+    fn official_module_identity_and_scope_are_preserved() {
+        let mut registry = ModuleRegistry::new();
+        registry.register(Arc::new(HouseNumberingModule)).unwrap();
+        assert!(registry.register(Arc::new(HouseNumberingModule)).is_err());
+        let manifest = registry.list_manifests().pop().unwrap();
+        assert_eq!(manifest.version, "2.0.0");
+        assert_eq!(manifest.extension_key, "house_numbering");
+        let mut ctx = ModuleExecutionContext {
+            tenant: TenantScope {
+                organization_id: Uuid::new_v4(),
+                workspace_id: None,
+                project_id: Some(Uuid::new_v4()),
+                actor: ActorContext {
+                    actor_type: ActorType::Human,
+                    actor_id: Uuid::new_v4(),
+                    credential_id: None,
+                    email: None,
+                },
+                permissions: vec![Permission::ProjectEdit],
+            },
+            granted_extension_permissions: vec!["ext.house_numbering.read".into()],
+        };
+        let request = ModuleCommandRequest {
+            command_id: "preview_numbering".into(),
+            payload: json!({"street_name":"Lê Lợi","alley_prefix":"8B","side":"right_even","start_number":2,"step":2,"count":2}),
+        };
+        assert!(registry
+            .dispatch("house_numbering", &ctx, &request)
+            .is_err());
+        ctx.granted_extension_permissions = vec!["ext.house_numbering.assign".into()];
+        assert!(registry.dispatch("house_numbering", &ctx, &request).is_ok());
+        ctx.tenant.project_id = None;
+        assert!(registry
+            .dispatch("house_numbering", &ctx, &request)
+            .is_err());
+    }
 }

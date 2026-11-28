@@ -39,6 +39,7 @@ pub struct ProjectRead<'a> {
     pub(crate) project_id: Uuid,
     pub(crate) gis_scoped: bool,
     edit_authorized: bool,
+    manage_authorized: bool,
     service_display_name: Option<String>,
 }
 
@@ -158,6 +159,11 @@ impl<'a> ProjectRead<'a> {
     #[must_use]
     pub fn service_display_name(&self) -> Option<&str> {
         self.service_display_name.as_deref()
+    }
+
+    #[must_use]
+    pub fn is_project_manager(&self) -> bool {
+        self.manage_authorized
     }
 
     #[must_use]
@@ -324,6 +330,7 @@ impl<'a> ProjectRead<'a> {
             project_id,
             gis_scoped: false,
             edit_authorized: edit,
+            manage_authorized: manage,
             service_display_name: Some(display_name),
         })
     }
@@ -511,6 +518,7 @@ impl<'a> ProjectRead<'a> {
             project_id,
             gis_scoped,
             edit_authorized: edit,
+            manage_authorized: manage,
             service_display_name: None,
         })
     }
