@@ -106,6 +106,10 @@ class _UnifiedPageState extends State<UnifiedPage>{
     await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>UnifiedSurvey(project:p,layer:l,revision:r,uuid:_uuid)));
     if(mounted)await _refresh();
   }
+  Future<void> _mediaInventory()async{
+    final p=_project,l=_layer,r=_revision;if(p==null||l==null||r==null)return;
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>_MediaInventoryPage(project:p,layer:l,revision:r)));
+  }
   Future<void> _survey()async{
     final p=_project,l=_layer,r=_revision;if(p==null||l==null||r==null)return;
     final tracks=<Map<String,dynamic>>[];var after='';
@@ -199,6 +203,7 @@ class _UnifiedPageState extends State<UnifiedPage>{
           FilledButton.icon(onPressed:edit?()=>unawaited(_run(_openMap)):null,icon:const Icon(Icons.map),label:const Text('Mở bản đồ Unified')),
           FilledButton.icon(onPressed:edit?()=>unawaited(_run(_openMvt)):null,icon:const Icon(Icons.layers),label:const Text('Bản đồ MVT thử nghiệm')),
           OutlinedButton(onPressed:edit?()=>unawaited(_run(_survey)):null,child:const Text('GPS Survey đã lưu')),
+          OutlinedButton(onPressed:edit?()=>unawaited(_run(_mediaInventory)):null,child:const Text('Media mã hóa · danh mục')),
           FilledButton.icon(onPressed:edit?()=>unawaited(_run(_captureSurvey)):null,icon:const Icon(Icons.gps_fixed),label:const Text('Khảo sát GPS Unified')),
           for(final l in _layers)ListTile(title:Text(l['name'].toString()),leading:Icon(l['id']==_layer?Icons.check_circle:Icons.layers),enabled:ready,onTap:()=>setState((){_layer=l['id'].toString();_rows=[];_cursor=null;})),
           TextField(controller:_name,enabled:ready,maxLength:256,decoration:const InputDecoration(labelText:'Tên lớp')),
@@ -238,6 +243,31 @@ class _SurveyReadPageState extends State<_SurveyReadPage>{
  @override Widget build(BuildContext context)=>PopScope(canPop:!_busy,child:Scaffold(appBar:AppBar(title:const Text('GPS Fix · dữ liệu gốc')),body:ListView(padding:const EdgeInsets.all(12),children:[
   if(_busy)const LinearProgressIndicator(),if(_error!=null)Text(_error!),
   for(final row in _rows)ListTile(title:Text('Fix ${row["seq"]} · Đoạn ${row["segment"]}'),subtitle:Text(jsonEncode(row['fix']))),
+  if(_next!=null)OutlinedButton(onPressed:_busy?null:()=>unawaited(_load(_next!)),child:const Text('Trang tiếp'))
+ ])));
+}
+
+class _MediaInventoryPage extends StatefulWidget{
+ final NativeUnifiedProject project;final String layer,revision;
+ const _MediaInventoryPage({required this.project,required this.layer,required this.revision});
+ @override State<_MediaInventoryPage> createState()=>_MediaInventoryPageState();
+}
+class _MediaInventoryPageState extends State<_MediaInventoryPage>{
+ List<Map<String,dynamic>> _rows=[];String? _next,_error;bool _busy=false;
+ @override void initState(){super.initState();unawaited(_load(''));}
+ Future<void> _load(String after)async{
+  if(_busy)return;setState(()=>_busy=true);
+  try{
+   final v=jsonDecode(await widget.project.mediaInventory(layerId:widget.layer,after:after,expected:widget.revision)) as Map<String,dynamic>;
+   final rows=(v['items'] as List).cast<Map<String,dynamic>>();
+   if(mounted)setState((){_rows=rows;_next=rows.length==100?rows.last['id'].toString():null;_error=null;});
+  }catch(e){if(mounted)setState(()=>_error=e.toString());}finally{if(mounted)setState(()=>_busy=false);}
+ }
+ @override Widget build(BuildContext context)=>PopScope(canPop:!_busy,child:Scaffold(appBar:AppBar(title:const Text('Media mã hóa · đang khóa')),body:ListView(padding:const EdgeInsets.all(16),children:[
+  const Text('Chỉ danh mục ciphertext đã nhập. Không chứa khóa giải mã. Cần tích hợp bộ cấp khóa nền tảng trước khi nhập hoặc mở ảnh. Media cũ chưa tự động chuyển.'),
+  if(_busy)const LinearProgressIndicator(),if(_error!=null)Text(_error!),
+  if(!_busy&&_rows.isEmpty&&_error==null)const Text('Không có media mã hóa trong trang này.'),
+  for(final row in _rows)ListTile(leading:const Icon(Icons.lock_outline),title:Text(row['id'].toString()),subtitle:Text('Đối tượng: ${row["feature"]}\n${row["cipher_bytes"]} byte ciphertext')),
   if(_next!=null)OutlinedButton(onPressed:_busy?null:()=>unawaited(_load(_next!)),child:const Text('Trang tiếp'))
  ])));
 }
