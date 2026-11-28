@@ -32,7 +32,7 @@ pub fn list_projects(path:&Path)->Result<Vec<String>>{
   }
  }out.sort();Ok(out)
 }
-pub struct NativeProject{store:Mutex<Option<Store>>,id:Uuid}
+pub struct NativeProject{store:Mutex<Option<Store>>,id:Uuid,tiles:Mutex<std::collections::HashMap<Uuid,tile_archive::TileArchive>>}
 impl NativeProject{
  fn with<T>(&self,f:impl FnOnce(&Store)->Result<T>)->Result<T>{
   let mut s=self.store.lock().map_err(lock_err)?;
@@ -42,7 +42,7 @@ impl NativeProject{
   }
  }
  pub fn project_id(&self)->String{self.id.to_string()}
- pub fn close(&self)->Result<()>{let mut s=self.store.lock().map_err(lock_err)?;if let Some(store)=s.as_ref(){store.checkpoint()?;}s.take();Ok(())}
+ pub fn close(&self)->Result<()>{let mut s=self.store.lock().map_err(lock_err)?;if let Some(store)=s.as_ref(){store.checkpoint()?;}s.take();self.tiles.lock().map_err(lock_err)?.clear();Ok(())}
  pub fn catalog(&self)->Result<String>{self.with(|s|encode(&s.catalog()?))}
  pub fn add_layer(&self,layer:&str,name:&str,expected:&str)->Result<String>{
   self.with(|s|Ok(s.add_layer(id(layer)?,name,revision(expected)?)?.to_string()))
@@ -186,6 +186,23 @@ impl NativeProject{
  pub fn survey_fixes(&self,layer:&str,track:&str,after:&str,expected:&str)->Result<String>{
   self.with(|s|encode(&s.survey_fixes(id(layer)?,id(track)?,revision(after)?,100,revision(expected)?)?))
  }
+ /// Build a private revision-bound render archive. At most two leases per
+ /// open project so the renderer can replace a source without deleting it early.
+ pub fn tile_archive(&self,layers:&[String],bbox:[f64;4],z:u8,expected:&str,cache:&Path)->Result<String>{
+  let ls=layers.iter().map(|l|id(l)).collect::<Result<Vec<_>>>()?;
+  self.with(|s|{
+   let mut leases=self.tiles.lock().map_err(lock_err)?;if leases.len()>=2{return Err(Error::Limit)}
+   let arc=tile_archive::TileArchive::build(s,&ls,revision(expected)?,bbox,z,&root(cache)?,&AtomicBool::new(false))?;
+   let key=Uuid::new_v4();let response=encode(&serde_json::json!({"lease":key,"archive":arc.info}))?;
+   leases.insert(key,arc);Ok(response)
+  })
+ }
+ pub fn release_tile_archive(&self,lease:&str)->Result<()>{
+  self.with(|_|{self.tiles.lock().map_err(lock_err)?.remove(&id(lease)?);Ok(())})
+ }
+ pub fn vector_tile(&self,layer:&str,z:u8,x:u32,y:u32,expected:&str)->Result<Vec<u8>>{
+  self.with(|s|mvt::unified_tile(s,id(layer)?,revision(expected)?,z,x,y,&AtomicBool::new(false)).map_err(|e|match e{"STALE_REVISION"=>Error::Conflict,"TILE_DENSITY_LIMIT"|"RESOURCE_LIMIT"=>Error::Limit,_=>Error::Invalid}))
+ }
  pub fn integrity(&self)->Result<bool>{self.with(|s|s.integrity())}
  /// Backup into private exchange directory, never caller path or cloud.
  pub fn backup(&self,exchange:&Path,expected:&str)->Result<String>{
@@ -197,7 +214,7 @@ pub fn open_project(path:&Path,project:&str)->Result<NativeProject>{
  let id=id(project)?;let dir=root(path)?.join(project);
  if !fs::symlink_metadata(&dir).is_ok_and(|m|m.is_dir()){return Err(Error::Invalid)}
  let store=Store::reopen(&dir.join("project.sqlite"))?;
- Ok(NativeProject{store:Mutex::new(Some(store)),id})
+ Ok(NativeProject{store:Mutex::new(Some(store)),id,tiles:Mutex::new(std::collections::HashMap::new())})
 }
 fn publish(path:&Path,f:impl FnOnce(&Path)->Result<()>)->Result<String>{
  let root=root(path)?;if list_projects(&root)?.len()>=MAX_PROJECTS{return Err(Error::Limit)}
