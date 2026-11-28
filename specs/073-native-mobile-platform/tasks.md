@@ -117,3 +117,7 @@ See [W2 checkpoint](evidence/w2-implementation-checkpoint.md) and [execution led
 
 ### W3 implementation evidence
 See [W3 checkpoint](evidence/w3-implementation-checkpoint.md). Host focused 29 tests PASS at b370310. New grouped edits/media and Flutter test pending. No formal task closure.
+
+
+### W4 implementation evidence
+See [W4 checkpoint](evidence/w4-implementation-checkpoint.md). Candidate scoped Dart SDK passes targeted tests. Separate encrypted managed repository and PostgreSQL identity candidate require further qualification; no formal task closure.

@@ -44,15 +44,15 @@ Snapshot based on implementation commit db2ef12c08a9943ee805cec1ebb78725665f4a34
 | E09 | 3 | T039 | Field survey | T036, T028 | 3 | IN PROGRESS | b370310 GGA checksum/fix test PASS | NTRIP, transport, real receiver, correction loss |
 | E08 | 3 | T040 | Storage | T016, T017, T022, T038 | 3 | IN PROGRESS | 7d00cfd encrypted blob candidate only | Encrypted DB, key wrapping, WAL/temp/backup, lock lifecycle |
 | E16 | 3 | T041 | Security/QA/release | T031, T033, T034, T035, T037, T038, T040 | 3 | IN PROGRESS | 46170034589 focused native PASS | A1 blocked: prior gates, APK and device workflow |
-| E10 | 4 | T042 | Dart SDK/auth/sync | T006, T008 | 3 | WAITING | — | Await accepted dependencies |
-| E10 | 4 | T043 | Dart SDK/auth/sync | T042, T006 | 3 | WAITING | — | Await accepted dependencies |
-| E10 | 4 | T044 | Dart SDK/auth/sync | T043, T014 | 3 | WAITING | — | Await accepted dependencies |
-| E10 | 4 | T045 | Dart SDK/auth/sync | T044, T040 | 3 | WAITING | — | Await accepted dependencies |
-| E10 | 4 | T046 | Dart SDK/auth/sync | T045, T017 | 3 | WAITING | — | Await accepted dependencies |
-| E10 | 4 | T047 | Dart SDK/auth/sync | T046 | 3 | WAITING | — | Await accepted dependencies |
-| E10 | 4 | T048 | Dart SDK/auth/sync | T045, T043 | 3 | WAITING | — | Await accepted dependencies |
-| E10 | 4 | T049 | Dart SDK/auth/sync | T044, T046 | 3 | WAITING | — | Await accepted dependencies |
-| E16 | 4 | T050 | Security/QA/release | T047, T048, T049, T041 | 3 | WAITING | — | Await accepted dependencies |
+| E10 | 4 | T042 | Dart SDK/auth/sync | T006, T008 | 3 | IN PROGRESS | 99e2cb5 Dart SDK targeted tests PASS | Generated OpenAPI/version negotiation/diff guard |
+| E10 | 4 | T043 | Dart SDK/auth/sync | T042, T006 | 3 | IN PROGRESS | 5dc552f candidate credential repository; PKCE SDK PASS | Reviewed migration/mounted auth, OS keychain and full DB tests |
+| E10 | 4 | T044 | Dart SDK/auth/sync | T043, T014 | 3 | IN PROGRESS | 99e2cb5 SDK scope/origin checks PASS | Connected UI/discovery and secure scope teardown |
+| E10 | 4 | T045 | Dart SDK/auth/sync | T044, T040 | 3 | IN PROGRESS | f9f2b87 encrypted snapshot/lease candidate | Signed server package download, multi-page staging and disk-full |
+| E10 | 4 | T046 | Dart SDK/auth/sync | T045, T017 | 3 | IN PROGRESS | d57a2a9 R029 delta transactional candidate | Runner, server transport and rebase |
+| E10 | 4 | T047 | Dart SDK/auth/sync | T046 | 3 | IN PROGRESS | f9f2b87 outbox/receipt and 100 local recovery fixtures | Runner, conflict UI/manual rebase, real server unknown ACK |
+| E10 | 4 | T048 | Dart SDK/auth/sync | T045, T043 | 3 | IN PROGRESS | d57a2a9 signed lease and connection closure candidate | OS key wrap, trusted clocks, device/reboot, server signing/revoke |
+| E10 | 4 | T049 | Dart SDK/auth/sync | T044, T046 | 3 | IN PROGRESS | 99e2cb5 bounded SSE parser test PASS | Actual scoped stream/reconnect/revoke |
+| E16 | 4 | T050 | Security/QA/release | T047, T048, T049, T041 | 3 | IN PROGRESS | d3f3128 isolated identity PG tests queued | A2 prior gates, PostGIS/Web concurrent edits, actual device |
 | E11 | 5 | T051 | Plugin runtime | T007, T042 | 3 | WAITING | — | Await accepted dependencies |
 | E11 | 5 | T052 | Plugin runtime | T051, T035 | 3 | WAITING | — | Await accepted dependencies |
 | E11 | 5 | T053 | Plugin runtime | T052, T048 | 3 | WAITING | — | Await accepted dependencies |
@@ -109,3 +109,6 @@ See [W2 checkpoint](w2-implementation-checkpoint.md). Targeted host native 25 te
 
 ## W3 source implementation
 See [W3 checkpoint](w3-implementation-checkpoint.md). Focused host run passed 29 tests at b370310; later attachment/group/Dart tests pending. A1 and earlier gates remain open.
+
+## W4 source implementation
+See [W4 checkpoint](w4-implementation-checkpoint.md). Dart SDK targeted tests passed; encrypted host and identity integration pending. A0/A1/A2 remain open.
