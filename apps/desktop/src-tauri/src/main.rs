@@ -6,6 +6,17 @@ use host::{Host, Opened, Poll, Project};
 use serde::Serialize;
 use tauri::{Emitter, Manager, State, WebviewWindow};
 use uuid::Uuid;
+use std::sync::atomic::{AtomicUsize, Ordering};
+static IN_FLIGHT: AtomicUsize = AtomicUsize::new(0);
+struct Permit;
+impl Permit {
+    fn acquire()->Reply<Self>{
+        IN_FLIGHT.fetch_update(Ordering::AcqRel,Ordering::Acquire,|n|if n<16 {Some(n+1)} else {None})
+            .map(|_|Self).map_err(|_|"RESOURCE_LIMIT".to_owned())
+    }
+}
+impl Drop for Permit {fn drop(&mut self){IN_FLIGHT.fetch_sub(1,Ordering::AcqRel);}}
+
 
 type Reply<T> = Result<T,String>;
 fn trusted(window:&WebviewWindow)->Reply<()>{
@@ -17,7 +28,8 @@ fn trusted(window:&WebviewWindow)->Reply<()>{
 }
 async fn run<T:Send+'static>(window:WebviewWindow,host:Host,f:impl FnOnce(Host)->Result<T,&'static str>+Send+'static)->Reply<T>{
     trusted(&window)?;
-    tauri::async_runtime::spawn_blocking(move||f(host)).await.map_err(|_|"SESSION_FAILED".to_owned())?.map_err(str::to_owned)
+    let permit=Permit::acquire()?;
+    tauri::async_runtime::spawn_blocking(move||{let _permit=permit;f(host)}).await.map_err(|_|"SESSION_FAILED".to_owned())?.map_err(str::to_owned)
 }
 #[derive(Serialize)]
 struct Capabilities { protocol_version:u32, standalone:bool, managed:bool, cloud:bool, local_tiles:bool, transform:bool }
@@ -81,6 +93,11 @@ fn main(){
             let id: &str=event.id().as_ref();
             if matches!(id,"new"|"close-workspace"){
                 if let Some(w)=app.get_webview_window("main"){let _=w.emit("desktop-menu",id);}
+            }
+        })
+        .on_window_event(|window,event|{
+            if window.label()=="main" && matches!(event,tauri::WindowEvent::Destroyed){
+                if let Some(host)=window.try_state::<Host>(){let _=host.shutdown();}
             }
         })
         .invoke_handler(tauri::generate_handler![desktop_capabilities,desktop_list,desktop_create,desktop_open,desktop_close,desktop_start_transform,desktop_poll,desktop_cancel])
