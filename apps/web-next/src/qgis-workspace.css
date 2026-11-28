@@ -197,3 +197,7 @@ html[data-ovg-icons=large] .qgis-toolrow .qgis-icon-button svg{width:24px;height
 @media(prefers-reduced-motion:reduce){
  .qgis-studio :is(.core-ribbon-menu,.qgis-floating-palette,.qgis-dock){transition:none!important;scroll-behavior:auto}
 }
+
+.attribute-column-picker{max-height:180px;overflow:auto;align-items:flex-start}
+.attribute-column-setting{display:flex;align-items:center;gap:4px;flex-wrap:nowrap;border:1px solid #bdcbbf;padding:2px 4px;border-radius:3px}
+.attribute-column-setting input[type=number]{width:64px}

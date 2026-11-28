@@ -31,11 +31,21 @@ export {snapLabel};
 export type SnapPrefs={enabled:boolean;mode:SnapMode;tolerance:number;scope?:SnapScope;selectedLayers?:string[]};
 import {getBasemap,cleanSentinelScene,type BasemapId,type SentinelScene} from "./Basemaps";
 export type WorkspacePrefs={width:number;showLayers:boolean;basemap:boolean;basemapProvider:BasemapId;sentinelScene?:SentinelScene;snap:SnapPrefs;browser:boolean;legend:boolean;layerViews:Record<string,LayerView>;themes:Record<string,MapTheme>;exclusive:string[]};
-export type MapTheme={hidden:string[];views:Record<string,LayerView>};
+export type MapTheme={hidden:string[];views:Record<string,LayerView>;pins?:Record<string,{source:string;schema:string}>};
 export const defaultWorkspace:WorkspacePrefs={width:340,showLayers:true,basemap:true,basemapProvider:"google-hybrid",snap:{enabled:false,mode:"both",tolerance:10,scope:"all",selectedLayers:[]},browser:true,legend:true,layerViews:{},themes:{},exclusive:[]};
 export function readWorkspace(key:string):WorkspacePrefs{try{const a=JSON.parse(localStorage.getItem(key)??"null");if(!a||typeof a!=="object")return defaultWorkspace;const views:Record<string,LayerView>={};for(const [id,v] of Object.entries(a.layerViews??{}).slice(0,100))views[id]=cleanLayerView(v);// 285 was the old default; untouched docks move to the wider default.
  return {width:a.width===285?340:clip(a.width,340,150,700),showLayers:a.showLayers!==false,basemap:a.basemap!==false,basemapProvider:getBasemap(a.basemapProvider).id,sentinelScene:cleanSentinelScene(a.sentinelScene),browser:a.browser!==false,legend:a.legend!==false,snap:{enabled:a.snap?.enabled===true,mode:["vertex","edge","both","smart","midpoint","intersection","perpendicular"].includes(a.snap?.mode)?a.snap.mode:"both",tolerance:clip(a.snap?.tolerance,10,4,25),scope:a.snap?.scope==="active"||a.snap?.scope==="selected"?a.snap.scope:"all",selectedLayers:Array.isArray(a.snap?.selectedLayers)?[...new Set<string>(a.snap.selectedLayers.filter((x:unknown)=>typeof x==="string"))].slice(0,100):[]},layerViews:views,themes:cleanThemes(a.themes),exclusive:Array.isArray(a.exclusive)?a.exclusive.filter((x:unknown)=>typeof x==="string").slice(0,50):[]}}catch{return defaultWorkspace}}
-function cleanThemes(x:unknown):Record<string,MapTheme>{const out:Record<string,MapTheme>={};if(!x||typeof x!=="object")return out;for(const [name,t] of Object.entries(x as Record<string,{hidden?:unknown;views?:unknown}>).slice(0,20)){if(!t||typeof t!=="object")continue;const views:Record<string,LayerView>={};for(const [id,v] of Object.entries((t.views??{}) as object).slice(0,100))views[id]=cleanLayerView(v);out[name.slice(0,60)]={hidden:Array.isArray(t.hidden)?t.hidden.filter((h:unknown)=>typeof h==="string").slice(0,200):[],views}}return out}
+function cleanThemes(x:unknown):Record<string,MapTheme>{
+ const out:Record<string,MapTheme>=Object.create(null);if(!x||typeof x!=="object")return out;
+ for(const [name,t] of Object.entries(x as Record<string,{hidden?:unknown;views?:unknown;pins?:unknown}>).slice(0,20)){
+  if(!name.trim()||name.length>60||["__proto__","constructor","prototype"].includes(name)||!t||typeof t!=="object")continue;
+  const views:Record<string,LayerView>=Object.create(null),pins:NonNullable<MapTheme["pins"]>=Object.create(null);
+  for(const [id,v] of Object.entries((t.views??{}) as object).slice(0,100))views[id]=cleanLayerView(v);
+  if(t.pins&&typeof t.pins==="object")for(const [id,p] of Object.entries(t.pins).slice(0,100)){if(p&&typeof p.source==="string"&&typeof p.schema==="string")pins[id]={source:p.source,schema:p.schema}}
+  out[name]={hidden:Array.isArray(t.hidden)?t.hidden.filter((h:unknown)=>typeof h==="string").slice(0,200):[],views,...(t.pins?{pins}:{})};
+ }
+ return out;
+}
 export function storeWorkspace(key:string,prefs:WorkspacePrefs){try{localStorage.setItem(key,JSON.stringify(prefs))}catch{/* storage unavailable */}}
 const geometryTitle=(s:string|undefined)=>({Point:"Điểm",LineString:"Đường",Polygon:"Vùng"}[s??""]??s??"—");
 function Preview({style,family}:{style:MapStyle;family:string|undefined}){return <svg className="lp-preview" viewBox="0 0 260 100" aria-label="Xem trước ký hiệu"><rect width="260" height="100" rx="5" fill="#f1f5f1"/>{family==="Point"?<circle cx="130" cy="50" r={Math.max(3,style.radius*1.9)} fill={style.color} stroke="#fff" strokeWidth="2"/>:family==="LineString"?<path d="M35 66 L88 26 L147 63 L222 28" stroke={style.color} strokeWidth={style.width} fill="none" strokeLinecap="round"/>:<path d="M40 53 L83 20 L178 15 L220 57 L180 81 L88 79Z" fill={style.color} fillOpacity={style.opacity} stroke={style.color} strokeWidth={style.width}/>}</svg>}

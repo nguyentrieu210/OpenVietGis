@@ -61,7 +61,18 @@ try{
 
  const first=page.locator('[data-layer-id="layer1"] .qgis-layer-name'), second=page.locator('[data-layer-id="layer2"] .qgis-layer-name');
  await first.waitFor();await second.waitFor();
- if(process.env.OVG_EXPORT_ONLY==="1"){
+ if(process.env.OVG_COLUMNS_ONLY==="1"){
+  const openTable=async()=>{await first.click();await page.keyboard.press("Control+k");const command=page.getByRole("textbox",{name:"Dòng lệnh GIS"});await command.fill("ATTR");await command.press("Enter");const t=page.locator("section.qgis-table");await t.waitFor();await t.getByLabel("Layer bảng thuộc tính").selectOption("layer1");await t.locator("tbody tr").first().waitFor();return t};
+  const table=await openTable();await table.getByRole("button",{name:"Cột",exact:true}).click();
+  const width=table.getByLabel("Độ rộng cột height_m");await width.fill("240");await width.press("Enter");
+  assert.equal(await table.getByRole("columnheader",{name:"height_m",exact:true}).evaluate(e=>e.style.width),"240px");
+  await table.getByRole("button",{name:"Đóng bảng thuộc tính",exact:true}).click();
+  await page.reload({waitUntil:"domcontentloaded",timeout:45000});const reopened=await openTable();
+  assert.equal(await reopened.getByRole("columnheader",{name:"height_m",exact:true}).evaluate(e=>e.style.width),"240px");
+  const copy=reopened.getByRole("button",{name:"Sao chép vùng chọn",exact:true});assert.equal(await copy.isEnabled(),false);
+  await reopened.locator("tbody tr").first().getByRole("checkbox").check();assert.equal(await copy.isEnabled(),true);
+  console.log("PASS column width persisted through F5 and selected-copy guard (synthetic)");
+ }else if(process.env.OVG_EXPORT_ONLY==="1"){
   await first.click();await page.keyboard.press("Control+k");const command=page.getByRole("textbox",{name:"Dòng lệnh GIS"});await command.fill("EXPORT");await command.press("Enter");
   const xp=page.getByRole("dialog",{name:"Xuất dữ liệu"});await xp.waitFor();
   await xp.getByRole("radio",{name:"Toàn bộ lớp",exact:true}).click();

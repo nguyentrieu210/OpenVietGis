@@ -41,3 +41,23 @@ export type SelectionLayerPin={id:string;source_id:string;lifecycle:string;layer
 export function selectionScopePin(layers:readonly SelectionLayerPin[],permissions:readonly string[],restricted:boolean|undefined):string{
  return JSON.stringify([restricted,[...permissions].sort(),layers.map(l=>[l.id,l.source_id,l.lifecycle,l.layer_revision,l.source.content_revision,l.source.schema_revision,l.capabilities.some(c=>c.name==="feature_read"&&c.available&&c.actor_authorized)]).sort((a,b)=>String(a[0]).localeCompare(String(b[0])))]);
 }
+
+export type ColumnConfig={hidden:string[];order:string[];widths:Record<string,number>};
+export function columnConfig(raw:unknown,fields:readonly string[]):ColumnConfig{
+ const v=raw&&typeof raw==="object"&&!Array.isArray(raw)?raw as Partial<ColumnConfig>:{};
+ const list=(x:unknown)=>Array.isArray(x)?[...new Set(x.filter((id):id is string=>typeof id==="string"&&fields.includes(id)))]:[];
+ const order=list(v.order),widths:Record<string,number>=Object.create(null);
+ for(const id of fields){const w=v.widths&&Object.hasOwn(v.widths,id)?v.widths[id]:undefined;if(typeof w==="number"&&Number.isFinite(w))widths[id]=Math.round(Math.min(600,Math.max(70,w)))}
+ return {hidden:list(Array.isArray(raw)?raw:v.hidden),order:[...order,...fields.filter(id=>!order.includes(id))],widths};
+}
+export function readColumnConfig(raw:string|null,fields:readonly string[]):ColumnConfig{
+ try{return columnConfig(JSON.parse(raw??"null"),fields)}catch{return columnConfig(null,fields)}
+}
+export function moveColumn(order:readonly string[],id:string,direction:-1|1){
+ const next=[...order],i=next.indexOf(id),j=i+direction;if(i<0||j<0||j>=next.length)return next;
+ [next[i],next[j]]=[next[j]!,next[i]!];return next;
+}
+export function completeSelection<T extends {key:string;layer:{id:string}}>(rows:readonly T[],selected:ReadonlySet<string>,scope:string){
+ const unique=new Map<string,T>();for(const r of rows)if(selected.has(r.key)&&(!scope||r.layer.id===scope)&&!unique.has(r.key))unique.set(r.key,r);
+ return unique.size===selected.size?[...unique.values()]:null;
+}
