@@ -104,8 +104,8 @@ pub async fn native_cad_convert(window:WebviewWindow,u:State<'_,Unified>,handle:
 }
 
 #[derive(Clone,Debug,Serialize)]
-pub struct EditorStatus{pub session:Uuid,pub state:String,pub format:String,pub changed:bool,pub bytes:u64,pub sha256:String}
-struct Editor{owner:Uuid,dir:tempfile::TempDir,path:PathBuf,format:String,original:String,child:Option<std::process::Child>,failed:bool}
+pub struct EditorStatus{pub session:Uuid,pub state:String,pub format:String,pub changed:bool,pub bytes:u64,pub sha256:String,pub parent:Option<Uuid>}
+struct Editor{owner:Uuid,dir:tempfile::TempDir,path:PathBuf,format:String,original:String,parent:Option<Uuid>,child:Option<std::process::Child>,failed:bool}
 #[derive(Clone,Default)]
 pub struct CadEditors{sessions:std::sync::Arc<std::sync::Mutex<std::collections::HashMap<Uuid,Editor>>>}
 fn stage_copy(src:&Path,dest:&Path,fmt:&str)->R<String>{
@@ -121,17 +121,17 @@ impl Editor{
  fn poll(&mut self,id:Uuid)->R<EditorStatus>{
   if let Some(child)=self.child.as_mut(){
    match child.try_wait().map_err(|_|"CAD_PROCESS_FAILED")?{
-    None=>return Ok(EditorStatus{session:id,state:"editing".into(),format:self.format.clone(),changed:false,bytes:0,sha256:String::new()}),
+    None=>return Ok(EditorStatus{session:id,state:"editing".into(),format:self.format.clone(),changed:false,bytes:0,sha256:String::new(),parent:self.parent}),
     Some(s)=>{self.failed=!s.success();self.child=None;}
    }
   }
   drawing(&self.path,&self.format)?;
   let (bytes,sha256)=digest(&self.path,MAX)?;
-  Ok(EditorStatus{session:id,state:if self.failed{"recoverable"}else{"ready"}.into(),format:self.format.clone(),changed:sha256!=self.original,bytes,sha256})
+  Ok(EditorStatus{session:id,state:if self.failed{"recoverable"}else{"ready"}.into(),format:self.format.clone(),changed:sha256!=self.original,bytes,sha256,parent:self.parent})
  }
 }
 impl CadEditors{
- fn start(&self,owner:Uuid,resource:&Path,private:&Path,src:&Path)->R<EditorStatus>{
+ fn start(&self,owner:Uuid,resource:&Path,private:&Path,src:&Path,parent:Option<Uuid>)->R<EditorStatus>{
   let mut map=self.sessions.lock().map_err(|_|"SESSION_FAILED")?;
   if map.len()>=2||map.values().any(|e|e.owner==owner){return Err("CAD_EDITOR_LIMIT")}
   let fmt=format(src)?;
@@ -143,8 +143,8 @@ impl CadEditors{
   let original=stage_copy(src,&path,fmt)?;
   let child=Command::new(exe).arg("--new-instance").arg(&path).current_dir(dir.path()).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().map_err(|_|"CAD_START_FAILED")?;
   let session=Uuid::new_v4();
-  map.insert(session,Editor{owner,dir,path,format:fmt.into(),original,child:Some(child),failed:false});
-  Ok(EditorStatus{session,state:"editing".into(),format:fmt.into(),changed:false,bytes:0,sha256:String::new()})
+  map.insert(session,Editor{owner,dir,path,format:fmt.into(),original,parent,child:Some(child),failed:false});
+  Ok(EditorStatus{session,state:"editing".into(),format:fmt.into(),changed:false,bytes:0,sha256:String::new(),parent})
  }
  fn poll(&self,owner:Uuid,id:Uuid)->R<EditorStatus>{
   let mut map=self.sessions.lock().map_err(|_|"SESSION_FAILED")?;
@@ -164,6 +164,20 @@ impl CadEditors{
   if stage_copy(&e.path,&staged,&e.format)?!=expected{return Err("CAD_DRAWING_CHANGED")}
   fs::hard_link(&staged,dest).map_err(|_|"DESTINATION_UNAVAILABLE")?;
   let result=Export{bytes:s.bytes,sha256:s.sha256,format:s.format};
+  map.remove(&id);Ok(result)
+ }
+
+ fn adopt(&self,owner:Uuid,id:Uuid,store:&ovg_project_store::Store,revision:u64,expected:&str)->R<ovg_project_store::asset_store::AssetMeta>{
+  let mut map=self.sessions.lock().map_err(|_|"SESSION_FAILED")?;
+  let e=map.get_mut(&id).filter(|e|e.owner==owner).ok_or("STALE_CAD_SESSION")?;
+  let s=e.poll(id)?;
+  if s.state=="editing"||s.sha256!=expected||(!s.changed&&e.parent.is_some()){return Err("CAD_DRAWING_NOT_READY")}
+  let kind=if e.format=="dwg"{"cad-native-dwg"}else{"cad-native-dxf"};
+  let stage=tempfile::tempdir().map_err(|_|"STORAGE_UNAVAILABLE")?;
+  let copy=stage.path().join(format!("result.{}",e.format));
+  if stage_copy(&e.path,&copy,&e.format)?!=expected{return Err("CAD_DRAWING_CHANGED")}
+  let result=store.attach_cad_version(Uuid::new_v4(),kind,&copy,revision,expected,e.parent.map(|p|(p,e.original.as_str())),&AtomicBool::new(false))
+   .map_err(|e|match e{ovg_project_store::Error::Conflict=>"REVISION_OR_PARENT_CONFLICT",ovg_project_store::Error::Limit=>"RESOURCE_LIMIT",_=>"CAD_ADOPTION_FAILED"})?;
   map.remove(&id);Ok(result)
  }
  fn discard(&self,owner:Uuid,id:Uuid)->R<()>{
@@ -191,7 +205,7 @@ pub async fn native_cad_edit_open(window:WebviewWindow,u:State<'_,Unified>,edito
    executable(&root)?;
    let Some(file)=app.dialog().file().add_filter("CAD DWG / DXF",&["dwg","dxf"]).blocking_pick_file()else{return Ok(None)};
    let path=file.into_path().map_err(|_|"INVALID_FILE")?;
-   s.with(handle,|_|ed.start(handle,&root,&private,&path).map(Some))
+   s.with(handle,|_|ed.start(handle,&root,&private,&path,None).map(Some))
   }).await
  }
  #[cfg(not(feature="native-cad"))]{let _=(u,editors,handle);trusted(&window)?;Err("CAD_RUNTIME_NOT_PACKAGED".into())}
@@ -237,7 +251,7 @@ mod editor_tests{
   let stage=tempfile::tempdir_in(d.path()).unwrap();let copy=stage.path().join("drawing.dxf");
   let hash=stage_copy(&original,&copy,"dxf").unwrap();
   drawing_fixture(&copy,"changed");let editors=CadEditors::default();let owner=Uuid::new_v4();let id=Uuid::new_v4();
-  editors.sessions.lock().unwrap().insert(id,Editor{owner,dir:stage,path:copy,format:"dxf".into(),original:hash,child:None,failed:false});
+  editors.sessions.lock().unwrap().insert(id,Editor{owner,dir:stage,path:copy,format:"dxf".into(),original:hash,parent:None,child:None,failed:false});
   let ready=editors.poll(owner,id).unwrap();assert!(ready.changed);assert_eq!(ready.state,"ready");
   assert!(editors.poll(Uuid::new_v4(),id).is_err());
   let dest=d.path().join("edited.dxf");
@@ -249,7 +263,35 @@ mod editor_tests{
  }
  #[test]fn exit_retains_staged_drawing(){
   let root=tempfile::tempdir().unwrap();let stage=tempfile::tempdir_in(root.path()).unwrap();let p=stage.path().join("drawing.dxf");drawing_fixture(&p,"recover");
-  let ed=CadEditors::default();ed.sessions.lock().unwrap().insert(Uuid::new_v4(),Editor{owner:Uuid::new_v4(),dir:stage,path:p.clone(),format:"dxf".into(),original:"unused".into(),child:None,failed:true});
+  let ed=CadEditors::default();ed.sessions.lock().unwrap().insert(Uuid::new_v4(),Editor{owner:Uuid::new_v4(),dir:stage,path:p.clone(),format:"dxf".into(),original:"unused".into(),parent:None,child:None,failed:true});
   ed.preserve_on_exit();assert!(p.exists());assert!(ed.sessions.lock().unwrap().is_empty());
  }
+}
+
+#[tauri::command]
+pub async fn native_cad_edit_project(window:WebviewWindow,u:State<'_,Unified>,editors:State<'_,CadEditors>,handle:Uuid,asset:Uuid,expected:String)->Reply<EditorStatus>{
+ #[cfg(feature="native-cad")]{
+  trusted(&window)?;let app=window.app_handle().clone();let ed=editors.inner().clone();
+  work(window,u.inner().clone(),move|s|s.with(handle,|store|{
+   if store.revision().map_err(|_|"STORE_QUERY_FAILED")?!=unified::number(&expected)?{return Err("REVISION_CONFLICT")}
+   let meta=store.assets().map_err(|_|"STORE_QUERY_FAILED")?.into_iter().find(|a|a.id==asset).ok_or("STALE_ASSET")?;
+   let ext=match meta.kind.as_str(){"cad-native-dwg"=>"dwg","cad-native-dxf"=>"dxf",_=>return Err("UNSUPPORTED_CAD_DOCUMENT")};
+   let stage=tempfile::tempdir().map_err(|_|"STORAGE_UNAVAILABLE")?;
+   let src=stage.path().join(format!("source.{ext}"));
+   store.materialize_asset(asset,&src,&AtomicBool::new(false)).map_err(|_|"CAD_ASSET_READ_FAILED")?;
+   let root=app.path().resource_dir().map_err(|_|"CAD_RUNTIME_NOT_PACKAGED")?;
+   let private=app.path().app_local_data_dir().map_err(|_|"STORAGE_UNAVAILABLE")?.join("cad-recovery");
+   ed.start(handle,&root,&private,&src,Some(asset))
+  })).await
+ }
+ #[cfg(not(feature="native-cad"))]{let _=(u,editors,handle,asset,expected);trusted(&window)?;Err("CAD_RUNTIME_NOT_PACKAGED".into())}
+}
+#[tauri::command]
+pub async fn native_cad_edit_adopt(window:WebviewWindow,u:State<'_,Unified>,editors:State<'_,CadEditors>,handle:Uuid,session:Uuid,revision:String,expected:String)->Reply<ovg_project_store::asset_store::AssetMeta>{
+ trusted(&window)?;let ed=editors.inner().clone();
+ work(window,u.inner().clone(),move|s|s.with(handle,|store|ed.adopt(handle,session,store,unified::number(&revision)?,&expected))).await
+}
+#[tauri::command]
+pub async fn native_cad_versions(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid)->Reply<Vec<ovg_project_store::asset_store::CadVersion>>{
+ work(window,u.inner().clone(),move|s|s.with(handle,|store|store.cad_versions().map_err(|_|"STORE_QUERY_FAILED"))).await
 }
