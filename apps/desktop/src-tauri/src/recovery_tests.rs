@@ -64,7 +64,7 @@ fn standard_external_gpkg_import_roundtrip(){
  use rusqlite::{Connection,params};
  let dir=tempfile::tempdir().unwrap();let src=dir.path().join("external.gpkg");
  let db=Connection::open(&src).unwrap();
- db.execute_batch("PRAGMA application_id=1196444487; CREATE TABLE gpkg_contents(table_name TEXT,data_type TEXT); CREATE TABLE gpkg_geometry_columns(table_name TEXT,column_name TEXT,srs_id INTEGER,z INTEGER,m INTEGER); CREATE TABLE survey(fid INTEGER PRIMARY KEY,geom BLOB,name TEXT); INSERT INTO gpkg_contents VALUES('survey','features'); INSERT INTO gpkg_geometry_columns VALUES('survey','geom',4326,0,0);").unwrap();
+ db.execute_batch("PRAGMA application_id=1196444487; CREATE TABLE gpkg_spatial_ref_sys(srs_id INTEGER,organization TEXT,organization_coordsys_id INTEGER); INSERT INTO gpkg_spatial_ref_sys VALUES(4326,'EPSG',4326),(3857,'EPSG',3857); CREATE TABLE gpkg_contents(table_name TEXT,data_type TEXT); CREATE TABLE gpkg_geometry_columns(table_name TEXT,column_name TEXT,srs_id INTEGER,z INTEGER,m INTEGER); CREATE TABLE survey(fid INTEGER PRIMARY KEY,geom BLOB,name TEXT); INSERT INTO gpkg_contents VALUES('survey','features'); INSERT INTO gpkg_geometry_columns VALUES('survey','geom',4326,0,0);").unwrap();
  let mut blob=vec![b'G',b'P',0,1];blob.extend(4326_i32.to_le_bytes());blob.extend(point(106.,11.));
  db.execute("INSERT INTO survey VALUES(1,?1,'sample')",params![blob]).unwrap();drop(db);
  let target=LocalStore::open(&dir.path().join("target.gpkg"),8*1024*1024).unwrap();
@@ -111,7 +111,7 @@ fn multi_table_catalog_imports_only_selected_layer_and_reprojects(){
  use rusqlite::{Connection,params};
  let d=tempfile::tempdir().unwrap();let src=d.path().join("multi.gpkg");
  let db=Connection::open(&src).unwrap();
- db.execute_batch("PRAGMA application_id=1196444487; CREATE TABLE gpkg_contents(table_name TEXT,data_type TEXT); CREATE TABLE gpkg_geometry_columns(table_name TEXT,column_name TEXT,srs_id INTEGER,z INTEGER,m INTEGER); CREATE TABLE a(fid INTEGER PRIMARY KEY,geom BLOB,name TEXT); CREATE TABLE b(fid INTEGER PRIMARY KEY,geom BLOB,name TEXT); INSERT INTO gpkg_contents VALUES('a','features'),('b','features'); INSERT INTO gpkg_geometry_columns VALUES('a','geom',4326,0,0),('b','geom',3857,0,0);").unwrap();
+ db.execute_batch("PRAGMA application_id=1196444487; CREATE TABLE gpkg_spatial_ref_sys(srs_id INTEGER,organization TEXT,organization_coordsys_id INTEGER); INSERT INTO gpkg_spatial_ref_sys VALUES(4326,'EPSG',4326),(3857,'EPSG',3857); CREATE TABLE gpkg_contents(table_name TEXT,data_type TEXT); CREATE TABLE gpkg_geometry_columns(table_name TEXT,column_name TEXT,srs_id INTEGER,z INTEGER,m INTEGER); CREATE TABLE a(fid INTEGER PRIMARY KEY,geom BLOB,name TEXT); CREATE TABLE b(fid INTEGER PRIMARY KEY,geom BLOB,name TEXT); INSERT INTO gpkg_contents VALUES('a','features'),('b','features'); INSERT INTO gpkg_geometry_columns VALUES('a','geom',4326,0,0),('b','geom',3857,0,0);").unwrap();
  let mut blob=vec![b'G',b'P',0,1];blob.extend(3857_i32.to_le_bytes());
  let mut point_wkb=vec![1,1,0,0,0];point_wkb.extend(111319.49079327357_f64.to_le_bytes());point_wkb.extend(0_f64.to_le_bytes());blob.extend(point_wkb);
  db.execute("INSERT INTO b VALUES(1,?1,'mercator')",params![blob]).unwrap();drop(db);
@@ -124,4 +124,25 @@ fn multi_table_catalog_imports_only_selected_layer_and_reprojects(){
  let v=h.viewport(child.handle,[0.9,-0.1,1.1,0.1]).unwrap();assert_eq!(v.data["features"].as_array().unwrap().len(),1);
  assert!(h.viewport(w.handle,[0.9,-0.1,1.1,0.1]).unwrap().data["features"].as_array().unwrap().is_empty());
  h.close(w.handle).unwrap();
+}
+
+#[test]
+fn complete_project_bundle_preserves_root_and_layer_journals(){
+ let d=tempfile::tempdir().unwrap();let h=Host::new(d.path().join("projects")).unwrap();
+ let p=h.create().unwrap();let w=h.open(p.id).unwrap();
+ let l=h.create_layer(w.handle,"survey".into(),None).unwrap();let child=h.open_layer(w.handle,l.id).unwrap();
+ let root_id=Uuid::new_v4();let child_id=Uuid::new_v4();
+ h.edit(w.handle,Uuid::new_v4(),root_id,"0".into(),Some("point".into()),vec![106.,11.],json!({})).unwrap();
+ h.edit(child.handle,Uuid::new_v4(),child_id,"0".into(),Some("point".into()),vec![107.,12.],json!({"a":1})).unwrap();
+ h.update_attributes(child.handle,child_id,"1".into(),json!({"a":2})).unwrap();
+ let file=d.path().join("project.ovgproject");h.backup_project(w.handle,&file).unwrap();
+ assert!(h.backup_project(w.handle,&file).is_err());
+ let p2=h.restore_project(&file).unwrap();assert_ne!(p.id,p2.id);
+ let w2=h.open(p2.id).unwrap();assert_eq!(h.list_layers(w2.handle).unwrap()[0].id,l.id);
+ let c2=h.open_layer(w2.handle,l.id).unwrap();
+ assert_eq!(h.feature(c2.handle,child_id).unwrap()["revision"],"2");
+ assert!(h.history(c2.handle,false).unwrap());assert_eq!(h.feature(c2.handle,child_id).unwrap()["attributes"]["a"],1);
+ assert!(h.feature(w2.handle,root_id).is_ok());
+ assert_eq!(h.feature(child.handle,child_id).unwrap()["attributes"]["a"],2);
+ h.close(w.handle).unwrap();h.close(w2.handle).unwrap();
 }
