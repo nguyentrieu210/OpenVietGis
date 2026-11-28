@@ -25,13 +25,16 @@ class UnifiedMap extends StatefulWidget{
  final String revision;
  final List<Map<String,dynamic>> layers;
  final String Function() uuid;
- const UnifiedMap({super.key,required this.project,required this.layer,required this.revision,required this.layers,required this.uuid});
+ final String? initialFeature;
+ final CameraPosition? initialCamera;
+ const UnifiedMap({super.key,required this.project,required this.layer,required this.revision,required this.layers,required this.uuid,this.initialFeature,this.initialCamera});
  @override State<UnifiedMap> createState()=>_UnifiedMapState();
 }
 class _UnifiedMapState extends State<UnifiedMap> with WidgetsBindingObserver{
  MapLibreMapController? _map;
  late String _revision,_active;
  late Set<String> _visible;
+ bool _initialLoaded=false;
  bool _snap=true,_vertexMode=false,_insert=false;
  int _vertex=0,_part=0;
  GeometryDraft? _structured;
@@ -110,6 +113,16 @@ class _UnifiedMapState extends State<UnifiedMap> with WidgetsBindingObserver{
     for(var i=0;i<p.length;i++){'type':'Feature','properties':{'chosen':_vertexMode&&i==_vertex},'geometry':{'type':'Point','coordinates':p[i]}},
     if(p.length>=2&&d?.type!='MultiPoint'){'type':'Feature','properties':{},'geometry':{'type':'LineString','coordinates':(_kind=='polygon'||d?.rings==true)&&p.length>=3?[...p,p.first]:p}}
   ]});}catch(e){if(mounted)setState(()=>_error=e.toString());}
+ }
+ Future<void> _loadInitial()async{
+  final id=widget.initialFeature;if(id==null||_initialLoaded)return;
+  _initialLoaded=true;
+  await _run(()async{
+   final d=jsonDecode(await widget.project.featureDetail(layerId:widget.layer,featureId:id,expected:_revision)) as Map<String,dynamic>;
+   if(!mounted)return;
+   setState((){_active=widget.layer;_selected=id;_geometry=Map<String,dynamic>.from(d['geometry'] as Map);_featureRevision=d['revision'].toString();_attributes=Map<String,dynamic>.from(d['attributes'] as Map);});
+   await _editVertices();
+  });
  }
  Future<void> _tap(dynamic point,LatLng coordinate)async{
   if(_busy||!_loaded)return;
@@ -202,7 +215,7 @@ class _UnifiedMapState extends State<UnifiedMap> with WidgetsBindingObserver{
  @override Widget build(BuildContext context)=>PopScope(canPop:!_busy&&_kind==null,child:Scaffold(
   appBar:AppBar(title:const Text('Unified Map'),actions:[IconButton(tooltip:'Đọc lại revision',onPressed:_busy||_kind!=null?null:()=>unawaited(_run(_refreshRevision)),icon:const Icon(Icons.refresh))]),
   body:Stack(children:[
-   Positioned.fill(child:MapLibreMap(styleString:jsonEncode(_style),initialCameraPosition:const CameraPosition(target:LatLng(11,106.7),zoom:8),onMapCreated:(m)=>_map=m,onStyleLoadedCallback:(){_loaded=true;_schedule();},onCameraIdle:_schedule,trackCameraPosition:true,onMapClick:(p,c)=>unawaited(_tap(p,c)))),
+   Positioned.fill(child:MapLibreMap(styleString:jsonEncode(_style),initialCameraPosition:widget.initialCamera??const CameraPosition(target:LatLng(11,106.7),zoom:8),onMapCreated:(m)=>_map=m,onStyleLoadedCallback:(){_loaded=true;_schedule();unawaited(_loadInitial());},onCameraIdle:_schedule,trackCameraPosition:true,onMapClick:(p,c)=>unawaited(_tap(p,c)))),
    Positioned(top:8,right:8,child:Card(child:Column(mainAxisSize:MainAxisSize.min,children:[
     if(_kind==null)...[
      IconButton(tooltip:'Quản lý lớp',icon:const Icon(Icons.layers),onPressed:_busy?null:()=>unawaited(_chooseLayers())),
@@ -213,7 +226,7 @@ class _UnifiedMapState extends State<UnifiedMap> with WidgetsBindingObserver{
      if(_vertexMode&&_kind!='point')IconButton(tooltip:'Chèn sau đỉnh chọn',icon:const Icon(Icons.add_location_alt),onPressed:_busy||_vertices.length>=4095?null:()=>setState(()=>_insert=!_insert)),
      IconButton(tooltip:'Bỏ đỉnh',icon:const Icon(Icons.undo),onPressed:_busy||_vertices.isEmpty?null:(){setState((){if(_vertexMode){if(_vertices.length<=(_structured?.minimum??(_kind=='polygon'?3:_kind=='line'?2:1)))return;_vertices.removeAt(_vertex);_vertex=math.min(_vertex,_vertices.length-1).toInt();_insert=false;}else{_vertices.removeLast();}});unawaited(_preview());}),
      IconButton(tooltip:'Lưu',icon:const Icon(Icons.check),onPressed:_busy||_vertices.isEmpty?null:()=>unawaited(_commit())),
-     IconButton(tooltip:'Hủy',icon:const Icon(Icons.close),onPressed:_busy?null:(){setState((){_kind=null;_vertexMode=false;_insert=false;_vertices.clear();_selected=null;_featureRevision=null;});unawaited(_preview());}),
+     IconButton(tooltip:'Hủy',icon:const Icon(Icons.close),onPressed:_busy?null:(){setState((){_kind=null;_vertexMode=false;_insert=false;_structured=null;_vertices.clear();_selected=null;_featureRevision=null;});unawaited(_preview());}),
     ]
    ]))),
    Positioned(left:8,right:68,bottom:8,child:Card(child:Padding(padding:const EdgeInsets.all(8),child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
