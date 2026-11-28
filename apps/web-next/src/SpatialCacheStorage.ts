@@ -1,3 +1,4 @@
+import {completeSnapshot} from "./spatial-snapshot-guard";
 import type {SpatialLayer} from "@openvietgis/client-sdk";
 import type {StudioRow} from "./studio-contract";
 
@@ -31,7 +32,7 @@ export async function readCache(scope:CacheScope,layerId:string):Promise<CacheEn
 let queue:Promise<unknown>=Promise.resolve();
 function serialized(fn:()=>Promise<void>){const task=queue.then(fn,fn);queue=task.catch(()=>{});return task.catch(()=>{})}
 export function writeCache(scope:CacheScope,layer:SpatialLayer,rows:CachedRow[],permissionKey:string){
-  if(!permissionKey||layer.organization_id!==scope.org||layer.project_id!==scope.project||rows.length!==layer.source.feature_count||rows.length>MAX_ROWS)return Promise.resolve();
+  if(!permissionKey||layer.organization_id!==scope.org||layer.project_id!==scope.project||!completeSnapshot(rows,layer.source.feature_count)||rows.length>MAX_ROWS)return Promise.resolve();
   return serialized(async()=>{
     const payload=rows;
     // Measure off the input event path. An oversized snapshot is never persisted.
