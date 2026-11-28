@@ -14,6 +14,8 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'workspaces.dart';
+import 'cloud_session.dart';
+import 'cloud_page.dart';
 
 const offlineStyle = <String,Object>{
   'version':8, 'sources': <String,Object>{},
@@ -27,7 +29,9 @@ final controllerProvider=ChangeNotifierProvider<WorkspaceController>((ref){
   unawaited(c.boot());
   return c;
 });
+final cloudProvider=ChangeNotifierProvider<CloudSession>((ref)=>CloudSession());
 final router=GoRouter(routes:[
+  GoRoute(path:'/cloud',builder:(context,state)=>const CloudRoute()),
   GoRoute(path:'/',builder:(context,state)=>const MapPage()),
   GoRoute(path:'/workspaces',builder:(context,state)=>const WorkspacePage()),
   GoRoute(path:'/survey',builder:(context,state)=>const SurveyRoute()),
@@ -85,7 +89,7 @@ class MapPage extends ConsumerWidget{
           ListTile(leading:const Icon(Icons.table_chart),title:Text(tr(vi,'Bảng thuộc tính','Attribute table')),enabled:c.ready&&!c.busy,onTap:(){Navigator.pop(sheet);context.push('/attributes');}),
           ListTile(leading:const Icon(Icons.gps_fixed),title:Text(tr(vi,'Khảo sát GPS','GPS survey')),enabled:c.ready&&!c.busy,onTap:(){Navigator.pop(sheet);context.push('/survey');}),
           ListTile(leading:const Icon(Icons.account_tree),title:Text(tr(vi,'Xử lý không gian','Spatial processing')),enabled:c.ready&&!c.busy,onTap:(){Navigator.pop(sheet);context.push('/processing');}),
-          ListTile(leading:const Icon(Icons.cloud_off),title:Text(tr(vi,'Kết nối máy chủ','Connect server')),subtitle:Text(tr(vi,'Chưa đủ điều kiện xác thực Mobile','Mobile authentication not qualified')),enabled:false),
+          ListTile(leading:const Icon(Icons.cloud),title:Text(tr(vi,'Kết nối máy chủ','Connect server')),subtitle:Text(tr(vi,'Kiểm tra kết nối HTTPS','Check HTTPS connection')),onTap:(){Navigator.pop(sheet);context.push('/cloud');}),
           ListTile(leading:const Icon(Icons.extension),title:Text(tr(vi,'Plugin','Plugins')),subtitle:Text(tr(vi,'Chưa có runtime đã nghiệm thu','Runtime not qualified')),enabled:false),
         ]))),
         icon:const Icon(Icons.menu),label:Text(tr(vi,'Công cụ','Tools')),
@@ -170,4 +174,9 @@ class ProcessingRoute extends ConsumerWidget{
 class SearchRoute extends ConsumerWidget{
  const SearchRoute({super.key});
  @override Widget build(BuildContext context,WidgetRef ref)=>SearchPage(controller:ref.watch(controllerProvider));
+}
+
+class CloudRoute extends ConsumerWidget{
+ const CloudRoute({super.key});
+ @override Widget build(BuildContext context,WidgetRef ref)=>CloudPage(session:ref.watch(cloudProvider),vi:ref.watch(controllerProvider).vi);
 }

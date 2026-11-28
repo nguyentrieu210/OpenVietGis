@@ -38,6 +38,9 @@ jobs:
           flutter_rust_bridge_codegen create openvietgis_mobile --org org.openvietgis
           cd openvietgis_mobile
           cp "$GITHUB_WORKSPACE/apps/mobile-flutter/pubspec.yaml" .
+          mkdir -p vendor
+          cp -R "$GITHUB_WORKSPACE/packages/dart-sdk" vendor/openvietgis_sdk
+          python3 -c 'from pathlib import Path; p=Path("pubspec.yaml"); p.write_text(p.read_text().replace("../../packages/dart-sdk","vendor/openvietgis_sdk"))'
           cp "$GITHUB_WORKSPACE/apps/mobile-flutter/lib/"*.dart lib/
           cp "$GITHUB_WORKSPACE/crates/ovg-mobile-ffi/src/api/simple.rs" rust/src/api/simple.rs
           mkdir -p test

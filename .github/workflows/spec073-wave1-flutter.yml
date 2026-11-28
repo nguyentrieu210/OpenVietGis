@@ -2,7 +2,7 @@ name: SPEC 073 Wave 1 Flutter integration
 on:
   push:
     branches: ["073-native-mobile-platform"]
-    paths: ["apps/mobile-flutter/**", "crates/ovg-mobile-ffi/**", "crates/ovg-mobile-engine/**", "crates/ovg-local-storage/**", "crates/ovg-spatial/**", ".github/workflows/spec073-wave1-flutter.yml"]
+    paths: ["apps/mobile-flutter/**", "packages/dart-sdk/**", "crates/ovg-mobile-ffi/**", "crates/ovg-mobile-engine/**", "crates/ovg-local-storage/**", "crates/ovg-spatial/**", ".github/workflows/spec073-wave1-flutter.yml"]
   workflow_dispatch:
   workflow_call:
 permissions:
@@ -50,6 +50,9 @@ jobs:
           flutter_rust_bridge_codegen create openvietgis_mobile --org org.openvietgis
           cd openvietgis_mobile
           cp "$GITHUB_WORKSPACE/apps/mobile-flutter/pubspec.yaml" .
+          mkdir -p vendor
+          cp -R "$GITHUB_WORKSPACE/packages/dart-sdk" vendor/openvietgis_sdk
+          python3 -c 'from pathlib import Path; p=Path("pubspec.yaml"); p.write_text(p.read_text().replace("../../packages/dart-sdk","vendor/openvietgis_sdk"))'
           cp "$GITHUB_WORKSPACE/apps/mobile-flutter/lib/"*.dart lib/
           cp "$GITHUB_WORKSPACE/crates/ovg-mobile-ffi/src/api/simple.rs" rust/src/api/simple.rs
           mkdir -p test

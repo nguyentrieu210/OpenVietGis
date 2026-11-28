@@ -16,6 +16,9 @@ dependencies:
   file_picker: 10.3.10
   share_plus: 10.1.4
   shared_preferences: 2.5.3
+  http: 1.4.0
+  openvietgis_sdk:
+    path: ../../packages/dart-sdk
   flutter_rust_bridge: 2.11.1
   rust_lib_openvietgis_mobile:
     path: rust_builder
