@@ -13,7 +13,8 @@ import { useEffect,useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { apiClient } from "../../app/api";
 import { ProjectToolbar } from "./ProjectToolbar";
-import {reprojectTargets,processingLayer,processingRequest,readPendingProcessing,supportedAlgorithm,verifyProcessingReceipt,overlayAlgorithm,type Algorithm,type ProcessingRequest} from "./processing-request";
+import {NativeVn2000Editor} from "../../../NativeVn2000Editor";
+import {extendedNativeCrs,reprojectTargets,processingLayer,processingRequest,readPendingProcessing,supportedAlgorithm,verifyProcessingReceipt,overlayAlgorithm,type Algorithm,type ProcessingRequest} from "./processing-request";
 
 import {appendBatch,readBatch,receivedBatch,nextBatchRow,MAX_BATCH,type BatchRow} from "./processing-batch";
 
@@ -188,6 +189,7 @@ export function ProcessingWorkbenchPage() {
           <div className="ovg-algorithm-picker" aria-label="Chọn thuật toán">{algorithms.map(a=><button type="button" key={a.id} className="ovg-algorithm-choice" aria-pressed={algo===a.id} disabled={busy||!!pending} onClick={()=>{setAlgo(a.id);setOverlayLayerId("");setGroupField("")}}><b>{algorithmLabel(a.id)}</b><small>{a.name}</small></button>)}</div>
           {algosQuery.isError&&<p role="alert">Không tải được danh mục. <button type="button" onClick={()=>void algosQuery.refetch()}>Thử lại</button></p>}
           {descriptor&&<p className="ovg-processing-description">{algo==="buffer"?"Tạo vùng đệm theo khoảng cách. Đầu vào địa lý được xử lý trong Web Mercator; không phải phép đo trắc địa chính xác.":algo==="clip"?"Cắt theo hợp các vùng phủ polygon.":algo==="difference"?"Trừ hợp các vùng phủ polygon; giữ ID nguồn.":algo==="intersection"?"Giao từng cặp đối tượng với vùng phủ polygon; giữ hai ID, không nối toàn bộ thuộc tính.":algo==="union"?"Hợp hai lớp polygon, giữ thuộc tính hai phía.":algo==="reproject"?"Đổi phép chiếu VN-2000 trong vùng EPSG; giữ ID và thuộc tính. CRS mở rộng hỗ trợ đọc và Reproject; hiển thị WGS84 chỉ khi chuỗi nguồn gốc được kiểm chứng. Vector tiles, biên tập và xuất CRS mở rộng chưa hỗ trợ.":algo==="spatial_join"?"Nối thuộc tính theo quan hệ không gian, giữ hình học đầu vào.":"Gộp hình học toàn lớp hoặc theo trường thuộc tính."}</p>}
+          {canWrite&&input&&extendedNativeCrs(input.source.stored_crs?.code)&&<NativeVn2000Editor key={input.source_id+":"+input.source.content_revision} client={apiClient} org={organizationId} pid={projectId} layer={input} onSaved={()=>void layersQuery.refetch()}/> }
           {pending&&<p role="status">Chưa xác minh phản hồi: {pending.algorithm_id} · {pending.output_name} · mã {pending.operation_id}. Gửi lại cùng yêu cầu, không tạo tác vụ mới.</p>}
           <fieldset disabled={busy||!!pending} className="ovg-form-row">
             <label>

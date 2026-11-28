@@ -95,6 +95,8 @@ pub struct CommitRequest {
     pub base_content_revision: String,
     #[serde(default)]
     pub base_schema_revision: Option<String>,
+    #[serde(default)]
+    pub acknowledge_native_crs: Option<i32>,
     #[serde(default = "default_summary")]
     pub summary: String,
     pub operations: Vec<EditOperation>,
@@ -734,6 +736,7 @@ impl<'a> EditScope<'a> {
                 .unwrap_or_default()
                 .to_owned(),
             base_schema_revision: None,
+            acknowledge_native_crs: None,
             summary: summary
                 .filter(|s| !s.is_empty())
                 .unwrap_or_else(|| format!("Revert changeset {changeset_id}")),
@@ -1147,9 +1150,13 @@ impl<'a> EditScope<'a> {
         }
         let stored_crs: i32 = get::<Option<i32>>(&source, "stored_crs")?
             .ok_or_else(|| EditError::Internal("ready source without stored CRS".into()))?;
-        if u32::try_from(stored_crs).ok().is_some_and(ovg_core::crs::is_extended_native_vn2000){
-            return Err(EditError::validation("UNSUPPORTED_CRS","Extended native VN-2000 layers are read-only; use Reproject first"));
-        }
+        let extended_native=u32::try_from(stored_crs).ok().is_some_and(ovg_core::crs::is_extended_native_vn2000);
+        if extended_native {
+            if self.scoped{return Err(EditError::forbidden("GIS_SCOPE_DENIED","Native projected edits require unrestricted project edit permission"));}
+            if reverted_from.is_none() && (request.acknowledge_native_crs!=Some(stored_crs)||request.base_schema_revision.is_none()){
+                return Err(EditError::validation("NATIVE_CRS_ACK_REQUIRED","Explicit native EPSG and schema revision required; XY means easting/northing in metres"));
+            }
+        } else if request.acknowledge_native_crs.is_some(){return Err(EditError::validation("UNSUPPORTED_CRS","Native CRS acknowledgement is only for extended VN-2000 layers"));}
         let family: String = get(&source, "geometry_family")?;
         let catalog_revision: i64 = get(&source, "catalog_revision")?;
         let content_revision: String = get(&source, "content_revision")?;
@@ -1792,7 +1799,13 @@ impl<'a> EditScope<'a> {
                 "geometry exceeds 4096 vertex limit",
             ));
         }
-        get(&row, "wkb")
+        let wkb:Vec<u8>=get(&row,"wkb")?;
+        if u32::try_from(srid).ok().is_some_and(ovg_core::crs::is_extended_native_vn2000){
+            let parsed=ovg_spatial::parse_wkb(&wkb,&ovg_spatial::ValidationLimits::default()).map_err(|_|EditError::validation("INVALID_GEOMETRY","Invalid native geometry"))?;
+            let geo=ovg_spatial::to_geojson(&parsed.geometry);
+            crate::spatial_pins::validate_ready_geojson(&geo,None,srid).map_err(|reason|EditError::validation("INVALID_GEOMETRY",reason))?;
+        }
+        Ok(wkb)
     }
 
     async fn load_fields(&mut self, source_id: Uuid) -> Result<Vec<FieldDef>, EditError> {

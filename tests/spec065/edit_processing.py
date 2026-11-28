@@ -176,6 +176,19 @@ def check_processing(post,get,foreign,fixtures):
     unverified=pinned_layer(reprojected["output_layer_id"],reprojected["output_source_id"])
     post("/processing/jobs",job("reproject",unverified,{"target_srid":4756}),expected=422)
     result(job("reproject",derived,{"target_srid":4756}),regional["feature_count"],0)
+    # Extended native edit requires explicit EPSG, then removes the source's
+    # eligibility for datum replay. The native edit itself remains revision-pinned.
+    with psycopg.connect(OWNER) as conn:
+        fid,x,y=conn.execute("SELECT feature_id,ST_X(geometry),ST_Y(geometry) FROM spatial.reference_features WHERE source_id=%s ORDER BY feature_id LIMIT 1",(extended_pin["source_id"],)).fetchone()
+    edit_path="/sources/"+extended_pin["source_id"]+"/changesets"
+    edit_body={"operation_id":str(uuid4()),"base_content_revision":extended_pin["content_revision"],"base_schema_revision":extended_pin["schema_revision"],"summary":"Native CRS edit","operations":[{"op_type":"update","feature_id":fid,"geometry":{"type":"Point","coordinates":[x+1,y]}}]}
+    post(edit_path,edit_body,expected=422)
+    post(edit_path,edit_body|{"acknowledge_native_crs":3406},expected=422)
+    post(edit_path,edit_body|{"acknowledge_native_crs":3405,"operations":[{"op_type":"update","feature_id":fid,"geometry":{"type":"Point","coordinates":[106,10]}}]},expected=422)
+    receipt=post(edit_path,edit_body|{"acknowledge_native_crs":3405})
+    assert receipt["status"]=="committed"
+    changed=pinned_layer(extended_pin["layer_id"],extended_pin["source_id"])
+    post("/processing/jobs",job("reproject",changed,{"target_srid":4326}),expected=422)
     print("PASS verified VN2000 projection, bounded multi-hop replay and tampered/unverified-source rejection",flush=True)
     post("/processing/jobs",job("reproject",point,{"target_srid":3405}),expected=422)
     post("/processing/jobs",job("spatial_join",point,{"predicate":"arbitrary_sql"},parcels),expected=422)
