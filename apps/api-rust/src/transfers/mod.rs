@@ -235,7 +235,7 @@ async fn inspect_payload(
         return build_geojson_inspection(payload, opts);
     }
     let decoded = crate::connectors::transfer_worker::run_import(payload,json!({"action":"inspect_import","format":format,"member":opts.selected_member,"encoding":opts.declared_encoding})).await
-        .map_err(|e| TransferError::coded(e.status.as_u16(),"VECTOR_CODEC_FAILED", if e.status.is_server_error() {"Vector decoder unavailable or resource budget exceeded.".into()} else {e.message}))?;
+        .map_err(|e| TransferError::coded(e.status.as_u16(),e.code.unwrap_or("VECTOR_CODEC_FAILED"), if e.status.is_server_error() {"Vector decoder unavailable or resource budget exceeded.".into()} else {e.message}))?;
     build_native_inspection(decoded, format, opts)
 }
 
