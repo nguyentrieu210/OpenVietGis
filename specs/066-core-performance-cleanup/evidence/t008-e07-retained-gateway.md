@@ -43,6 +43,7 @@ The 064 E09–E12 integration evidence further states that raster and CAD/3D ope
 ### Migrations and operations
 
 - Alembic remains the schema migration authority under apps/api/migrations/versions; the checked source includes versions through 0046_map_display_config. No separate Rust migration directory was found under crates/ovg-storage. This appears to be an intentional retained migration path, but T008 still needs an exact-head migration/bootstrap/rollback comparison on the integrated candidate.
+- Rust formatting check on source head 76d624e also failed in six files: apps/api-rust/src/field_worker.rs, metrics.rs, middleware.rs, transfers/mod.rs, transfers/store.rs, and crates/ovg-spatial/src/geometry.rs. This is an unresolved PR quality gate, not E07 gateway evidence.
 - Rust Platform CI run 46109085094 reports failures in E18 differential operations parity. The logged mismatches are Cache-Control comparisons for anonymous/foreign-tenant entitlement reads and writes, missing CSRF, insufficient member permissions, text/plain anonymous PUT, and suspended-organization denial. The operations parity gate is therefore not green.
 - No exact-current-head route/migration/operations parity certificate was generated in this slice.
 
