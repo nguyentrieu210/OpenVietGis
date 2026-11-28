@@ -121,6 +121,15 @@ def check_processing(post,get,foreign,fixtures):
     derived=pinned_layer(projected["output_layer_id"],projected["output_source_id"])
     geographic,_=result(job("reproject",derived,{"target_srid":4326}),regional["feature_count"],0)
     assert geographic["output_crs"]==4326
+    for region in ("da_nang", "hai_phong", "dong_nai"):
+        for src,dst in ((4756,4326),(4326,4756)):
+            registered=post("/spatial/sources",{"reference_key":f"reference_points_{src}_{region}","name":f"SPEC065 {region} {src}"})
+            sid=registered["resource_id"]
+            layer=post("/layers",{"source_id":sid,"name":f"SPEC065 {region} {src} layer"})
+            pin=pinned_layer(layer["resource_id"],sid)
+            assert pin["feature_count"]==3
+            transformed,_=result(job("reproject",pin,{"target_srid":dst}),3,0)
+            assert transformed["output_crs"]==dst
     # A successful ordinary reproject does not establish regional provenance.
     unverified=pinned_layer(reprojected["output_layer_id"],reprojected["output_source_id"])
     post("/processing/jobs",job("reproject",unverified,{"target_srid":4756}),expected=422)

@@ -312,6 +312,7 @@ pub enum FixtureRequirement {
     QuangNinhHvs,
     DaNangCircular,
     HaiPhongCircular,
+    DongNaiCircular,
 }
 
 /// Fixed PROJ operation strings, identical to the Python reference. Reads run
@@ -506,9 +507,19 @@ const HAI_PHONG_FORWARD: TransformationProfile = TransformationProfile {
     fixture_requirement: FixtureRequirement::HaiPhongCircular,
     ..DATUM_FORWARD
 };
+const DONG_NAI_FORWARD: TransformationProfile = TransformationProfile {
+    validated_area: "Trusted Dong Nai river points HD2, HD5, HD6, Circular 02/2026/TT-BXD; not a province boundary or survey claim.",
+    evidence_id: "circular-02-2026-tt-bxd-dong-nai",
+    geographic_bounds: CoordinateBounds::new(106.74, 10.63, 106.87, 10.71),
+    tolerance: 3.0,
+    fixture_requirement: FixtureRequirement::DongNaiCircular,
+    ..DATUM_FORWARD
+};
 static REGIONAL_DATUM_TRANSFORMATIONS: &[TransformationProfile] = &[
     DA_NANG_FORWARD,
     TransformationProfile {source_code:4326,target_code:4756,operation_id:"epsg-6960-inverse",method:"inverse EPSG:6960",steps:&[DATUM_INVERSE_STEP],..DA_NANG_FORWARD},
+    DONG_NAI_FORWARD,
+    TransformationProfile {source_code:4326,target_code:4756,operation_id:"epsg-6960-inverse",method:"inverse EPSG:6960",steps:&[DATUM_INVERSE_STEP],..DONG_NAI_FORWARD},
     HAI_PHONG_FORWARD,
     TransformationProfile {source_code:4326,target_code:4756,operation_id:"epsg-6960-inverse",method:"inverse EPSG:6960",steps:&[DATUM_INVERSE_STEP],..HAI_PHONG_FORWARD},
 ];

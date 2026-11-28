@@ -24,14 +24,15 @@ fn satisfies(p: Provenance, r: FixtureRequirement) -> bool {
         FixtureRequirement::QuangNinhHvs => p == Provenance::QuangNinhHvs,
         FixtureRequirement::DaNangCircular => p == Provenance::DaNangCircular,
         FixtureRequirement::HaiPhongCircular => p == Provenance::HaiPhongCircular,
+        FixtureRequirement::DongNaiCircular => p == Provenance::DongNaiCircular,
     }
 }
 fn trusted(p:Provenance)->bool {
-    matches!(p,Provenance::QuangNinhCircular|Provenance::QuangNinhHvs|Provenance::DaNangCircular|Provenance::HaiPhongCircular)
+    matches!(p,Provenance::QuangNinhCircular|Provenance::QuangNinhHvs|Provenance::DaNangCircular|Provenance::HaiPhongCircular|Provenance::DongNaiCircular)
 }
 fn effective_profile(p:Provenance,base:&'static TransformationProfile)->Result<&'static TransformationProfile,AppError>{
     if satisfies(p,base.fixture_requirement){return Ok(base)}
-    let requirement=match p{Provenance::DaNangCircular=>FixtureRequirement::DaNangCircular,Provenance::HaiPhongCircular=>FixtureRequirement::HaiPhongCircular,_=>return Err(outside())};
+    let requirement=match p{Provenance::DaNangCircular=>FixtureRequirement::DaNangCircular,Provenance::HaiPhongCircular=>FixtureRequirement::HaiPhongCircular,Provenance::DongNaiCircular=>FixtureRequirement::DongNaiCircular,_=>return Err(outside())};
     regional_datum_transformation(base.source_code,base.target_code,requirement).ok_or_else(outside)
 }
 async fn check_independent_controls(tx:&mut Transaction<'_,Postgres>,p:Provenance,profile:&TransformationProfile)->Result<(),AppError>{

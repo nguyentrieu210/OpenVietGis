@@ -143,7 +143,7 @@ fn transform(
     let has_required_provenance = match profile.fixture_requirement {
         FixtureRequirement::None => true,
         FixtureRequirement::QuangNinh => provenance.is_some(),
-        FixtureRequirement::DaNangCircular | FixtureRequirement::HaiPhongCircular => false,
+        FixtureRequirement::DaNangCircular | FixtureRequirement::HaiPhongCircular | FixtureRequirement::DongNaiCircular => false,
         FixtureRequirement::QuangNinhHvs => {
             provenance == Some(VerifiedReferenceProvenance::QuangNinhHvs)
         }

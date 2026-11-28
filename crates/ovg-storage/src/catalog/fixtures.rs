@@ -21,6 +21,7 @@ pub enum Provenance {
     QuangNinhHvs,
     DaNangCircular,
     HaiPhongCircular,
+    DongNaiCircular,
 }
 
 impl Provenance {
@@ -32,6 +33,7 @@ impl Provenance {
             Self::QuangNinhHvs => "quang_ninh_mae_eia_hvs",
             Self::DaNangCircular => "da_nang_circular_46_2025",
             Self::HaiPhongCircular => "hai_phong_circular_49_2025",
+            Self::DongNaiCircular => "dong_nai_circular_02_2026",
         }
     }
 }
@@ -286,8 +288,15 @@ const HAI_PHONG: [CircularRow;3] = [
  ("HP2",(106,48,4020),(20,37,5340),(106,48,4690),(20,37,4980)),
  ("HP3",(106,44,3480),(20,41,3980),(106,44,4160),(20,41,3620)),
 ];
+// Circular 02/2026/TT-BXD: selected independently matching control pairs.
+// HD1 is excluded: its published pair differs by approximately 19 m.
+const DONG_NAI: [CircularRow; 3] = [
+    ("HD2", (106,51,3777), (10,38,3407), (106,51,4420), (10,38,3040)),
+    ("HD5", (106,45,3094), (10,41,4808), (106,45,3736), (10,41,4441)),
+    ("HD6", (106,45,1337), (10,42,937), (106,45,1980), (10,42,571)),
+];
 pub(super) fn regional_controls(p:Provenance)->Option<Vec<((f64,f64),(f64,f64))>> {
-    let rows = match p { Provenance::DaNangCircular=>&DA_NANG, Provenance::HaiPhongCircular=>&HAI_PHONG,_=>return None };
+    let rows = match p { Provenance::DaNangCircular=>&DA_NANG, Provenance::HaiPhongCircular=>&HAI_PHONG, Provenance::DongNaiCircular=>&DONG_NAI,_=>return None };
     let xy=|lon:Dms,lat:Dms|(dms(lon.0,lon.1,lon.2),dms(lat.0,lat.1,lat.2));
     Some(rows.iter().map(|&(_,a,b,c,d)|(xy(a,b),xy(c,d))).collect())
 }
@@ -559,6 +568,16 @@ pub fn get_reference_spec(key: &str) -> Option<(ReferenceSpec, Vec<FixtureRecord
             let pts:Vec<(&str,(f64,f64))>=HAI_PHONG.iter().map(|&(id,_,_,lon,lat)|(id,(dms(lon.0,lon.1,lon.2),dms(lat.0,lat.1,lat.2)))).collect();
             let mut recs=point_records(&pts,4326);recs.sort_by(|a,b|a.feature_id.cmp(&b.feature_id));
             Some((ReferenceSpec{key:"reference_points_4326_hai_phong",declared_crs:Some(4326),stored_crs:Some(4326),declared_family:"Point",declared_dimensions:"XY",expected_family:"Point",expected_dimensions:"XY",expected_count:pts.len(),expected_bounds:Some(point_bounds(&pts)),provenance:Provenance::HaiPhongCircular,expected_reason:None,axis_control_xy:None,correctable_to_crs:None},recs))
+        }
+        "reference_points_4756_dong_nai" => {
+            let pts:Vec<(&str,(f64,f64))>=DONG_NAI.iter().map(|&(id,lon,lat,_,_)|(id,(dms(lon.0,lon.1,lon.2),dms(lat.0,lat.1,lat.2)))).collect();
+            let mut recs=point_records(&pts,4756);recs.sort_by(|a,b|a.feature_id.cmp(&b.feature_id));
+            Some((ReferenceSpec{key:"reference_points_4756_dong_nai",declared_crs:Some(4756),stored_crs:Some(4756),declared_family:"Point",declared_dimensions:"XY",expected_family:"Point",expected_dimensions:"XY",expected_count:pts.len(),expected_bounds:Some(point_bounds(&pts)),provenance:Provenance::DongNaiCircular,expected_reason:None,axis_control_xy:None,correctable_to_crs:None},recs))
+        }
+        "reference_points_4326_dong_nai" => {
+            let pts:Vec<(&str,(f64,f64))>=DONG_NAI.iter().map(|&(id,_,_,lon,lat)|(id,(dms(lon.0,lon.1,lon.2),dms(lat.0,lat.1,lat.2)))).collect();
+            let mut recs=point_records(&pts,4326);recs.sort_by(|a,b|a.feature_id.cmp(&b.feature_id));
+            Some((ReferenceSpec{key:"reference_points_4326_dong_nai",declared_crs:Some(4326),stored_crs:Some(4326),declared_family:"Point",declared_dimensions:"XY",expected_family:"Point",expected_dimensions:"XY",expected_count:pts.len(),expected_bounds:Some(point_bounds(&pts)),provenance:Provenance::DongNaiCircular,expected_reason:None,axis_control_xy:None,correctable_to_crs:None},recs))
         }
         "reference_points_4756" => {
             let pts: Vec<(&str, (f64, f64))> = CIRCULAR

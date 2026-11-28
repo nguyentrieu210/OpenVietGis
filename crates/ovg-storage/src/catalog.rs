@@ -1067,7 +1067,7 @@ fn render_supported(
         || !matches!(crs, Some(4756 | 5899))
         || matches!(
             reference_key,
-            Some("reference_points_4756" | "reference_points_4756_hvs" | "reference_points_5899" | "reference_points_4756_da_nang" | "reference_points_4756_hai_phong")
+            Some("reference_points_4756" | "reference_points_4756_hvs" | "reference_points_5899" | "reference_points_4756_da_nang" | "reference_points_4756_hai_phong" | "reference_points_4756_dong_nai")
         );
     let display_extent = crs != Some(4326)
         || feature_count == Some(0)
