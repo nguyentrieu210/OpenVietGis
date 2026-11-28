@@ -13,6 +13,8 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri-plugin-dialog = "2"
 uuid = { version = "1", features = ["v4", "serde"] }
 # Temporary exact source pin until PR 103 is merged; switch to local path deps at convergence.
 ovg-mobile-engine = { git = "https://github.com/nguyentrieu210/OpenVietGis", rev = "2acf58d897bb093966f18639d087ef904a72a720" }
