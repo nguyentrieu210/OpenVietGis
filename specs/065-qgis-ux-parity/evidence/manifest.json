@@ -687,13 +687,20 @@
     {
       "id": "PROC-10",
       "task": "T072",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/SpatialWorkspace.tsx",
         "apps/web-next/src/Spatial3DSettings.tsx",
-        "apps/api-rust/src/tilesets.rs"
+        "apps/api-rust/src/tilesets.rs",
+        "apps/web-next/src/TemporalMapView.tsx",
+        "apps/web-next/src/temporal-plan.ts",
+        "apps/web-next/src/temporal-plan.test.ts",
+        "apps/web-next/src/SecondaryMapView.tsx",
+        "packages/spatial-workspace/src/gltf.ts",
+        "packages/spatial-workspace/src/tileset.ts",
+        "packages/spatial-workspace/src/terrain.ts"
       ],
-      "blocker": "Temporal controller, mesh and point-cloud adapter support not demonstrated; no fake provider UI."
+      "blocker": "Bounded UTC day playback for fully loaded, authorized revision-pinned timestamp vector layers in read-only secondary map (up to 5000 features). No arbitrary time intervals, raster temporal series or tile support. Mesh dataset providers and point cloud formats LAS/LAZ/COPC/EPT remain unsupported: inspected existing GLTF triangle-only, DEM grid and GLB tile contracts are not equivalent. New tests not executed; browser/QGIS acceptance pending."
     },
     {
       "id": "OUTPUT-01",
