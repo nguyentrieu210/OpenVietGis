@@ -60,7 +60,9 @@ fn geometry(g:Geometry<f64>,z:u8,x:u32,y:u32)->Result<(u64,Vec<u8>)>{
   _=>return Err("UNSUPPORTED_GEOMETRY")
  };Ok((kind,out))
 }
-pub fn tile(store:&LocalStore,z:u8,x:u32,y:u32)->Result<Vec<u8>>{
+pub fn tile(store:&LocalStore,z:u8,x:u32,y:u32,cancel:&std::sync::atomic::AtomicBool)->Result<Vec<u8>>{
+ use std::sync::atomic::Ordering;
+ if cancel.load(Ordering::Acquire){return Err("CANCELLED")}
  let b=bounds(z,x,y)?;
  let rows=store.query(b,0,MAX_FEATURES+1).map_err(|_|"STORAGE_UNAVAILABLE")?;
  let last=rows.last().map_or(0,|r|r.0);
@@ -69,6 +71,7 @@ pub fn tile(store:&LocalStore,z:u8,x:u32,y:u32)->Result<Vec<u8>>{
  bytes(3,b"stable_id",&mut layer);
  let mut values=Vec::new();
  for (_,f) in rows{
+   if cancel.load(Ordering::Acquire){return Err("CANCELLED")}
    // Shared validator rejects unsupported dimensions and invalid topology.
    let g=parse_xy_wkb(&f.wkb,&ValidationLimits::default()).map_err(|_|"INVALID_GEOMETRY")?.geometry;
    let (kind,geom)=std::panic::catch_unwind(std::panic::AssertUnwindSafe(||geometry(g,z,x,y))).map_err(|_|"INVALID_GEOMETRY")??;
@@ -78,6 +81,7 @@ pub fn tile(store:&LocalStore,z:u8,x:u32,y:u32)->Result<Vec<u8>>{
    let mut feature=Vec::new();bytes(2,&tags,&mut feature);number(3,kind,&mut feature);bytes(4,&geom,&mut feature);bytes(2,&feature,&mut layer);
    if layer.len()>MAX_TILE{return Err("RESOURCE_LIMIT")}
  }
+ if cancel.load(Ordering::Acquire){return Err("CANCELLED")}
  for v in values{bytes(4,&v,&mut layer);}
  let mut out=Vec::new();bytes(3,&layer,&mut out);
  if out.len()>MAX_TILE{return Err("RESOURCE_LIMIT")}Ok(out)
