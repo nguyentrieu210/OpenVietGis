@@ -675,6 +675,7 @@ pub async fn submit_job_pinned(
             input_source.id,
             input_source.stored_crs,
             target,
+            "rf.geometry",
         )
         .await?;
         target
