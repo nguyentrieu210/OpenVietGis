@@ -50,9 +50,11 @@ try{
  const search=page.getByRole("textbox",{name:"Tìm công cụ",exact:true});
  await search.waitFor();
  assert.ok(await search.evaluate(e=>e===document.activeElement));
- await search.fill("BUFFER");
+ await search.fill("PAN");
  const activeMenu=search.locator("xpath=ancestor::*[@role=\"region\"][1]");
- assert.equal(await activeMenu.locator(".core-menu-items button").count(),1);
+ const exactResults=activeMenu.locator(".core-menu-items button");
+ assert.equal(await exactResults.count(),1);
+ assert.equal(await exactResults.locator("code").innerText(),"PAN");
  await search.press("Escape");
  await page.locator(".core-ribbon-menu-fixed").waitFor({state:"detached"});
  assert.ok(await find.evaluate(e=>e===document.activeElement));
