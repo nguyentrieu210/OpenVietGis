@@ -89,7 +89,7 @@ export default function LocalWorkbench({handle}:{handle:string}){
     alive.current=true;styleReady.current=false;
     maplibregl.addProtocol("ovg",async(params,abort)=>{
       if(abort.signal.aborted)throw new DOMException("Aborted","AbortError");
-      const data=await desktop.resource(params.url);
+      const data=await desktop.resource(params.url,abort.signal);
       if(abort.signal.aborted)throw new DOMException("Aborted","AbortError");
       return {data};
     });
