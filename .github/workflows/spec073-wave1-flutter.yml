@@ -1,7 +1,7 @@
 name: SPEC 073 Wave 1 Flutter integration
 on:
   push:
-    branches: ["073-native-mobile-platform"]
+    branches: ["073-native-mobile-platform", "073-unified-store-integration"]
     paths: ["apps/mobile-flutter/**", "packages/dart-sdk/**", "crates/ovg-mobile-ffi/**", "crates/ovg-mobile-engine/**", "crates/ovg-local-storage/**", "crates/ovg-spatial/**", ".github/workflows/spec073-wave1-flutter.yml"]
   workflow_dispatch:
   workflow_call:
@@ -64,6 +64,8 @@ jobs:
           root=os.environ["GITHUB_WORKSPACE"]
           deps='\n'.join(f'{n} = {{ path = "{root}/crates/{n}" }}' for n in ["ovg-mobile-engine","ovg-local-storage"])
           text=p.read_text().replace("[dependencies]", "[dependencies]\n"+deps+'\nuuid = { version = "1", features = ["v4"] }\nserde_json = "1"',1)
+          text=text.replace("[dependencies]", '[dependencies]\novg-project-store = { git = "https://github.com/nguyentrieu210/OpenVietGis", rev = "b6c00b0707f7e4f8502f3e8ebebacea0ead11353" }',1)
+          text+='\n[patch."https://github.com/nguyentrieu210/OpenVietGis"]\n'+'\n'.join(f'{n} = {{ path = "{root}/crates/{n}" }}' for n in ["ovg-mobile-engine","ovg-local-storage","ovg-spatial"])+'\n'
           p.write_text(text)
           PY
           flutter pub get
@@ -78,6 +80,8 @@ jobs:
         run: |
           set -euxo pipefail
           cd "$RUNNER_TEMP/openvietgis_mobile"
+          cargo metadata --manifest-path rust/Cargo.toml --format-version 1 > "$RUNNER_TEMP/unified-graph.json"
+          python3 "$GITHUB_WORKSPACE/infra/mobile/check-unified-graph.py" "$RUNNER_TEMP/unified-graph.json"
           cargo test --manifest-path rust/Cargo.toml
           cargo build --release --manifest-path rust/Cargo.toml
           flutter analyze lib test
@@ -112,6 +116,7 @@ jobs:
             ${{ runner.temp }}/openvietgis_mobile/lib/src/rust
             ${{ runner.temp }}/openvietgis_mobile/rust/src/frb_generated.rs
             ${{ runner.temp }}/openvietgis_mobile/build/app/outputs/flutter-apk/app-debug.apk
+            ${{ runner.temp }}/unified-graph.json
             ${{ runner.temp }}/w1-elf.json
             ${{ runner.temp }}/w1-apk.sha256
             ${{ runner.temp }}/release-evidence
