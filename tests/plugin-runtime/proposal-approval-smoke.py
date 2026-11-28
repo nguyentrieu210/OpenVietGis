@@ -55,8 +55,8 @@ def main():
                     r'"(SELECT DISTINCT link FROM \(.*?refs WHERE link->>.*?IS NOT NULL)"',
                     r'"(WITH items AS \(.*?END FROM items)"',
                     r'"(SELECT EXISTS\(SELECT 1 FROM house_numbering.proposal_items i JOIN house_numbering.reconcile_cases c.*?matched\x27\))"']]
-                def run(db,query):
-                    args=[org,project,proposal['id']]
+                def run(db,query,offset=0):
+                    args=[org,project,proposal['id'],offset]
                     order=[int(x)-1 for x in re.findall(r'\$(\d+)',query)]
                     return db.execute(re.sub(r'\$\d+','%s',query),[args[i] for i in order]).fetchall()
                 def scoped(db):
@@ -83,6 +83,21 @@ def main():
                 with psycopg.connect(runtime) as db:
                     scoped(db)
                     assert run(db,queries[2])[0][0] is True
+                # Old candidate supplies a real approved fixture via its ordinary
+                # transition API. New issuance SQL is checked separately.
+                with psycopg.connect(owner) as db:
+                    db.execute("UPDATE house_numbering.reconcile_cases SET status='resolved',revision=revision+1 WHERE building_id=%s",(building['id'],))
+                move('submit',1)
+                with psycopg.connect(runtime) as db:
+                    scoped(db)
+                    submitted_digest=run(db,queries[1])[0][0]
+                move('approve',2,headers=reviewer['csrf'])
+                with psycopg.connect(runtime) as db:
+                    scoped(db)
+                    assert run(db,queries[1],1)[0][0]==submitted_digest
+                    assert run(db,queries[1],0)[0][0]!=submitted_digest
+                from issuance_sql_fixture import check_issuance_sql
+                check_issuance_sql(ROOT,runtime,scoped,org,project,actor,proposal['id'],number,route['id'],fx['project_b_id'])
                 print('PASS exact proposal SQL, geometry digest invalidation, quality gate, append-only grants and cross-project RLS; transition API not tested')
                 return
             move('submit',1)
@@ -110,5 +125,23 @@ def main():
                 pins=db.execute("SELECT submitted_revision,submitted_by::text,input_digest FROM house_numbering.proposal_submission_pins WHERE proposal_id=%s ORDER BY submitted_revision",(proposal['id'],)).fetchall()
                 assert [p[0] for p in pins]==[2,4,6] and all(p[1]==actor and len(p[2])==64 for p in pins)
                 assert len({p[2] for p in pins})==3
+            body={'proposal_id':proposal['id'],'number_id':number,'authority_name':'Fixture authority','decision_ref':'TEST-DECISION','certificate_ref':'TEST-CERT','effective_date':'2026-11-01','template_revision':'test-v1'}
+            expect(api.post(root+'/issuances',json=body,headers=editor['csrf']),403)
+            registered=expect(api.post(root+'/issuances',json=body,headers=reviewer['csrf']),201)
+            iid=registered['record']['id'];issue=root+'/issuances/'+iid;lookup=root+'/address-lookup/'+iid
+            assert registered['history'][0]['state']=='recorded'
+            expect(api.post(root+'/issuances',json=body,headers=reviewer['csrf']),409)
+            expect(api.get(lookup),401)
+            assert expect(api.get(lookup,headers=h),200)['plate_state']=='recorded'
+            def stage(revision,state,status=200):
+                return expect(api.post(issue+'/transition',json={'expected_revision':revision,'state':state,'evidence_ref':'Fixture evidence'},headers=reviewer['csrf']),status)
+            stage(1,'installed',409)
+            for rev,state in [(1,'printed'),(2,'delivered'),(3,'installed')]:stage(rev,state)
+            stage(1,'void',409)
+            assert expect(api.get(lookup,headers=h),200)['plate_state']=='installed'
+            stage(4,'void')
+            expect(api.get(lookup,headers=h),404)
+            assert len(expect(api.get(issue,headers=reviewer['csrf']),200)['history'])==5
+            print('PASS issuance HTTP: external certificate registry, ordered plate states, permission, immutable history and revocation')
             print('PASS proposal: independent reviewer, stale geometry, unresolved case, changed evidence, resubmission, approved number, retained pins')
 if __name__=='__main__':main()

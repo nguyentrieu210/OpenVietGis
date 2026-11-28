@@ -25,7 +25,7 @@ import {projectApiPath} from "./http";
 export type ModuleChangePage={mode:"snapshot_required"|"delta";cursor:string;has_more:boolean;items:{sequence:string;extension_key:string;kind:ModuleChangeNotice["kind"]}[]};
 export function replayModuleChanges(client:ApiClient,org:string,project:string,cursor?:string,signal?:AbortSignal){
  const query=new URLSearchParams({limit:"100"});if(cursor!==undefined)query.set("cursor",cursor);
- return client.request<ModuleChangePage>(projectApiPath(org,project)+"/extensions/change-events?"+query,{signal,cache:"no-store"});
+ return client.request<ModuleChangePage>(projectApiPath(org,project)+"/extensions/change-events?"+query,{...(signal?{signal}:{}),cache:"no-store"});
 }
 /** Deliver one replay page; advance the cursor only after successful processing.
  * Duplicate hints are harmless because subscribers reread source-of-truth state. */

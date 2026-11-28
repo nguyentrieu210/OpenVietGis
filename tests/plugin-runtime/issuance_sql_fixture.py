@@ -1,0 +1,45 @@
+"""Disposable fixture only: exercise the exact new issuance SQL and DB state machine."""
+from datetime import date
+from pathlib import Path
+from uuid import uuid4
+import re
+import psycopg
+
+def check_issuance_sql(root, runtime, scoped, org, project, actor, proposal, number, route, other_project):
+    src=(Path(root)/'modules/house_numbering/storage/src/persistence/issuance.rs').read_text()
+    create=re.search(r'"(WITH inserted AS \(.*?SELECT to_jsonb\(inserted\) FROM inserted)"',src,re.S).group(1)
+    event=re.search(r'"(INSERT INTO house_numbering.issuance_events.*?)"',src,re.S).group(1)
+    lookup=re.search(r'"(SELECT jsonb_build_object\(\x27id\x27,r.id.*?route.status=\x27confirmed\x27)"',src,re.S).group(1)
+    iid=str(uuid4())
+    def query(db,sql,params):
+        order=[int(x)-1 for x in re.findall(r'\$(\d+)',sql)]
+        return db.execute(re.sub(r'\$\d+','%s',sql),[params[i] for i in order])
+    def append(db,rev,state):
+        return query(db,event,[org,project,iid,rev,state,'fixture evidence',actor])
+    with psycopg.connect(runtime) as db:
+        scoped(db)
+        params=[org,project,iid,proposal,number,'Fixture authority','TEST-DECISION','TEST-CERT',date(2026,11,1),'test-v1',actor]
+        assert query(db,create,params).fetchone()[0]['route_id']==route
+        append(db,1,'recorded')
+        assert query(db,create,[*params[:2],str(uuid4()),*params[3:]]).fetchone() is None
+        def state():
+            row=query(db,lookup,[org,project,iid]).fetchone()
+            return row[0]['plate_state'] if row else None
+        assert state()=='recorded'
+        try:
+            with db.transaction():append(db,2,'installed')
+        except psycopg.Error as e:assert e.sqlstate=='OV409'
+        else:raise AssertionError('skipped required plate stages')
+        for rev,status in [(2,'printed'),(3,'delivered'),(4,'installed')]:append(db,rev,status)
+        assert state()=='installed'
+        append(db,5,'void')
+        assert state() is None
+        try:
+            with db.transaction():append(db,6,'printed')
+        except psycopg.Error as e:assert e.sqlstate=='OV409'
+        else:raise AssertionError('void record reactivated')
+        assert not db.execute("SELECT has_table_privilege(current_user,'house_numbering.issuance_events','UPDATE')").fetchone()[0]
+        assert not db.execute("SELECT has_table_privilege(current_user,'house_numbering.issuance_records','DELETE')").fetchone()[0]
+        db.execute("SELECT set_config('openvietgis.project_id',%s,true)",(other_project,))
+        assert db.execute("SELECT count(*) FROM house_numbering.issuance_records").fetchone()[0]==0
+    print('PASS exact issuance SQL: duplicate protection, ordered stages, void lookup, immutable grants, RLS')

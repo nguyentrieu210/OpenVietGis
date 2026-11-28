@@ -416,7 +416,7 @@ fn blank(comment: Option<&str>) -> bool {
 
 // Bind the decision to the exact submitted domain revisions, resolved route
 // geometry, linked feature content and evidence/case state, without storing PII.
-async fn submission_digest(edit:&mut ProjectRead<'_>,proposal_id:Uuid)->Result<String,AppError>{
+async fn submission_digest(edit:&mut ProjectRead<'_>,proposal_id:Uuid,revision_offset:i64)->Result<String,AppError>{
     let org=edit.organization_id();let project=edit.project_id();
     let links:Vec<Value>=sqlx::query_scalar(
         "SELECT DISTINCT link FROM (
@@ -442,7 +442,7 @@ async fn submission_digest(edit:&mut ProjectRead<'_>,proposal_id:Uuid)->Result<S
     let digest:String=sqlx::query_scalar(
         "WITH items AS (
           SELECT i.id,i.building_id,n.route_id,
-            jsonb_build_array(i.id,b.id,b.revision,n.id,n.revision,r.id,r.revision,
+            jsonb_build_array(i.id,b.id,b.revision,n.id,n.revision-$4,r.id,r.revision,
               rule.id,rule.revision,rule.status,rule.authority_ref,
               encode(sha256(ST_AsEWKB(line.geometry)),'hex'),
               encode(sha256(convert_to(jsonb_build_array(f.attributes,encode(ST_AsEWKB(f.geometry),'hex'),f.geometry_state,f.schema_revision,s.lifecycle,s.validation_state)::text,'UTF8')),'hex'),
@@ -463,7 +463,7 @@ async fn submission_digest(edit:&mut ProjectRead<'_>,proposal_id:Uuid)->Result<S
           WHERE i.organization_id=$1 AND i.project_id=$2 AND i.proposal_id=$3
         ) SELECT CASE WHEN count(*)>0 AND bool_and(coalesce(ready,false)) THEN
           encode(sha256(convert_to(jsonb_agg(pin ORDER BY id)::text,'UTF8')),'hex') ELSE '' END FROM items"
-    ).bind(org).bind(project).bind(proposal_id).fetch_one(&mut **edit.transaction()).await.map_err(db_error)?;
+    ).bind(org).bind(project).bind(proposal_id).bind(revision_offset).fetch_one(&mut **edit.transaction()).await.map_err(db_error)?;
     if digest.is_empty(){return Err(AppError::conflict("PROPOSAL_GEOMETRY_UNVERIFIED","every item requires a ready linked building and resolved route geometry"));}
     Ok(digest)
 }
@@ -555,7 +555,7 @@ pub async fn transition_proposal(
                 ));
             }
             move_numbers(edit, actor, proposal_id, "proposed", "submitted", now).await?;
-            let digest=submission_digest(edit,proposal_id).await?;
+            let digest=submission_digest(edit,proposal_id,0).await?;
             sqlx::query("INSERT INTO house_numbering.proposal_submission_pins(organization_id,project_id,proposal_id,submitted_revision,submitted_by,input_digest) VALUES($1,$2,$3,$4,$5,$6)")
               .bind(edit.organization_id()).bind(edit.project_id()).bind(proposal_id).bind(expected_revision+1).bind(actor.id).bind(digest)
               .execute(&mut **edit.transaction()).await.map_err(db_error)?;
@@ -601,7 +601,7 @@ pub async fn transition_proposal(
                 .fetch_optional(&mut **edit.transaction()).await.map_err(db_error)?;
             let (submitter,digest)=pin.ok_or_else(||AppError::conflict("PROPOSAL_REVIEW_REQUIRED","withdraw and resubmit the legacy proposal before approval"))?;
             if submitter==actor.id{return Err(AppError::forbidden("proposal approver must be independent from submitter"));}
-            if submission_digest(edit,proposal_id).await?!=digest{
+            if submission_digest(edit,proposal_id,0).await?!=digest{
                 return Err(AppError::conflict("STALE_PROPOSAL_REVIEW","proposal inputs changed; withdraw and resubmit"));
             }
             move_numbers(edit, actor, proposal_id, "submitted", "approved", now).await?;
@@ -648,4 +648,24 @@ pub async fn transition_proposal(
     )
     .await?;
     Ok(result)
+}
+
+/// Registration of an external certificate requires the same approved input
+/// snapshot, not just an approved status flag. No mutation of the proposal.
+pub(super) async fn verify_approved_snapshot(edit:&mut ProjectRead<'_>,proposal_id:Uuid)->Result<(),AppError>{
+    let (proposal,_)=load_proposal(edit,proposal_id,true).await?;
+    if proposal["status"]!="approved" || proposal["rule_status"]!="authoritative" || blank(proposal["authority_ref"].as_str()){
+        return Err(AppError::conflict("ISSUANCE_REQUIRES_APPROVAL","a verified approved proposal is required"));
+    }
+    validate_transition_items(edit,proposal_id,&proposal,"approved",true).await?;
+    check_quality(edit,proposal_id).await?;
+    let revision=proposal["revision"].as_i64().ok_or_else(||AppError::internal("missing proposal revision"))?;
+    let pin:Option<(Uuid,String)>=sqlx::query_as("SELECT submitted_by,input_digest::text FROM house_numbering.proposal_submission_pins WHERE organization_id=$1 AND project_id=$2 AND proposal_id=$3 AND submitted_revision=$4")
+        .bind(edit.organization_id()).bind(edit.project_id()).bind(proposal_id).bind(revision-1)
+        .fetch_optional(&mut **edit.transaction()).await.map_err(db_error)?;
+    let (submitter,digest)=pin.ok_or_else(||AppError::conflict("ISSUANCE_REQUIRES_VERIFIED_APPROVAL","approved proposal has no verified submission pin"))?;
+    if proposal["updated_by_actor_id"].as_str()==Some(submitter.to_string().as_str()) || submission_digest(edit,proposal_id,1).await?!=digest{
+        return Err(AppError::conflict("ISSUANCE_REVIEW_REQUIRED","approved inputs or reviewer verification changed"));
+    }
+    Ok(())
 }

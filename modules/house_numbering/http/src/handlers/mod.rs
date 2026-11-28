@@ -4,6 +4,7 @@ mod assignment;
 mod buildings;
 mod field;
 mod hierarchy;
+mod issuance;
 mod numbering;
 mod proposals;
 mod records;
@@ -48,6 +49,7 @@ pub fn router() -> Router<AppState> {
         .merge(assignment::router())
         .merge(buildings::router())
         .merge(proposals::router())
+        .merge(issuance::router())
         .merge(field::router())
         .merge(records::router())
         .merge(numbering::router())

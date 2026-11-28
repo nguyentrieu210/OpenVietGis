@@ -1022,3 +1022,24 @@ export function revokeSurveySignoff(client: ApiClient, orgId: string, projectId:
     { reason }
   );
 }
+
+export type IssuanceState="recorded"|"printed"|"delivered"|"installed"|"void";
+export type IssuanceRecord={id:string;proposal_id:string;building_id:string;number_id:string;route_id:string;number_text:string;route_name:string;authority_name:string;decision_ref:string;certificate_ref:string;effective_date:string;template_revision:string;recorded_at:string};
+export type IssuanceEvent={revision:number;state:IssuanceState;evidence_ref:string;occurred_at:string};
+export type IssuanceDetail={record:IssuanceRecord;history:IssuanceEvent[]};
+export type IssuanceInput={proposal_id:string;number_id:string;authority_name:string;decision_ref:string;certificate_ref:string;effective_date:string;template_revision:string};
+export function recordHouseNumberingIssuance(client:ApiClient,org:string,project:string,input:IssuanceInput){
+ return jsonMutation<IssuanceDetail>(client,base(org,project)+"/issuances","POST",input);
+}
+export function listHouseNumberingIssuances(client:ApiClient,org:string,project:string,building:string){
+ return client.request<{items:(IssuanceRecord&{state:IssuanceState;revision:number})[]}>(base(org,project)+"/buildings/"+encodeURIComponent(building)+"/issuances");
+}
+export function getHouseNumberingIssuance(client:ApiClient,org:string,project:string,id:string){
+ return client.request<IssuanceDetail>(base(org,project)+"/issuances/"+encodeURIComponent(id));
+}
+export function transitionHouseNumberingIssuance(client:ApiClient,org:string,project:string,id:string,input:{expected_revision:number;state:Exclude<IssuanceState,"recorded">;evidence_ref:string}){
+ return jsonMutation<IssuanceDetail>(client,base(org,project)+"/issuances/"+encodeURIComponent(id)+"/transition","POST",input);
+}
+export function houseNumberingAddressLookupUrl(org:string,project:string,id:string){
+ return "/api/v1"+base(org,project)+"/address-lookup/"+encodeURIComponent(id);
+}
