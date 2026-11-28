@@ -63,85 +63,56 @@ struct Evidence {
     raw_number: Option<String>,
 }
 
-async fn case_exists(
-    edit: &mut ProjectRead<'_>,
-    building_id: Option<Uuid>,
-    case_class: &str,
-    evidence_ids: &[Uuid],
-) -> Result<Option<Value>, AppError> {
-    let rows = sqlx::query(
-        "SELECT to_jsonb(c) AS wire FROM house_numbering.reconcile_cases c
-         WHERE c.organization_id=$1 AND c.project_id=$2
-           AND c.building_id IS NOT DISTINCT FROM $3
-           AND c.case_class=$4 AND c.status='open'
-         ORDER BY c.created_at DESC",
-    )
-    .bind(edit.organization_id())
-    .bind(edit.project_id())
-    .bind(building_id)
-    .bind(case_class)
-    .fetch_all(&mut **edit.transaction())
-    .await
-    .map_err(db_error)?;
-    let wanted: std::collections::BTreeSet<String> =
-        evidence_ids.iter().map(Uuid::to_string).collect();
-    for row in &rows {
-        let value = wire_py(row)?;
-        let have: std::collections::BTreeSet<String> = value["evidence_ids"]
-            .as_array()
-            .map(|items| {
-                items
-                    .iter()
-                    .map(|item| {
-                        item.as_str()
-                            .map_or_else(|| item.to_string(), str::to_owned)
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
-        if have == wanted {
-            return Ok(Some(value));
-        }
+// Batch reconciliation by the complete immutable evidence set. Rebuilding
+// unchanged input must not reopen resolved or ignored historical decisions.
+async fn persist_cases(edit:&mut ProjectRead<'_>,actor:AuditActor<'_>,cases:&[Value])->Result<Vec<Value>,AppError>{
+    let mut results=Vec::with_capacity(cases.len());
+    for batch in cases.chunks(500){
+        let rows=sqlx::query(
+            "WITH incoming AS MATERIALIZED (
+               SELECT * FROM jsonb_to_recordset($3::jsonb) AS x(id uuid,building_id uuid,evidence_ids jsonb,case_class text,estimated boolean,position bigint)
+             ), matched AS MATERIALIZED (
+               SELECT i.*,old.id AS existing_id FROM incoming i LEFT JOIN LATERAL (
+                 SELECT c.id FROM house_numbering.reconcile_cases c
+                 WHERE c.organization_id=$1 AND c.project_id=$2 AND c.building_id IS NOT DISTINCT FROM i.building_id
+                   AND c.case_class=i.case_class AND c.estimated=i.estimated
+                   AND c.evidence_ids @> i.evidence_ids AND c.evidence_ids <@ i.evidence_ids
+                 ORDER BY (c.status='open') DESC,c.updated_at DESC,c.id LIMIT 1
+               ) old ON true
+             ), inserted AS (
+               INSERT INTO house_numbering.reconcile_cases(id,organization_id,project_id,building_id,evidence_ids,case_class,estimated,status,resolution,revision,created_by_actor_id,updated_by_actor_id,created_at,updated_at)
+               SELECT id,$1,$2,building_id,evidence_ids,case_class,estimated,'open',NULL,1,$4,$4,now(),now()
+               FROM matched WHERE existing_id IS NULL RETURNING *
+             ), results AS (
+               SELECT m.position,to_jsonb(c) AS wire FROM matched m JOIN house_numbering.reconcile_cases c ON c.id=m.existing_id
+               UNION ALL SELECT m.position,to_jsonb(i) FROM matched m JOIN inserted i ON i.id=m.id
+             ) SELECT wire FROM results ORDER BY position"
+        ).bind(edit.organization_id()).bind(edit.project_id()).bind(json!(batch)).bind(actor.id)
+          .fetch_all(&mut **edit.transaction()).await.map_err(db_error)?;
+        if rows.len()!=batch.len(){return Err(AppError::internal("reconciliation result count mismatch"));}
+        results.extend(rows_py(&rows)?);
     }
-    Ok(None)
+    Ok(results)
 }
 
-async fn insert_case(
-    edit: &mut ProjectRead<'_>,
-    actor: AuditActor<'_>,
-    building_id: Option<Uuid>,
-    evidence_ids: &[Uuid],
-    case_class: &str,
-    estimated: bool,
-) -> Result<Value, AppError> {
-    if let Some(existing) = case_exists(edit, building_id, case_class, evidence_ids).await? {
-        return Ok(existing);
-    }
-    let ids: Vec<String> = evidence_ids.iter().map(Uuid::to_string).collect();
-    let row = sqlx::query(
-        "WITH inserted AS (
-            INSERT INTO house_numbering.reconcile_cases (
-                id,organization_id,project_id,building_id,evidence_ids,case_class,
-                estimated,status,resolution,revision,created_by_actor_id,updated_by_actor_id,
-                created_at,updated_at
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,'open',NULL,1,$8,$8,$9,$9)
-            RETURNING *
-         )
-         SELECT to_jsonb(inserted) AS wire FROM inserted",
-    )
-    .bind(Uuid::new_v4())
-    .bind(edit.organization_id())
-    .bind(edit.project_id())
-    .bind(building_id)
-    .bind(json!(ids))
-    .bind(case_class)
-    .bind(estimated)
-    .bind(actor.id)
-    .bind(chrono::Utc::now())
-    .fetch_one(&mut **edit.transaction())
-    .await
-    .map_err(db_error)?;
-    wire_py(&row)
+fn source_numbers(rows:&[Evidence],origin:&str)->std::collections::BTreeSet<String>{
+    rows.iter().filter(|e|e.origin==origin).filter_map(|e|e.raw_number.as_deref())
+        .map(|v|v.trim_matches(' ').to_ascii_uppercase()).filter(|v|!v.is_empty()).collect()
+}
+
+fn classify_sources<F>(rows:&[Evidence],removed:bool,classify:&F)->Result<&'static str,AppError>
+where F:Fn(Option<&str>,Option<&str>,Option<&str>,bool,bool)->Result<&'static str,String>{
+    let certificate=source_numbers(rows,"certificate");
+    let cad=source_numbers(rows,"cad");
+    let survey=source_numbers(rows,"survey");
+    let surveyed=rows.iter().any(|e|e.origin=="survey");
+    if removed&&!surveyed{return Err(validation("removed building requires survey evidence"));}
+    if removed{return Ok("no_longer_exists");}
+    // Do not silently select the latest number when observations conflict.
+    if certificate.len()>1||cad.len()>1{return Ok("cad_certificate_mismatch");}
+    if survey.len()>1{return Ok("number_mismatch");}
+    classify(certificate.first().map(String::as_str),cad.first().map(String::as_str),
+      survey.first().map(String::as_str),surveyed,true).map_err(AppError::internal)
 }
 
 /// Port of `HouseNumberingReconciliation.rebuild_cases`; `classify` is the module rule.
@@ -190,57 +161,26 @@ where
             Some(building) => by_building.entry(building).or_default().push(evidence),
         }
     }
-    // Python `str(raw_number)` renders a missing number as the text "None".
-    let text = |evidence: Option<&Evidence>| {
-        evidence.map(|row| row.raw_number.clone().unwrap_or_else(|| "None".to_owned()))
-    };
-    let mut results = Vec::new();
+    let removed:std::collections::HashSet<_>=removed.iter().copied().collect();
+    let estimated:std::collections::HashSet<_>=estimated.iter().copied().collect();
+    let active:std::collections::HashSet<_>=buildings.iter().copied().collect();
+    if removed.iter().chain(estimated.iter()).any(|id|!active.contains(id)){
+        return Err(validation("reconciliation flag refers to a non-active building"));
+    }
+    let mut cases=Vec::with_capacity(buildings.len()+unmatched.len());
     for building_id in buildings {
-        let rows = by_building
-            .get(&building_id)
-            .map(Vec::as_slice)
-            .unwrap_or(&[]);
-        let latest = |origin: &str| rows.iter().find(|row| row.origin == origin);
-        let (certificate, cad, survey) = (latest("certificate"), latest("cad"), latest("survey"));
-        let (cert_text, cad_text, survey_text) = (text(certificate), text(cad), text(survey));
-        let case_class = classify(
-            cert_text.as_deref(),
-            cad_text.as_deref(),
-            survey_text.as_deref(),
-            survey.is_some(),
-            !removed.contains(&building_id),
-        )
-        .map_err(AppError::internal)?;
-        let evidence_ids: Vec<Uuid> = [certificate, cad, survey]
-            .into_iter()
-            .flatten()
-            .map(|row| row.id)
-            .collect();
-        results.push(
-            insert_case(
-                edit,
-                actor,
-                Some(building_id),
-                &evidence_ids,
-                case_class,
-                estimated.contains(&building_id),
-            )
-            .await?,
-        );
+        let rows=by_building.get(&building_id).map(Vec::as_slice).unwrap_or(&[]);
+        let case_class=classify_sources(rows,removed.contains(&building_id),&classify)?;
+        let mut ids:Vec<Uuid>=rows.iter().filter(|r|matches!(r.origin.as_str(),"certificate"|"cad"|"survey")).map(|r|r.id).collect();
+        ids.sort_unstable();
+        cases.push(json!({"id":Uuid::new_v4(),"building_id":building_id,"evidence_ids":ids,"case_class":case_class,
+          "estimated":estimated.contains(&building_id),"position":cases.len()}));
     }
-    for evidence_id in unmatched {
-        results.push(
-            insert_case(
-                edit,
-                actor,
-                None,
-                &[evidence_id],
-                "certificate_unmatched",
-                false,
-            )
-            .await?,
-        );
+    for evidence_id in unmatched{
+        cases.push(json!({"id":Uuid::new_v4(),"building_id":null,"evidence_ids":[evidence_id],"case_class":"certificate_unmatched",
+          "estimated":false,"position":cases.len()}));
     }
+    let results=persist_cases(edit,actor,&cases).await?;
     Ok(json!({ "items": results }))
 }
 
@@ -339,13 +279,17 @@ pub async fn resolve_case(
     resolution: &str,
     building_id: Option<Uuid>,
 ) -> Result<Value, AppError> {
+    if resolution.trim().is_empty(){return Err(validation("resolution evidence is required"));}
+    if let Some(building)=building_id{
+        if get_building(edit,building,true).await?["state"]!="active"{return Err(validation("resolution requires an active building"));}
+    }
     let row = sqlx::query(
         "WITH updated AS (
             UPDATE house_numbering.reconcile_cases
             SET status=$4,resolution=$5,building_id=COALESCE($6,building_id),revision=revision+1,
                 updated_by_actor_id=$7,updated_at=$8
             WHERE organization_id=$1 AND project_id=$2 AND id=$3
-              AND revision=$9 AND status='open'
+              AND revision=$9 AND status='open' AND ($6::uuid IS NULL OR building_id IS NULL OR building_id=$6)
             RETURNING *
          )
          SELECT to_jsonb(updated) AS wire FROM updated",
@@ -365,6 +309,8 @@ pub async fn resolve_case(
     .ok_or_else(|| {
         AppError::conflict("STALE_RECONCILE_CASE", "reconcile case is stale or closed")
     })?;
+    append_audit(edit,actor,"house_numbering.reconciliation.resolve","house_numbering_reconcile_case",case_id,
+       json!({"status":status,"revision":expected_revision+1,"building_id":building_id})).await?;
     wire_py(&row)
 }
 
@@ -987,4 +933,21 @@ pub async fn list_geometry_reviews(
         "items": items,
         "next_offset": if has_more { json!(offset + limit) } else { Value::Null },
     }))
+}
+
+#[cfg(test)]
+mod reconciliation_tests{
+    use super::*;
+    fn ev(origin:&str,raw:Option<&str>)->Evidence{Evidence{id:Uuid::new_v4(),building_id:None,origin:origin.into(),raw_number:raw.map(str::to_owned)}}
+    fn classify(c:Option<&str>,d:Option<&str>,s:Option<&str>,surveyed:bool,_:bool)->Result<&'static str,String>{
+        Ok(if c.is_some()&&d.is_some()&&c!=d{"cad_certificate_mismatch"}else if !surveyed{"not_surveyed"}else if c.or(d)==s{"matched"}else{"number_mismatch"})
+    }
+    #[test]
+    fn all_sources_and_null_values(){
+        assert_eq!(classify_sources(&[ev("certificate",Some("100A")),ev("certificate",Some(" 100a ")),ev("survey",Some("100A"))],false,&classify).unwrap(),"matched");
+        assert_eq!(classify_sources(&[ev("certificate",Some("100")),ev("certificate",Some("102")),ev("survey",Some("102"))],false,&classify).unwrap(),"cad_certificate_mismatch");
+        assert_eq!(classify_sources(&[ev("cad",Some("100")),ev("survey",Some("100")),ev("survey",Some("102"))],false,&classify).unwrap(),"number_mismatch");
+        assert_eq!(source_numbers(&[ev("certificate",None)],"certificate").len(),0);
+        assert!(classify_sources(&[],true,&classify).is_err());
+    }
 }

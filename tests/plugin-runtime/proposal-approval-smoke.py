@@ -237,6 +237,29 @@ def main():
                         db.execute("SELECT set_config('openvietgis.project_id',%s,true)",(fx['project_b_id'],))
                         assert db.execute("SELECT count(*) FROM house_numbering.parcels").fetchone()[0]==0
                 print('PASS parcel SQL: distinct identity, duplicate geometry link, independent review, multiple parcels, revision CAS, detach/reobserve and RLS')
+                # Batched rebuild persists the exact evidence set and prior decisions.
+                records_src=(ROOT/'modules/house_numbering/storage/src/persistence/records.rs').read_text()
+                batch_sql=re.search(r'"(WITH incoming AS MATERIALIZED .*?SELECT wire FROM results ORDER BY position)"',records_src,re.S).group(1)
+                from psycopg.types.json import Jsonb
+                with psycopg.connect(runtime) as db:
+                    scoped(db)
+                    with db.transaction(force_rollback=True):
+                        e1,e2=str(uuid4()),str(uuid4())
+                        case={'id':str(uuid4()),'building_id':building['id'],'evidence_ids':[e1,e2],'case_class':'number_mismatch','estimated':False,'position':0}
+                        def persist(items):
+                            return [r[0] for r in execute(db,batch_sql,[org,project,Jsonb(items),actor]).fetchall()]
+                        first=persist([case])[0]
+                        assert first['id']==case['id']
+                        db.execute("UPDATE house_numbering.reconcile_cases SET status='resolved',resolution='fixture checked',revision=2 WHERE id=%s",(first['id'],))
+                        replay=persist([{**case,'id':str(uuid4()),'evidence_ids':[e2,e1]}])[0]
+                        assert replay['id']==first['id'] and replay['status']=='resolved' and replay['revision']==2
+                        changed=persist([{**case,'id':str(uuid4()),'evidence_ids':[e1,e2,str(uuid4())]}])[0]
+                        assert changed['id']!=first['id'] and changed['status']=='open'
+                        estimated=persist([{**case,'id':str(uuid4()),'estimated':True}])[0]
+                        assert estimated['id']!=first['id'] and estimated['estimated']
+                        orphan={'id':str(uuid4()),'building_id':None,'evidence_ids':[str(uuid4())],'case_class':'certificate_unmatched','estimated':False,'position':1}
+                        assert persist([{**case,'id':str(uuid4())},orphan])[1]['id']==orphan['id']
+                print('PASS reconciliation batch SQL: exact evidence set reuse, resolved state retained, changed evidence and estimate create new cases, unmatched certificate')
                 # Old candidate supplies a real approved fixture via its ordinary
                 # transition API. New issuance SQL is checked separately.
                 with psycopg.connect(owner) as db:
