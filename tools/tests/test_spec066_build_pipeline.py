@@ -105,7 +105,6 @@ def test_full_ci_is_not_path_filtered_for_prs_or_main() -> None:
     ci = yaml.load((ROOT / ".github/workflows/ci.yml").read_text(), Loader=yaml.BaseLoader)
     triggers = ci["on"]
     assert triggers["pull_request"] is None
-    assert "paths" not in triggers["pull_request"]
     assert "main" in triggers["push"]["branches"]
 
 
