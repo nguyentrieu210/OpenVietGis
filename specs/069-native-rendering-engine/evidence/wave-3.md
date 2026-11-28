@@ -9,3 +9,6 @@
 - Synthetic snap measurement: synchronous cold 148.6 ms, async cold first query 28.5 ms, warm query p95 0.1 ms. Earlier candidate cold measurement 319 ms. Software-rendered frame interval p95 32.2 ms, 27 frames. Not a hardware GPU or end-to-end million-feature benchmark.
 
 Remaining acceptance: cold-query 10 ms target not met; hardware GPU 60 FPS and actual million-feature backend/tile workload not certified; independent native CAD relay path is not changed by this GIS work; integrated app, security, touch/cancellation, comparison and release gates remain pending. No production deployment or merge implied.
+
+## Polygon label regression fix
+Use one cached bounded polylabel interior anchor per feature, including holes and multipart geometries; deduplicate repeated feature keys. Chromium zoom regression requires exactly one rendered polygon label after both jump and animated zoom. Fixed anchors outside the visible viewport are not displayed.
