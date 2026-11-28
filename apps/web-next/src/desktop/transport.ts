@@ -114,6 +114,20 @@ export type UnifiedEdit={layer:string;feature:string;expected:string;geometry:Ge
 export type UnifiedLink={relation:string;source:string;target:string;add:boolean};
 export type UnifiedBatch={operation:string;expected_project:string;edits:UnifiedEdit[];links:UnifiedLink[]};
 export const unified={
+ backup:(handle:string,expected:string)=>host().core.invoke<boolean>("unified_backup",{handle,expected}),
+ restore:()=>host().core.invoke<Project|null>("unified_restore"),
+ tile:async(handle:string,layer:string,expected:string,z:number,x:number,y:number,signal?:AbortSignal):Promise<ArrayBuffer>=>{
+   if(signal?.aborted)throw new DOMException("Aborted","AbortError");
+   const requestId=crypto.randomUUID();
+   const cancel=()=>{void host().core.invoke<void>("desktop_cancel_resource",{requestId}).catch(()=>{})};
+   signal?.addEventListener("abort",cancel,{once:true});
+   try{
+    const raw=await host().core.invoke<ArrayBuffer|number[]>("unified_tile",{handle,layer,expected,z,x,y,requestId});
+    if(signal?.aborted)throw new DOMException("Aborted","AbortError");
+    const b=raw instanceof ArrayBuffer?raw:Uint8Array.from(raw).buffer;
+    if(b.byteLength>4*1024*1024)throw Error("RESOURCE_LIMIT");return b;
+   }finally{signal?.removeEventListener("abort",cancel)}
+ },
  list:()=>host().core.invoke<Project[]>("unified_list"),
  create:()=>host().core.invoke<Project>("unified_create"),
  open:(id:string)=>host().core.invoke<Opened>("unified_open",{id}),
