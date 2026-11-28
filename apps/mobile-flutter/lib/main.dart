@@ -14,6 +14,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'workspaces.dart';
+import 'unified_page.dart';
 import 'cloud_session.dart';
 import 'cloud_page.dart';
 
@@ -33,6 +34,7 @@ final cloudProvider=ChangeNotifierProvider<CloudSession>((ref)=>CloudSession());
 final router=GoRouter(routes:[
   GoRoute(path:'/cloud',builder:(context,state)=>const CloudRoute()),
   GoRoute(path:'/',builder:(context,state)=>const MapPage()),
+  GoRoute(path:'/unified',builder:(context,state)=>const UnifiedPage()),
   GoRoute(path:'/workspaces',builder:(context,state)=>const WorkspacePage()),
   GoRoute(path:'/survey',builder:(context,state)=>const SurveyRoute()),
   GoRoute(path:'/attributes',builder:(context,state)=>const AttributesRoute()),
@@ -84,6 +86,7 @@ class MapPage extends ConsumerWidget{
       floatingActionButton:FloatingActionButton.extended(
         onPressed:()=>showModalBottomSheet<void>(context:context,builder:(sheet)=>SafeArea(child:Column(mainAxisSize:MainAxisSize.min,children:[
           ListTile(leading:const Icon(Icons.folder),title:Text(tr(vi,'Không gian làm việc local','Local workspaces')),onTap:(){Navigator.pop(sheet);context.push('/workspaces');}),
+          ListTile(leading:const Icon(Icons.storage),title:const Text('Unified Store · thử nghiệm'),enabled:c.ready&&!c.busy,onTap:(){Navigator.pop(sheet);context.push('/unified');}),
           ListTile(leading:const Icon(Icons.file_open),title:Text(tr(vi,'Nhập GeoJSON','Import GeoJSON')),subtitle:Text(tr(vi,'WGS84 XY · tối đa 16 MiB / 4096 đối tượng','WGS84 XY · max 16 MiB / 4096 features')),enabled:c.ready&&!c.busy,onTap:(){Navigator.pop(sheet);unawaited(importFile(context,c));}),
           ListTile(leading:const Icon(Icons.share),title:Text(tr(vi,'Xuất GeoJSON','Export GeoJSON')),enabled:c.ready&&!c.busy,onTap:(){Navigator.pop(sheet);unawaited(exportFile(context,c));}),
           ListTile(leading:const Icon(Icons.table_chart),title:Text(tr(vi,'Bảng thuộc tính','Attribute table')),enabled:c.ready&&!c.busy,onTap:(){Navigator.pop(sheet);context.push('/attributes');}),
