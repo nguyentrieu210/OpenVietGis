@@ -18,7 +18,7 @@ try{
  const org="fixture-org",pid="fixture-project",id="drawing-id",feature={feature_id:"building",geometry_state:"present",attributes:{height_m:25},geometry:{type:"Polygon",coordinates:[[[106.66,10.76],[106.662,10.76],[106.662,10.762],[106.66,10.762],[106.66,10.76]]],coordinate_reference:{code:4326}}};
  const layer={id:"layer1",source_id:"source1",name:"Buildings",lifecycle:"active",capabilities:[{name:"export",available:true,actor_authorized:true},{name:"feature_read",available:true,actor_authorized:true},{name:"query",available:true,technical_supported:true,actor_authorized:true},{name:"edit",available:true,technical_supported:true,actor_authorized:true}],source:{lifecycle:"active",validation_state:"ready",feature_count:1,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),stored_crs:{code:4326},schema:{geometry_family:"Polygon",fields:[{field_id:"height_m",name:"Height",type:"integer",nullable:true}]}}};
  const raster={id:"12345678-1234-1234-1234-123456789abc",name:"QA DEM",method:"band",width:3,height:3,bands:1,output_bands:1,epsg:3857,bounds:[106.66,10.76,106.662,10.762],maxzoom:12,tile_count:1,byte_size:123,legend:[0,20],stats:{valid:8,nodata:1,min:0,max:20,mean:10,std:8}};
- let rasterPosts=0;
+ let rasterPosts=0;const binaryRequests=[];const binaryBytes=Buffer.from("synthetic artifact, not GIS file");const binaryHash=createHash("sha256").update(binaryBytes).digest("hex");let binaryOp="";
  const saved=[],edits=[],processingRequests=[];let restricted=false,pluginActive=false,pluginCompatible=true,holdSave=false,releaseSave;
  const ver=()=>({id,filename:"building.dxf",format:"dxf",version:saved.length+1,byte_size:40,sha256:"a".repeat(64),created_at:"2026-01-01T00:00:00Z"});
  await page.route("**/*",route=>new URL(route.request().url()).hostname==="127.0.0.1"?route.continue():route.abort());
@@ -37,6 +37,10 @@ try{
   else if(p.includes("/raster/layers/")&&p.endsWith(".png"))return route.fulfill({contentType:"image/png",body:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==","base64")});
   else if(p.endsWith("/layers"))body={items:[layer,{...layer,id:"layer2",source_id:"source2",name:"Second layer",source:{...layer.source,feature_count:1001}}],next_after_id:null};
   else if(p.endsWith("/pro/topology")&&m==="POST"){const q=route.request().postDataJSON();assert.equal(q.primary.layer_id,"layer1");body={source_id:"source1",content_revision:layer.source.content_revision,schema_revision:layer.source.schema_revision,requested_count:1,scanned_count:0,skipped_count:1,truncated:false,complete:false,secondary_pin:null,items:[]}}
+  else if(p.endsWith("/exports/preview")&&m==="POST"){const q=route.request().postDataJSON();body={...q,source_id:"source1",source_crs:4326,feature_count:1,geometry_family:"Polygon",confirmable:true,preview_fingerprint:"f".repeat(64),field_mappings:[],disclosures:[{code:"DBF_TEST",message:"Chuyển đổi QA cần xác nhận",requires_approval:true,affected_fields:["height_m"]}]}}
+  else if(p.endsWith("/exports/confirm")&&m==="POST"){const q=route.request().postDataJSON();binaryRequests.push(q);binaryOp=q.operation_id;assert.deepEqual(q.approved_disclosures,["DBF_TEST"]);if(binaryRequests.length===1)return route.fulfill({status:503,json:{}});body={id:"export-job",operation_id:binaryOp,kind:"export",status:"succeeded",organization_id:org,project_id:pid,target_source_id:"source1",target_layer_id:"layer1",artifact_id:"artifact-test"}}
+  else if(p.endsWith("/artifacts/artifact-test"))body={id:"artifact-test",job_id:"export-job",organization_id:org,project_id:pid,source_id:"source1",layer_id:"layer1",source_content_revision:layer.source.content_revision,source_schema_revision:layer.source.schema_revision,output_format:"shapefile_zip",output_crs:4326,state:"ready",sha256:binaryHash,byte_size:binaryBytes.length,content_type:"application/zip",comparison_report:{exported_feature_count:1}};
+  else if(p.endsWith("/artifacts/artifact-test/download"))return route.fulfill({contentType:"application/zip",headers:{"x-content-sha256":binaryHash},body:binaryBytes});
   else if(p.endsWith("/processing/algorithms"))body={items:[{id:"buffer",name:"Buffer",description:"Buffer",required_inputs:["input_layer_id"],parameters_schema:{}},{id:"clip",name:"Clip",description:"Clip",required_inputs:["input_layer_id","overlay_layer_id"],parameters_schema:{}}]};
   else if(p.endsWith("/processing/jobs")&&m==="GET")body={items:[]};
   else if(p.endsWith("/processing/jobs")&&m==="POST"){const payload=route.request().postDataJSON();processingRequests.push(payload);if(processingRequests.length===1||processingRequests.length===4)return route.fulfill({status:503,json:{}});body={id:processingRequests.length<=2?"job-test":"job-batch-"+processingRequests.length,operation_id:payload.operation_id,algorithm_id:payload.algorithm_id,output_name:payload.output_name,status:"queued",feature_count:null};}
@@ -57,7 +61,21 @@ try{
 
  const first=page.locator('[data-layer-id="layer1"] .qgis-layer-name'), second=page.locator('[data-layer-id="layer2"] .qgis-layer-name');
  await first.waitFor();await second.waitFor();
- if(process.env.OVG_SHELL_ONLY==="1"){
+ if(process.env.OVG_EXPORT_ONLY==="1"){
+  await first.click();await page.keyboard.press("Control+k");const command=page.getByRole("textbox",{name:"Dòng lệnh GIS"});await command.fill("EXPORT");await command.press("Enter");
+  const xp=page.getByRole("dialog",{name:"Xuất dữ liệu"});await xp.waitFor();
+  await xp.getByRole("radio",{name:"Toàn bộ lớp",exact:true}).click();
+  await xp.getByRole("radio",{name:/Shapefile/}).click();
+  await xp.getByRole("button",{name:"Kiểm tra trước khi xuất"}).click();
+  const confirm=xp.getByRole("button",{name:/⬇ Xuất/});await confirm.waitFor();
+  assert.equal(await confirm.isEnabled(),false);
+  await xp.getByLabel(/Chuyển đổi QA cần xác nhận/).check();await confirm.click();
+  await xp.getByRole("status").filter({hasText:"Lỗi:"}).waitFor();assert.equal(binaryRequests.length,1);
+  const [download]=await Promise.all([page.waitForEvent("download"),confirm.click()]);
+  assert.ok(download.suggestedFilename().endsWith(".zip"));await xp.getByText(/Đã tải 1 tệp/).waitFor();
+  assert.equal(binaryRequests.length,2);assert.deepEqual(binaryRequests[0],binaryRequests[1]);
+  console.log("PASS binary export approval, exact operation retry and checksum-gated download (synthetic)");
+ }else if(process.env.OVG_SHELL_ONLY==="1"){
   const cameraKey="ovg-workspace:v1:fixture:fixture-org:fixture-project:camera";
   const canvas=page.locator(".maplibregl-canvas").first();
   await canvas.waitFor();await page.waitForTimeout(400);

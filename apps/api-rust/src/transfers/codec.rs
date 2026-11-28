@@ -461,7 +461,7 @@ impl Geom {
         }
     }
 
-    fn coordinates_value(&self) -> Value {
+    pub(crate) fn coordinates_value(&self) -> Value {
         let pos = |p: &[f64; 2]| json!([p[0], p[1]]);
         match self {
             Geom::Point(p) => pos(p),
@@ -1834,7 +1834,22 @@ pub fn plan_export_mapping(
         field_type: f.2.to_string(),
     };
     if output_format == "geopackage" {
-        return Ok((fields.iter().map(identity).collect(), disclosures, op_id));
+        let mut used: std::collections::HashSet<String> = ["fid","geom","ovg_feature_id"].into_iter().map(str::to_owned).collect();
+        let mut mappings=Vec::new();
+        let mut renamed=Vec::new();
+        for f in fields {
+            let mut m=identity(f);
+            let mut suffix=1;
+            while !used.insert(m.output_name.to_ascii_lowercase()) {
+                m.output_name=format!("{}_{}",f.0,suffix);suffix+=1;
+            }
+            if m.output_name!=f.0 {renamed.push(format!("{}->{}",f.0,m.output_name));}
+            mappings.push(m);
+        }
+        if !renamed.is_empty(){let mut c=Conversion::new("GPKG_RESERVED_FIELD_RENAMED","Reserved or case-colliding GeoPackage column names will be mapped.",true);c.affected_fields=renamed;disclosures.push(c);}
+        let decimals:Vec<String>=fields.iter().filter(|f|f.2=="decimal").map(|f|f.0.to_owned()).collect();
+        if !decimals.is_empty(){let mut c=Conversion::new("GPKG_DECIMAL_REAL","GeoPackage REAL fields use binary64 floating point and may lose decimal precision.",true);c.affected_fields=decimals;disclosures.push(c);}
+        return Ok((mappings, disclosures, op_id));
     }
     if output_format == "geojson" {
         let stringified: Vec<String> = fields
@@ -1923,6 +1938,7 @@ pub fn plan_export_mapping(
          (up to 6 decimal places).",
         decimals,
     );
+    add("DBF_TEXT_NULL_EMPTY","DBF character fields cannot preserve the distinction between NULL, empty and padded text.",fields.iter().filter(|f|f.2=="text").map(|f|f.0.to_owned()).collect());
     if has_long_text {
         let mut c = Conversion::new(
             "DBF_TEXT_TRUNCATED_254",
@@ -2180,6 +2196,7 @@ mod tests {
             [
                 "DBF_FIELD_NAME_TRUNCATED",
                 "DBF_DECIMAL_FIXED_PRECISION",
+                "DBF_TEXT_NULL_EMPTY",
                 "DBF_TEXT_TRUNCATED_254"
             ]
         );

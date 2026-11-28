@@ -761,9 +761,11 @@
         "apps/api/openvietgis_api/adapters/formats/geopackage.py",
         "apps/api/openvietgis_api/adapters/formats/shapefile_zip.py",
         "tests/spec065/native_import.py",
-        "infra/rust-platform/Dockerfile.api-rust"
+        "infra/rust-platform/Dockerfile.api-rust",
+        "apps/web-next/src/binary-export.ts",
+        "apps/web-next/src/binary-export.test.ts"
       ],
-      "blocker": "Authenticated direct GeoJSON/GPKG/ZIP SHP import and GeoJSON adapter export pass; native EPSG:3857 to 4326, multi-member selection, explicit encoding, stale/replay and unsafe archives verified. New import is bounded XY single-part with recognized file CRS; Rust control plane uses Python codec worker. General binary export confirmation, full field/CRS/geometry matrix, worker retry and resource exhaustion, runtime image rebuild and paired QGIS remain."
+      "blocker": "Direct GPKG/SHP/GeoJSON import and durable binary export tested with explicit disclosure approval, pinned CRS/revisions, SHA256, replay and tenant denial; GDAL independent reader and re-import inspection pass, including polygon holes and decimal/name disclosures. Bounded XY single-part profile, Python codec worker, no full lossless/CRS/type matrix, retry-job execution, runtime image or paired desktop acceptance."
     },
     {
       "id": "OUTPUT-08",

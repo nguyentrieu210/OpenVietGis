@@ -257,6 +257,12 @@ try:
                     field_mappings=mappings,
                     features=features,
                 )
+            elif fmt == "shapefile_zip":
+                from openvietgis_api.adapters.formats.shapefile_zip import write_shapefile_zip
+                payload, ext, media_type = write_shapefile_zip(
+                    layer_name=layer_name, crs_code=crs_code, geometry_family=geometry_family,
+                    field_mappings=mappings, features=features,
+                )
             elif fmt == "geojson":
                 payload, ext, media_type = write_geojson(
                     field_mappings=mappings,
@@ -270,6 +276,8 @@ try:
                     field_mappings=mappings,
                     features=features,
                 )
+        if req.get("bounded_transfer") and len(payload)>64*1024*1024:
+            raise TransferLimitExceededError("ARTIFACT_SIZE_EXCEEDED","Binary export exceeds 64 MiB.")
         out_path = Path(req["output_path"])
         out_path.write_bytes(payload)
         print(json.dumps({
@@ -538,6 +546,10 @@ async fn invoke(work_dir: &Path, request: Value) -> Result<Value, WorkerError> {
             status: StatusCode::INTERNAL_SERVER_ERROR,
             message: format!("create worker root: {err}"),
         })?;
+    #[cfg(unix)] {
+        use std::os::unix::fs::PermissionsExt;
+        tokio::fs::set_permissions(work_dir, std::fs::Permissions::from_mode(0o700)).await.map_err(|_|WorkerError{status:StatusCode::INTERNAL_SERVER_ERROR,message:"secure worker directory failed".into()})?;
+    }
     for init in PACKAGE_INITS {
         let p = work_dir.join(init);
         if let Some(parent) = p.parent() {
@@ -590,7 +602,7 @@ async fn invoke(work_dir: &Path, request: Value) -> Result<Value, WorkerError> {
             message: format!("write driver.py: {err}"),
         })?;
 
-    let python = if request["action"] == "inspect_import" {
+    let python = if request["action"] == "inspect_import" || request["format"] == "shapefile_zip" {
         std::env::var("OPENVIETGIS_VECTOR_CODEC_PYTHON").unwrap_or_else(|_| "/usr/bin/python3".into())
     } else { "/usr/bin/python3".into() };
     let mut cmd = tokio::process::Command::new(python);

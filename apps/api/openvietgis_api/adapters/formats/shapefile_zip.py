@@ -8,7 +8,7 @@ import math
 import re
 import zipfile
 from collections.abc import Sequence
-from decimal import Decimal
+from decimal import Decimal, localcontext
 from typing import Any
 
 import shapefile  # type: ignore[import-untyped]
@@ -554,16 +554,33 @@ def write_shapefile_zip(
         elif geom.type == "LineString":
             writer.line([[[float(p[0]), float(p[1])] for p in gcoords]])
         else:
-            writer.poly([[[float(p[0]), float(p[1])] for p in ring] for ring in gcoords])
+            # ESRI exterior clockwise, interior counterclockwise; preserve holes.
+            rings=[]
+            for index,ring in enumerate(gcoords):
+                pts=[[float(p[0]),float(p[1])] for p in ring]
+                signed=sum(a[0]*b[1]-b[0]*a[1] for a,b in zip(pts,pts[1:]))
+                if (signed>0)==(index==0):
+                    pts.reverse()
+                rings.append(pts)
+            writer.poly(rings)
         rec: list[Any] = [fid]
         for m in field_mappings:
             v = attrs.get(m.field_id)
             if v is None:
                 rec.append(None)
             elif m.type == FieldType.DECIMAL:
-                rec.append(float(Decimal(str(v))))
+                with localcontext() as ctx:
+                    ctx.prec=50
+                    fixed=format(Decimal(str(v)).quantize(Decimal("0.000001")),"f")
+                if len(fixed)>19:
+                    raise TransferFormatError("DBF_NUMERIC_OVERFLOW","Decimal exceeds DBF width; export GeoPackage or GeoJSON.")
+                # pyshp formats numeric through float. Reject width overflow after formatting too.
+                numeric=float(fixed)
+                if len(format(numeric,".6f"))>19:
+                    raise TransferFormatError("DBF_NUMERIC_OVERFLOW","Decimal exceeds DBF width.")
+                rec.append(numeric)
             elif m.type == FieldType.TEXT:
-                rec.append(str(v)[:254])
+                rec.append(str(v).encode("utf-8")[:254].decode("utf-8",errors="ignore"))
             else:
                 rec.append(v)
         writer.record(*rec)

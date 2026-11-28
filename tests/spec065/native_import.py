@@ -47,6 +47,38 @@ def check_native_import(c,f):
         assert ex.status_code==200,(ex.status_code,ex.text[:400])
         rows=ex.json()["features"]
         assert len(rows)==2
+        if fmt!="geojson":
+            import tempfile
+            import subprocess
+            from pathlib import Path
+            export={"layer_id":lid,"content_revision":report["content_revision"],"schema_revision":report["schema_revision"],"output_format":fmt,"output_crs":target}
+            pre=post("/exports/preview",json=export)
+            assert pre["feature_count"]==2 and pre["confirmable"]
+            required=[d["code"] for d in pre["disclosures"] if d["requires_approval"]]
+            body=export|{"operation_id":str(uuid4()),"preview_fingerprint":pre["preview_fingerprint"],"approved_disclosures":required}
+            post("/exports/confirm",409,json=body|{"preview_fingerprint":"0"*64})
+            if required:post("/exports/confirm",422,json=body|{"approved_disclosures":[]})
+            out=post("/exports/confirm",json=body)
+            assert out["status"]=="succeeded",out
+            assert post("/exports/confirm",json=body)["id"]==out["id"]
+            a=out["artifact"]
+            assert a["comparison_report"]["exported_feature_count"]==2
+            dl=c.get(path+"/artifacts/"+a["id"]+"/download",headers=auth,timeout=60)
+            assert dl.status_code==200 and dl.headers["x-content-sha256"]==a["sha256"]==hashlib.sha256(dl.content).hexdigest()
+            assert c.get(path+"/artifacts/"+a["id"]+"/download",headers=foreign).status_code==404
+            roundtrip=upload(a["filename"],dl.content)["inspection"]
+            assert roundtrip["confirmable"] and roundtrip["feature_count"]==2 and roundtrip["resolved_source_crs"]==target
+            with tempfile.TemporaryDirectory() as d:
+                file=Path(d)/a["filename"];file.write_bytes(dl.content)
+                reader_path=str(file)
+                if fmt=="shapefile_zip":
+                    with zipfile.ZipFile(file) as archive:
+                        names=[n for n in archive.namelist() if n.lower().endswith(".shp")]
+                        assert len(names)==1
+                    reader_path="/vsizip/"+str(file)+"/"+names[0]
+                external=subprocess.run(["ogrinfo","-al","-so",reader_path],capture_output=True,text=True,timeout=20)
+                assert external.returncode==0 and "Feature Count: 2" in external.stdout,(external.stdout,external.stderr)
+            print("PASS durable "+fmt+" export, explicit approvals, digest, tenant, replay and independent GDAL reader/re-import",flush=True)
         return rows,report
     for fmt,name,raw in fixtures():
         rows,report=publish(fmt,name,raw)
@@ -99,3 +131,21 @@ def check_native_import(c,f):
         p=coords[int(feature["properties"]["code"])]
         assert all(math.isclose(a,b,abs_tol=1e-8) for a,b in zip(feature["geometry"]["coordinates"],p))
     print("PASS EPSG:3857 GeoPackage -> EPSG:4326 via approved transformation, native CRS provenance retained; malformed archive and unknown CRS rejected",flush=True)
+
+    # Verify actual precision/name disclosure, and native polygon with interior hole.
+    from openvietgis_api.adapters.formats.shapefile_zip import write_shapefile_zip
+    rings=(((106.6,10.7),(106.62,10.7),(106.62,10.72),(106.6,10.72),(106.6,10.7)),((106.605,10.705),(106.605,10.71),(106.61,10.71),(106.61,10.705),(106.605,10.705)))
+    raw=write_geopackage(layer_name="QA polygon",crs_code=4326,geometry_family="Polygon",field_mappings=[ExportFieldMapping("very_long_field","very_long_field","very_long_field",FieldType.TEXT),ExportFieldMapping("amount","amount","amount",FieldType.DECIMAL)],features=[("p",{"very_long_field":"Đất trồng","amount":"12.123456789"},NativeGeometry("Polygon",rings,4326))])[0]
+    upload_result=upload("polygon.gpkg",raw);i=upload_result["inspection"];assert i["confirmable"],i
+    opts={"source_asset_id":upload_result["asset"]["id"],"selected_member":i["selected_member"],"declared_source_crs":4326,"declared_encoding":"utf-8","target_crs":4326,"operation_id":str(uuid4()),"source_name":"Polygon QA","layer_name":"Polygon QA","inspection_fingerprint":i["inspection_fingerprint"],"approved_conversions":[]}
+    j=post("/imports/confirm",json=opts);assert j["status"]=="succeeded",j
+    r=j["result_report"]
+    for fmt,codes in [("geopackage",{"GPKG_DECIMAL_REAL"}),("shapefile_zip",{"DBF_FIELD_NAME_TRUNCATED","DBF_DECIMAL_FIXED_PRECISION","DBF_TEXT_NULL_EMPTY"})]:
+        params={"layer_id":j["target_layer_id"],"content_revision":r["content_revision"],"schema_revision":r["schema_revision"],"output_format":fmt,"output_crs":4326}
+        preview=post("/exports/preview",json=params);required={d["code"] for d in preview["disclosures"] if d["requires_approval"]};assert codes<=required,required
+        body=params|{"operation_id":str(uuid4()),"preview_fingerprint":preview["preview_fingerprint"],"approved_disclosures":sorted(required)}
+        post("/exports/confirm",422,json=body|{"approved_disclosures":[]})
+        out=post("/exports/confirm",json=body);assert out["status"]=="succeeded",out
+        a=out["artifact"];dl=c.get(path+"/artifacts/"+a["id"]+"/download",headers=auth,timeout=60);assert dl.status_code==200
+        rt=upload(a["filename"],dl.content)["inspection"];assert rt["confirmable"] and rt["feature_count"]==1 and rt["geometry_family"]=="Polygon",rt
+    print("PASS polygon with hole, GPKG decimal and DBF name/precision disclosures require approval",flush=True)
