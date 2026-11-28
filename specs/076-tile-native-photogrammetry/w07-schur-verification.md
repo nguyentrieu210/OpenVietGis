@@ -1,0 +1,2 @@
+# W07 Schur verification checkpoint
+Adds cancellation polling inside matrix-free operator passes, validates each original camera block with Cholesky, and checks residuals of original coupled camera/point equations after back-substitution. Full residual threshold is ten times the requested relative tolerance against the full RHS norm; reduced residual retains its original threshold. This is a numerical consistency check, not a proof of global positive definiteness or survey accuracy. Adds a nonsymmetric camera fixture. No CI executed.

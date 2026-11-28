@@ -41,13 +41,15 @@ fn cross_t(l:&Link,c:C6,z:&mut P3){
 fn subtract_cross(l:&Link,p:P3,c:&mut C6){
  for i in 0..6{for j in 0..3{c[i]-=l.cross[i][j]*p[j];}}
 }
-fn apply(s:&System<'_>,factors:&[M3],x:&[C6],out:&mut[C6]){
- for (i,a) in s.camera.iter().enumerate(){out[i]=std::array::from_fn(|j|(0..6).map(|k|a[j][k]*x[i][k]).sum());}
- for (p,v) in s.landmarks.iter().zip(factors){
+fn apply(s:&System<'_>,factors:&[M3],x:&[C6],out:&mut[C6],cancelled:&mut impl FnMut()->bool)->Result<(),Error>{
+ for (i,a) in s.camera.iter().enumerate(){if i%256==0&&cancelled(){return Err(Error::Cancelled);}out[i]=std::array::from_fn(|j|(0..6).map(|k|a[j][k]*x[i][k]).sum());}
+ for (i,(p,v)) in s.landmarks.iter().zip(factors).enumerate(){
+ if i%256==0&&cancelled(){return Err(Error::Cancelled);}
  let mut z=[0.;3];for l in &p.links{cross_t(l,x[l.camera],&mut z);}
  let z=solve(v,z);
  for l in &p.links{subtract_cross(l,z,&mut out[l.camera]);}
  }
+ Ok(())
 }
 fn dot(a:&[C6],b:&[C6])->f64{a.iter().zip(b).map(|(a,b)|(0..6).map(|i|a[i]*b[i]).sum::<f64>()).sum()}
 fn precondition(f:&[M6],r:&[C6],z:&mut[C6]){for ((l,r),z)in f.iter().zip(r).zip(z){*z=solve(l,*r);}}
@@ -64,6 +66,7 @@ pub fn solve_system(s:System<'_>,p:Policy,mut cancelled:impl FnMut()->bool)->Res
  let mut factors=Vec::with_capacity(m);
  let mut rhs=s.rhs.to_vec();
  if !rhs.iter().flatten().all(|v|v.is_finite()){return Err(Error::Invalid);}
+ for (i,a)in s.camera.iter().enumerate(){if i%256==0&&cancelled(){return Err(Error::Cancelled);}chol(*a)?;}
  let mut diag=s.camera.to_vec();
  for (idx,a)in s.landmarks.iter().enumerate(){
  if idx%256==0&&cancelled(){return Err(Error::Cancelled);}
@@ -86,7 +89,7 @@ pub fn solve_system(s:System<'_>,p:Policy,mut cancelled:impl FnMut()->bool)->Res
  precondition(&f,&r,&mut z);let mut d=z.clone();let mut rz=dot(&r,&z);
  for k in 0..p.max_iterations{
  if cancelled(){return Err(Error::Cancelled);}
- apply(&s,&factors,&d,&mut ap);
+ apply(&s,&factors,&d,&mut ap,&mut cancelled)?;
  let denom=dot(&d,&ap);if !denom.is_finite()||denom<=0.||!rz.is_finite()||rz<=0.{return Err(Error::Indefinite);}
  let alpha=rz/denom;if !alpha.is_finite(){return Err(Error::Indefinite);}
  for i in 0..n{for j in 0..6{x[i][j]+=alpha*d[i][j];r[i][j]-=alpha*ap[i][j];}}
@@ -96,17 +99,31 @@ pub fn solve_system(s:System<'_>,p:Policy,mut cancelled:impl FnMut()->bool)->Res
  let beta=next/rz;for i in 0..n{for j in 0..6{d[i][j]=z[i][j]+beta*d[i][j];}}rz=next;
  }
  // Recompute the true residual before accepting recursive PCG convergence.
- apply(&s,&factors,&x,&mut ap);
+ apply(&s,&factors,&x,&mut ap,&mut cancelled)?;
  for i in 0..n{for j in 0..6{r[i][j]=rhs[i][j]-ap[i][j];}}
  residual=dot(&r,&r).sqrt();if !residual.is_finite()||residual>base*p.relative_tolerance{return Err(Error::NonConverged);}
  }
  let mut landmark=Vec::with_capacity(m);
+ // Check the original coupled equations as well as the reduced Schur residual.
+ let mut full:Vec<C6>=s.camera.iter().zip(&x).zip(s.rhs).map(|((a,c),b)|std::array::from_fn(|i|(0..6).map(|j|a[i][j]*c[j]).sum::<f64>()-b[i])).collect();
+ let mut full_residual=0.0f64;
+ let mut full_rhs=0.0f64;
+ for b in s.rhs{for v in b{full_rhs=full_rhs.hypot(*v);}}
  for (i,(a,l))in s.landmarks.iter().zip(&factors).enumerate(){
  if i%256==0&&cancelled(){return Err(Error::Cancelled);}
  let mut v=[0.;3];for w in &a.links{cross_t(w,x[w.camera],&mut v);}
- let d=solve(l,std::array::from_fn(|i|a.rhs[i]-v[i]));if !d.iter().all(|v|v.is_finite()){return Err(Error::Indefinite);}landmark.push(d);
+ let d=solve(l,std::array::from_fn(|i|a.rhs[i]-v[i]));if !d.iter().all(|v|v.is_finite()){return Err(Error::Indefinite);}
+ for j in 0..3{
+ let e=(0..3).map(|k|a.normal[j][k]*d[k]).sum::<f64>()+v[j]-a.rhs[j];
+ full_residual=full_residual.hypot(e);full_rhs=full_rhs.hypot(a.rhs[j]);
+ }
+ for w in &a.links{for j in 0..6{full[w.camera][j]+=(0..3).map(|k|w.cross[j][k]*d[k]).sum::<f64>();}}
+ landmark.push(d);
  }
  if cancelled(){return Err(Error::Cancelled);}
+ for e in full.iter().flatten(){full_residual=full_residual.hypot(*e);}
+ if !full_residual.is_finite()||!full_rhs.is_finite()||
+ full_residual>full_rhs.max(f64::MIN_POSITIVE)*p.relative_tolerance*10.{return Err(Error::NonConverged);}
  Ok(Solution{camera:x,landmark,iterations,residual})
 }
 #[cfg(test)]mod tests{
@@ -122,6 +139,11 @@ pub fn solve_system(s:System<'_>,p:Policy,mut cancelled:impl FnMut()->bool)->Res
  #[test]fn solves_coupled_blocks_without_dense_matrix(){
  let(a,b,p)=fixture();let q=solve_system(System{camera:&a,rhs:&b,landmarks:&p},policy(),||false).unwrap();
  assert!((q.camera[0][0]-1.).abs()<1e-9);assert!((q.camera[1][0]-2.).abs()<1e-9);assert!((q.landmark[0][0]+1.).abs()<1e-9);}
+ #[test]fn rejects_nonsymmetric_camera_even_with_zero_rhs(){
+ let(a,_,p)=fixture();let mut a=a;a[0][0][1]=0.25;
+ let b=vec![[0.;6];2];
+ assert!(matches!(solve_system(System{camera:&a,rhs:&b,landmarks:&p},policy(),||false),Err(Error::Invalid)));
+ }
  #[test]fn rejects_indefinite_and_cancel(){
  let(a,b,mut p)=fixture();assert!(matches!(solve_system(System{camera:&a,rhs:&b,landmarks:&p},policy(),||true),Err(Error::Cancelled)));
  p[0].normal[0][0]=-1.;assert!(matches!(solve_system(System{camera:&a,rhs:&b,landmarks:&p},policy(),||false),Err(Error::Indefinite)));}
