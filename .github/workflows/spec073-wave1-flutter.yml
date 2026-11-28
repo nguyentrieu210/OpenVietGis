@@ -72,6 +72,7 @@ jobs:
           p.write_text(text)
           PY
           python3 "$GITHUB_WORKSPACE/infra/mobile/install-media-provider.py" "$GITHUB_WORKSPACE" "$PWD"
+          python3 "$GITHUB_WORKSPACE/infra/mobile/enable-local-tile-bridge.py" "$PWD"
           flutter pub get
           flutter_rust_bridge_codegen generate
           python3 "$GITHUB_WORKSPACE/infra/mobile/patch-frb-android-sdk.py" rust_builder/android/build.gradle
