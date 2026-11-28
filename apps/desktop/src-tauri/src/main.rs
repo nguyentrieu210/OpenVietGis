@@ -2,7 +2,7 @@
 mod host;
 #[path="../../../../infra/desktop/wave0/protocol.rs"]
 mod protocol;
-use host::{Host, Opened, Poll, Project};
+use host::{Host, Opened, Poll, Project, Raster};
 use serde::Serialize;
 use serde_json::Value;
 use tauri_plugin_dialog::DialogExt;
@@ -34,11 +34,11 @@ async fn run<T:Send+'static>(window:WebviewWindow,host:Host,f:impl FnOnce(Host)-
     tauri::async_runtime::spawn_blocking(move||{let _permit=permit;f(host)}).await.map_err(|_|"SESSION_FAILED".to_owned())?.map_err(str::to_owned)
 }
 #[derive(Serialize)]
-struct Capabilities { protocol_version:u32, standalone:bool, managed:bool, cloud:bool, local_tiles:bool, transform:bool, local_edit:bool, viewport:bool }
+struct Capabilities { protocol_version:u32, standalone:bool, managed:bool, cloud:bool, local_tiles:bool, transform:bool, local_edit:bool, viewport:bool, raster_archive:bool }
 #[tauri::command]
 fn desktop_capabilities(window:WebviewWindow)->Reply<Capabilities>{
     trusted(&window)?;
-    Ok(Capabilities{protocol_version:1,standalone:true,managed:false,cloud:false,local_tiles:false,transform:true,local_edit:true,viewport:true})
+    Ok(Capabilities{protocol_version:1,standalone:true,managed:false,cloud:false,local_tiles:false,transform:true,local_edit:true,viewport:true,raster_archive:true})
 }
 #[tauri::command]
 async fn desktop_list(window:WebviewWindow,host:State<'_,Host>)->Reply<Vec<Project>>{
@@ -128,6 +128,32 @@ async fn desktop_export(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,for
     }).await
 }
 
+#[tauri::command]
+async fn desktop_open_raster(window:WebviewWindow,host:State<'_,Host>,handle:Uuid)->Reply<Option<Raster>>{
+    let app=window.app_handle().clone();
+    run(window,host.inner().clone(),move|h|{
+        h.generation(handle)?;
+        let Some(file)=app.dialog().file().add_filter("PNG MBTiles",&["mbtiles"]).blocking_pick_file() else{return Ok(None)};
+        let path=file.into_path().map_err(|_|"INVALID_STORAGE")?;
+        h.open_raster(handle,&path).map(Some)
+    }).await
+}
+#[tauri::command]
+async fn desktop_close_raster(window:WebviewWindow,host:State<'_,Host>,handle:Uuid)->Reply<()>{
+    run(window,host.inner().clone(),move|h|h.close_raster(handle)).await
+}
+// Logical ovg:// resource route, transported as binary IPC until OS custom
+// scheme origin/session qualification completes. No generic file reads.
+#[tauri::command]
+async fn desktop_resource(window:WebviewWindow,host:State<'_,Host>,uri:String)->Reply<tauri::ipc::Response>{
+    let req=protocol::parse(&uri).map_err(|_|"INVALID_RESOURCE".to_owned())?;
+    let handle=Uuid::parse_str(req.workspace).map_err(|_|"INVALID_RESOURCE".to_owned())?;
+    let source=Uuid::parse_str(req.source).map_err(|_|"INVALID_RESOURCE".to_owned())?;
+    if req.revision!=0{return Err("STALE_REVISION".into())}
+    let protocol::Resource::RasterTile{z,x,y}=req.resource else{return Err("NOT_AVAILABLE".into())};
+    let b=run(window,host.inner().clone(),move|h|h.raster_tile(handle,source,z,x,y)).await?;
+    Ok(tauri::ipc::Response::new(b))
+}
 fn main(){
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -163,6 +189,6 @@ fn main(){
                 if let Some(host)=window.try_state::<Host>(){let _=host.shutdown();}
             }
         })
-        .invoke_handler(tauri::generate_handler![desktop_capabilities,desktop_list,desktop_create,desktop_open,desktop_close,desktop_start_transform,desktop_poll,desktop_cancel,desktop_viewport,desktop_attributes,desktop_feature,desktop_edit,desktop_update_attributes,desktop_history,desktop_checkpoint,desktop_import_geojson,desktop_export])
+        .invoke_handler(tauri::generate_handler![desktop_capabilities,desktop_list,desktop_create,desktop_open,desktop_close,desktop_start_transform,desktop_poll,desktop_cancel,desktop_viewport,desktop_attributes,desktop_feature,desktop_edit,desktop_update_attributes,desktop_history,desktop_checkpoint,desktop_import_geojson,desktop_export,desktop_open_raster,desktop_close_raster,desktop_resource])
         .run(tauri::generate_context!()).expect("Desktop host failed");
 }
