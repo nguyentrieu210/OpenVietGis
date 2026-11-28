@@ -1,0 +1,33 @@
+{
+  "name": "@openvietgis/ui-react",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "exports": {
+    ".": "./src/index.ts",
+    "./compat": "./src/compat.tsx",
+    "./styles.css": "./src/styles.css"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "vite build",
+    "test": "playwright test"
+  },
+  "dependencies": {
+    "@base-ui/react": "1.9.0"
+  },
+  "peerDependencies": {
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "typescript": "6.0.3",
+    "vite": "8.3.8",
+    "@playwright/test": "1.65.1"
+  }
+}
