@@ -194,3 +194,14 @@ export const remoteTiff={
  },
  cancel:(requestId:string)=>host().core.invoke<void>("desktop_cancel_resource",{requestId})
 };
+
+export type RemoteCopcInfo={identity:{bytes:number;etag:string};info:{center:[number,number,number];halfsize:number;spacing:number;points:number;point_format:number}};
+export const remoteCopc={
+ status:()=>host().core.invoke<boolean>("remote_copc_status"),
+ inspect:(handle:string,url:string,requestId:string)=>host().core.invoke<RemoteCopcInfo>("remote_copc_inspect",{handle,url,requestId}),
+ query:async(handle:string,url:string,identity:RemoteCopcInfo["identity"],bounds:[number,number,number,number,number,number],level:number,requestId:string)=>{
+  const raw=await host().core.invoke<ArrayBuffer|number[]>("remote_copc_query",{handle,url,...identity,bounds,level,requestId});
+  const b=raw instanceof ArrayBuffer?raw:Uint8Array.from(raw).buffer;if(b.byteLength>2048*24||b.byteLength%24!==0)throw Error("RESOURCE_LIMIT");return b;
+ },
+ cancel:remoteTiff.cancel
+};
