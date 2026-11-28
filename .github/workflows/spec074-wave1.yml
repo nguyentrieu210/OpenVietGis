@@ -5,6 +5,7 @@ on:
     paths:
       - 'apps/desktop/**'
       - 'crates/ovg-project-store/**'
+      - 'crates/ovg-native-providers/**'
       - 'apps/web-next/src/desktop/**'
       - 'apps/web-next/src/main.tsx'
       - '.github/workflows/spec074-wave1.yml'
@@ -65,3 +66,19 @@ jobs:
           path: |
             crates/ovg-project-store/Cargo.lock
             project-store-metadata.json
+  native-providers:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: sudo apt-get update && sudo apt-get install -y libgdal-dev libproj-dev
+      - run: cargo test --manifest-path crates/ovg-native-providers/Cargo.toml --features ogr,analytics-bundled
+      - run: cargo metadata --manifest-path crates/ovg-native-providers/Cargo.toml --features ogr,analytics-bundled --format-version 1 > native-providers-metadata.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-providers-candidate
+          path: |
+            crates/ovg-native-providers/Cargo.lock
+            native-providers-metadata.json
