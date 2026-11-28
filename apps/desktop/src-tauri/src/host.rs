@@ -391,6 +391,22 @@ impl Host {
         out.sort_by_key(|p|p.id);
         Ok(out)
     }
+    pub fn project_state(&self,handle:Uuid)->Result<crate::project_state::ProjectState>{
+        self.read(handle,|w|{
+            let ids:Vec<_>=self.list_layers_for(w.project)?.iter().map(|l|l.id).collect();
+            crate::project_state::read(&self.root.join(w.project.to_string()),&ids)
+        })
+    }
+    pub fn save_project_state(&self,handle:Uuid,state:crate::project_state::ProjectState,expected:u64)->Result<crate::project_state::ProjectState>{
+        self.read(handle,|w|{
+            if w.layer.is_some(){return Err("ROOT_WORKSPACE_REQUIRED")}
+            let ids:Vec<_>=self.list_layers_for(w.project)?.iter().map(|l|l.id).collect();
+            crate::project_state::save(&self.root.join(w.project.to_string()),&ids,state,expected)
+        })
+    }
+    pub fn set_schema(&self,handle:Uuid,fields:Vec<ovg_mobile_engine::attributes::Field>)->Result<()>{
+        self.mutate(handle,|s|s.set_attribute_schema(&fields).map_err(store_err))
+    }
     pub fn backup_project(&self,handle:Uuid,dest:&Path)->Result<()>{
         let s=self.lock()?;let w=s.open.get(&handle).ok_or("STALE_HANDLE")?;
         if w.layer.is_some(){return Err("ROOT_WORKSPACE_REQUIRED")}
@@ -416,7 +432,9 @@ impl Host {
             total=total.checked_add(fs::metadata(&snapshot).map_err(|_|"STORAGE_UNAVAILABLE")?.len()).ok_or("RESOURCE_LIMIT")?;
             if total>2*1024*1024*1024{return Err("RESOURCE_LIMIT")}
         }
-        crate::project_backup::write_bundle(stage.path(),&layers,dest)
+        let ids:Vec<_>=layers.iter().map(|l|l.id).collect();
+        let state=crate::project_state::read(&self.root.join(project.to_string()),&ids)?;
+        crate::project_backup::write_bundle(stage.path(),&layers,&state,dest)
     }
     pub fn restore_project(&self,path:&Path)->Result<Project>{
         let _guard=self.lock()?;
