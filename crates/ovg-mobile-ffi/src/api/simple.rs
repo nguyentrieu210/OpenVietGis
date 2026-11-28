@@ -283,13 +283,33 @@ impl NativeUnifiedProject{
   self.inner.append_survey(&layer_id,&track_id,&fix_json,&expected).map_err(unified_error)
  }
  // Native key service: no key material enters or leaves Flutter.
+ pub fn capture_media_preview(&self,layer_id:String,feature_id:String,attachment_id:String,expected:String)->Result<String,String>{
+  use ovg_project_store::media::MediaKeys;
+  use crate::media_keys::PlatformKeys;
+  if !PlatformKeys::camera_available(){return Err("NATIVE_CAMERA_UNAVAILABLE".into())}
+  let layer=id(&layer_id)?;let feature=id(&feature_id)?;let attachment=id(&attachment_id)?;
+  // Validate owner and expected revision before opening the external camera.
+  self.inner.feature(&layer_id,&feature_id,&expected).map_err(unified_error)?;
+  let inventory:serde_json::Value=serde_json::from_str(&self.inner.media_inventory(&layer_id,"",&expected).map_err(unified_error)?).map_err(|_|"INVALID_INVENTORY".to_owned())?;
+  let raw=PlatformKeys::capture_preview().map_err(unified_error)?;
+  let scope=match inventory["scope"].as_str(){
+   Some(s)=>{let d=id(s)?;PlatformKeys.key_for(d).map_err(unified_error)?;d},
+   None=>{let d=id(&self.inner.project_id())?;PlatformKeys::provision(d).map_err(unified_error)?;d}
+  };
+  self.inner.capture_jpeg_native(scope,layer,feature,attachment,&raw,&expected,&PlatformKeys).map_err(unified_error)
+ }
+ pub fn view_media_native(&self,attachment_id:String,expected:String)->Result<bool,String>{
+  if !crate::media_keys::PlatformKeys::camera_available(){return Err("NATIVE_VIEWER_UNAVAILABLE".into())}
+  let raw=self.inner.read_media_native(id(&attachment_id)?,&expected,&crate::media_keys::PlatformKeys).map_err(unified_error)?;
+  crate::media_keys::PlatformKeys::show_preview(&raw).map_err(unified_error)
+ }
  pub fn media_key_status(&self,layer_id:String,expected:String)->Result<String,String>{
   use ovg_project_store::media::MediaKeys;
   let v:serde_json::Value=serde_json::from_str(&self.inner.media_inventory(&layer_id,"",&expected).map_err(unified_error)?).map_err(|_|"INVALID_INVENTORY".to_owned())?;
   let scope=v["scope"].as_str().map(id).transpose()?;
   let available=crate::media_keys::PlatformKeys::available();
   let unlocked=scope.is_some_and(|s|crate::media_keys::PlatformKeys.key_for(s).is_ok());
-  Ok(serde_json::json!({"provider_available":available,"scope":scope,"key_available":unlocked}).to_string())
+  Ok(serde_json::json!({"provider_available":available,"scope":scope,"key_available":unlocked,"native_camera":crate::media_keys::PlatformKeys::camera_available()}).to_string())
  }
  /// Explicit reference manifest, private legacy workspace vault only.
  /// Source scope must already have a registered key; never provision a source.
