@@ -116,7 +116,7 @@ export async function readRemoteCopc(raw:string,crs:4326|3857,depth:number,signa
  }
  const records=new Uint8Array(count*length);let pos=0;for(const chunk of chunks){records.set(chunk,pos);pos+=chunk.byteLength}
  // Preserve all original VLRs/scale/offset, pin the actual decoded subset.
- const h=new DataView(prefix.buffer);h.setBigUint64(235,0n,true);h.setUint32(243,0,true);h.setBigUint64(247,BigInt(count),true);
+ const h=new DataView(prefix.buffer);h.setBigUint64(235,0n,true);h.setUint32(243,0,true);h.setUint32(107,count,true);h.setBigUint64(247,BigInt(count),true);
  const cloud=parseLasRecords(prefix.buffer,crs,records.buffer);
  return {...cloud,datasetCount,nodeCount,complete:complete&&count===datasetCount};
 }
