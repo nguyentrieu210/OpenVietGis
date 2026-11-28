@@ -10,7 +10,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::{header, HeaderMap, StatusCode};
 use axum::routing::{get, patch, post};
 use axum::{Json, Router};
-use ovg_storage::house_numbering as store;
+use ovg_module_house_numbering_storage as store;
 use ovg_storage::integration_hub::{self, EffectiveProjectLevel};
 use serde::Deserialize;
 use serde_json::{Map, Value};

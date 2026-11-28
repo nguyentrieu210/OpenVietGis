@@ -19,7 +19,7 @@ use ovg_module_house_numbering::recovery::{
     catalog_finish, catalog_scan, prefix_finish, prefix_plan, Window,
 };
 use ovg_storage::catalog::ProjectRead;
-use ovg_storage::house_numbering as store;
+use ovg_module_house_numbering_storage as store;
 use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 use serde_json::{json, Value};

@@ -277,89 +277,12 @@ pub(crate) async fn append_audit(
     resource_id: Uuid,
     metadata: Value,
 ) -> Result<(), AppError> {
-    sqlx::query(
-        "INSERT INTO audit.audit_events (
-            id, organization_id, actor_type, actor_id, actor_display_snapshot,
-            action, resource_type, resource_id, outcome, metadata, created_at
-         ) VALUES ($1,$2,'human',$3,$4,$5,$6,$7,'success',$8,$9)",
-    )
-    .bind(Uuid::new_v4())
-    .bind(edit.organization_id())
-    .bind(actor.id)
-    .bind(actor.display_name)
-    .bind(action)
-    .bind(resource_type)
-    .bind(resource_id)
-    .bind(metadata)
-    .bind(chrono::Utc::now())
-    .execute(&mut **edit.transaction())
-    .await
-    .map_err(db_error)?;
-    Ok(())
+    ovg_storage::module_ports::append_audit(
+        edit, actor.id, actor.display_name, action, resource_type, resource_id, metadata,
+    ).await
 }
 
-pub(crate) async fn spatial_feature(
-    edit: &mut ProjectRead<'_>,
-    source_id: Uuid,
-    feature_id: &str,
-    expected: &[&str],
-) -> Result<i32, AppError> {
-    let row = sqlx::query(
-        "SELECT ds.stored_crs, ds.lifecycle, ds.validation_state,
-                ST_SRID(rf.geometry) AS srid,
-                ST_GeometryType(rf.geometry) AS geometry_type
-         FROM spatial.data_sources ds
-         JOIN spatial.reference_features rf
-           ON rf.organization_id = ds.organization_id
-          AND rf.project_id = ds.project_id
-          AND rf.source_id = ds.id
-         WHERE ds.organization_id = $1
-           AND ds.project_id = $2
-           AND ds.id = $3
-           AND rf.feature_id = $4
-           AND rf.geometry_state = 'present'",
-    )
-    .bind(edit.organization_id())
-    .bind(edit.project_id())
-    .bind(source_id)
-    .bind(feature_id)
-    .fetch_optional(&mut **edit.transaction())
-    .await
-    .map_err(db_error)?
-    .ok_or_else(|| AppError::not_found("linked spatial feature not found or not usable"))?;
-
-    let lifecycle: String = row.try_get("lifecycle").map_err(db_error)?;
-    let validation_state: String = row.try_get("validation_state").map_err(db_error)?;
-    if lifecycle != "active" || validation_state != "ready" {
-        return Err(AppError::validation(
-            "SOURCE_NOT_READY",
-            "linked spatial source is not ready",
-        ));
-    }
-    let geometry_type: String = row.try_get("geometry_type").map_err(db_error)?;
-    if !expected.contains(&geometry_type.as_str()) {
-        return Err(AppError::validation(
-            "GEOMETRY_TYPE_MISMATCH",
-            format!("linked feature geometry '{geometry_type}' is not valid for this entity"),
-        ));
-    }
-    let srid = row
-        .try_get::<Option<i32>, _>("srid")
-        .map_err(db_error)?
-        .filter(|srid| *srid != 0)
-        .or(row
-            .try_get::<Option<i32>, _>("stored_crs")
-            .map_err(db_error)?
-            .filter(|srid| *srid != 0))
-        .unwrap_or(0);
-    if srid <= 0 {
-        return Err(AppError::validation(
-            "MISSING_CRS",
-            "linked geometry has no explicit CRS",
-        ));
-    }
-    Ok(srid)
-}
+pub(crate) use ovg_storage::module_ports::validate_linked_feature as spatial_feature;
 
 fn rule_wire(mut wire: Value, distance: String) -> Result<Value, AppError> {
     fix_times(&mut wire, false);

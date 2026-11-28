@@ -8,7 +8,7 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::routing::{get, put};
 use axum::{Json, Router};
 use ovg_module_house_numbering::canonical_prefix;
-use ovg_storage::house_numbering as store;
+use ovg_module_house_numbering_storage as store;
 use serde::Deserialize;
 use serde_json::Value;
 use uuid::Uuid;

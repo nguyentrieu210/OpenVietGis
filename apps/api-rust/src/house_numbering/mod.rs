@@ -19,7 +19,7 @@ use axum::{Json, Router};
 use ovg_core::AppError;
 use ovg_storage::catalog::{ProjectRead, ProjectReadPolicy};
 use ovg_storage::editing::{EditError, ServiceAuth};
-use ovg_storage::house_numbering;
+use ovg_module_house_numbering_storage as house_numbering;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::Value;

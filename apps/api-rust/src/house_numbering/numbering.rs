@@ -18,7 +18,7 @@ use ovg_module_house_numbering::planning::{
     Occupant, PointRow, RouteSnapshot, TargetRow,
 };
 use ovg_storage::catalog::ProjectRead;
-use ovg_storage::house_numbering as store;
+use ovg_module_house_numbering_storage as store;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use uuid::Uuid;

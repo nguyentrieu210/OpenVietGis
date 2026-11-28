@@ -1,0 +1,22 @@
+[package]
+name = "ovg-module-house-numbering-storage"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+ovg-core.workspace = true
+ovg-storage.workspace = true
+chrono.workspace = true
+serde.workspace = true
+serde_json = { workspace = true, features = ["float_roundtrip"] }
+sha2.workspace = true
+sqlx.workspace = true
+sqlx-postgres.workspace = true
+tracing.workspace = true
+uuid.workspace = true

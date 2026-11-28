@@ -124,8 +124,36 @@ def domain_framework_violations(relative: str, content: str) -> list[str]:
     return errors
 
 
+RUST_VERTICAL_IMPORT = re.compile(r"\bovg_module_(?!sdk\b)[a-zA-Z0-9_]+\b")
+RUST_VERTICAL_DEP = re.compile(r"(?m)^\s*ovg-module-(?!sdk\s*=)[a-zA-Z0-9_-]+\s*=")
+RUST_APP_IMPORT = re.compile(r"\bopenvietgis_api_rust\b|(?:path\s*=\s*\x22[^\x22]*apps/api-rust)")
+RUST_COMPOSITION = {"apps/api-rust/src/state.rs", "apps/api-rust/src/routes.rs", "apps/api-rust/src/lib.rs"}
+
+
+def rust_boundary_violations(root: Path) -> list[str]:
+    errors = []
+    for base in ("crates", "modules", "apps/api-rust"):
+        for path in (root / base).rglob("*"):
+            if not path.is_file() or any(part in SKIP_DIRS | {"target", "target-build"} for part in path.relative_to(root).parts):
+                continue
+            if path.suffix != ".rs" and path.name != "Cargo.toml":
+                continue
+            rel = path.relative_to(root).as_posix()
+            content = path.read_text(encoding="utf-8", errors="ignore")
+            # Do not mistake a quoted example of an extension key for a code import.
+            if rel.startswith("crates/") and (RUST_VERTICAL_IMPORT.search(content) or RUST_VERTICAL_DEP.search(content)):
+                errors.append(f"{rel} Core Rust depends on vertical module")
+            if rel.startswith("modules/") and RUST_APP_IMPORT.search(content):
+                errors.append(f"{rel} Rust module depends on HTTP application internals")
+            if rel.startswith("apps/api-rust/src/") and rel not in RUST_COMPOSITION and not rel.startswith("apps/api-rust/src/house_numbering/") and RUST_VERTICAL_IMPORT.search(content):
+                errors.append(f"{rel} Rust vertical import outside composition or legacy adapter")
+    if (root / "crates/ovg-storage/src/house_numbering").exists():
+        errors.append("crates/ovg-storage/src/house_numbering is module-owned persistence in Core")
+    return errors
+
+
 def find_violations(root: Path = ROOT) -> list[str]:
-    violations: list[str] = []
+    violations: list[str] = rust_boundary_violations(root)
     for core_root in (root / "apps", root / "packages", root / "modules"):
         if not core_root.exists():
             continue

@@ -16,7 +16,7 @@ use ovg_module_house_numbering::route_import::{
     self as import, s, truthy, Junctions, Layer, Override, ParentPick, Row,
 };
 use ovg_storage::catalog::ProjectRead;
-use ovg_storage::house_numbering as store;
+use ovg_module_house_numbering_storage as store;
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
 use uuid::Uuid;

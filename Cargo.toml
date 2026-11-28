@@ -9,6 +9,7 @@ members = [
     "crates/ovg-processing",
     "crates/ovg-module-sdk",
     "modules/house_numbering/rust",
+    "modules/house_numbering/storage",
 ]
 
 [workspace.package]
@@ -49,6 +50,7 @@ ovg-sync = { path = "crates/ovg-sync" }
 ovg-processing = { path = "crates/ovg-processing" }
 ovg-module-sdk = { path = "crates/ovg-module-sdk" }
 ovg-module-house-numbering = { path = "modules/house_numbering/rust" }
+ovg-module-house-numbering-storage = { path = "modules/house_numbering/storage" }
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }

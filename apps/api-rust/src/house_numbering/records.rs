@@ -15,7 +15,7 @@ use ovg_module_house_numbering::domain::{
 };
 use ovg_storage::editing::authenticate_service;
 use ovg_storage::editing::domain::py_strip;
-use ovg_storage::house_numbering as store;
+use ovg_module_house_numbering_storage as store;
 use ovg_storage::integration_hub::{self, EffectiveProjectLevel};
 use serde::Deserialize;
 use serde_json::{json, Value};

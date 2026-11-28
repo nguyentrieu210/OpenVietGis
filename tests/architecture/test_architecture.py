@@ -125,3 +125,22 @@ def test_module_frontend_can_import_public_plugin_sdk(tmp_path: Path) -> None:
     write_source(tmp_path, "modules/example/frontend/Panel.tsx",
                  'import {Modal} from "@openvietgis/spatial-workspace/plugin/studio-ui";')
     assert find_violations(tmp_path) == []
+
+
+def test_rust_core_cannot_import_or_depend_on_vertical_module(tmp_path: Path) -> None:
+    write_source(tmp_path, "crates/ovg-storage/src/bad.rs", "use ovg_module_house_numbering_storage as store;")
+    write_source(tmp_path, "crates/ovg-core/Cargo.toml", "ovg-module-house-numbering = { workspace = true }")
+    assert len([v for v in find_violations(tmp_path) if "Core Rust depends on vertical module" in v]) == 2
+
+
+def test_rust_module_can_use_core_ports_but_not_http_app(tmp_path: Path) -> None:
+    write_source(tmp_path, "modules/example/storage/src/lib.rs", "use ovg_storage::catalog::ProjectRead;")
+    write_source(tmp_path, "crates/ovg-storage/Cargo.toml", "ovg-module-sdk = { workspace = true }")
+    assert find_violations(tmp_path) == []
+    write_source(tmp_path, "modules/example/storage/Cargo.toml", 'host = { path = "../../../apps/api-rust" }')
+    assert any("HTTP application internals" in v for v in find_violations(tmp_path))
+
+
+def test_rust_legacy_storage_location_cannot_return(tmp_path: Path) -> None:
+    write_source(tmp_path, "crates/ovg-storage/src/house_numbering/mod.rs", "// old code")
+    assert any("module-owned persistence in Core" in v for v in find_violations(tmp_path))

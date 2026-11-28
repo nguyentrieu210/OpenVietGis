@@ -1014,6 +1014,7 @@ dependencies = [
  "miniz_oxide",
  "ovg-core",
  "ovg-module-house-numbering",
+ "ovg-module-house-numbering-storage",
  "ovg-module-sdk",
  "ovg-processing",
  "ovg-spatial",
@@ -1053,6 +1054,22 @@ dependencies = [
  "serde_json",
  "sha2",
  "unicode-normalization",
+ "uuid",
+]
+
+[[package]]
+name = "ovg-module-house-numbering-storage"
+version = "0.2.0"
+dependencies = [
+ "chrono",
+ "ovg-core",
+ "ovg-storage",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sqlx",
+ "sqlx-postgres",
+ "tracing",
  "uuid",
 ]
 
