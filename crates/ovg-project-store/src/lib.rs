@@ -1,6 +1,6 @@
 //! R3 single-domain transaction candidate. Not wired to Desktop or managed data.
 //! Do not open legacy GeoPackages with this kernel.
-use rusqlite::{params,Connection,OptionalExtension,Transaction,TransactionBehavior};
+use rusqlite::{params,Connection,OptionalExtension,TransactionBehavior};
 use serde::{Deserialize,Serialize};
 use serde_json::Value;
 use sha2::{Digest,Sha256};
@@ -49,7 +49,7 @@ fn schema(db:&Connection,id:Uuid)->Result<Option<Vec<Field>>>{
 fn current(db:&Connection,l:Uuid,id:Uuid)->Result<(u64,Option<Image>)>{
  let rev=db.query_row("SELECT revision FROM feature_revision WHERE layer=?1 AND id=?2",params![l.to_string(),id.to_string()],|r|r.get::<_,u64>(0)).optional()?.unwrap_or(0);
  let img=db.query_row("SELECT wkb,attributes FROM feature WHERE layer=?1 AND id=?2",params![l.to_string(),id.to_string()],|r|Ok((r.get::<_,Vec<u8>>(0)?,r.get::<_,String>(1)?))).optional()?;
- Ok((rev,img.map(|(w,a)|Ok(Image{wkb:w,attributes:decode(&a)?})).transpose()?))
+ Ok((rev,img.map(|(w,a)|->Result<Image>{Ok(Image{wkb:w,attributes:decode(&a)?})}).transpose()?))
 }
 fn validate_image(db:&Connection,l:Uuid,img:&Image)->Result<([f64;4],String)>{
  let a=json(&img.attributes)?;
@@ -188,5 +188,49 @@ impl Store{
   let bad:i64=db.query_row("SELECT count(*) FROM feature f LEFT JOIN feature_index i ON i.fid=f.fid WHERE i.fid IS NULL OR i.minx>f.minx OR i.maxx<f.maxx OR i.miny>f.miny OR i.maxy<f.maxy",[],|r|r.get(0))?;
   let orphan:i64=db.query_row("SELECT count(*) FROM feature_index i LEFT JOIN feature f ON f.fid=i.fid WHERE f.fid IS NULL",[],|r|r.get(0))?;
   Ok(v=="ok"&&fk==0&&bad==0&&orphan==0)
+ }
+}
+
+#[cfg(test)]
+mod tests{
+ use super::*;
+ fn img(x:f64)->Image{Image{wkb:ovg_mobile_engine::edit::draft("point",&[x,11.]).unwrap(),attributes:serde_json::json!({"name":"A"})}}
+ fn e(l:Uuid,id:Uuid,expected:u64,image:Option<Image>)->Edit{Edit{layer:l,feature:id,expected,image}}
+ #[test]fn multi_layer_atomic_replay_and_restart(){
+   let d=tempfile::tempdir().unwrap();let p=d.path().join("project.sqlite");
+   let s=Store::create(&p).unwrap();let a=Uuid::new_v4();let b=Uuid::new_v4();let x=Uuid::new_v4();let y=Uuid::new_v4();
+   s.add_layer(a,"A",0).unwrap();s.add_layer(b,"B",1).unwrap();
+   let bad=Batch{operation:Uuid::new_v4(),expected_project:2,edits:vec![e(a,x,0,Some(img(106.))),e(b,y,7,Some(img(107.)))],links:vec![]};
+   assert_eq!(s.apply(&bad),Err(Error::Conflict));assert_eq!(s.revision().unwrap(),2);
+   assert!(s.query(a,[0.,0.,180.,90.],0,10,2).unwrap().rows.is_empty());
+   let good=Batch{operation:Uuid::new_v4(),expected_project:2,edits:vec![e(a,x,0,Some(img(106.))),e(b,y,0,Some(img(107.)))],links:vec![]};
+   let r=s.apply(&good).unwrap();assert_eq!(r.revision,3);assert!(s.integrity().unwrap());drop(s);
+   let s=Store::reopen(&p).unwrap();assert_eq!(s.apply(&good).unwrap(),r);
+   let mut changed=good.clone();changed.edits[0].image=Some(img(105.));assert_eq!(s.apply(&changed),Err(Error::Reused));
+   assert_eq!(s.query(b,[106.,10.,108.,12.],0,10,3).unwrap().rows[0].id,y);
+   assert!(s.query(a,[0.,0.,180.,90.],0,10,2).is_err());
+ }
+ #[test]fn relation_cardinality_and_deletion_roll_back(){
+   let d=tempfile::tempdir().unwrap();let s=Store::create(&d.path().join("p.sqlite")).unwrap();
+   let a=Uuid::new_v4();let b=Uuid::new_v4();let rel=Uuid::new_v4();let x=Uuid::new_v4();let y=Uuid::new_v4();let z=Uuid::new_v4();
+   s.add_layer(a,"A",0).unwrap();s.add_layer(b,"B",1).unwrap();s.add_relation(rel,a,b,"one_many",2).unwrap();
+   let l=Link{relation:rel,source:x,target:y,add:true};
+   let batch=Batch{operation:Uuid::new_v4(),expected_project:3,edits:vec![e(a,x,0,Some(img(106.))),e(a,z,0,Some(img(106.))),e(b,y,0,Some(img(107.)))],links:vec![l.clone()]};
+   s.apply(&batch).unwrap();
+   let invalid=Batch{operation:Uuid::new_v4(),expected_project:4,edits:vec![],links:vec![Link{source:z,..l.clone()}]};
+   assert_eq!(s.apply(&invalid),Err(Error::Relation));
+   let del=Batch{operation:Uuid::new_v4(),expected_project:4,edits:vec![e(b,y,1,None)],links:vec![]};
+   assert_eq!(s.apply(&del),Err(Error::Relation));
+   assert_eq!(s.related(rel,x,"",10,4).unwrap(),vec![y]);
+   let good=Batch{links:vec![Link{add:false,..l}],..del};s.apply(&good).unwrap();assert!(s.integrity().unwrap());
+ }
+ #[test]fn schema_validates_existing_and_new_rows(){
+   let d=tempfile::tempdir().unwrap();let s=Store::create(&d.path().join("p.sqlite")).unwrap();let a=Uuid::new_v4();
+   s.add_layer(a,"A",0).unwrap();
+   let field=Field{name:"name".into(),kind:attributes::Kind::Text,required:true,max_length:Some(2),min:None,max:None};
+   s.set_schema(a,&[field],1).unwrap();
+   let mut bad=img(106.);bad.attributes=serde_json::json!({"name":"long"});
+   let batch=Batch{operation:Uuid::new_v4(),expected_project:2,edits:vec![e(a,Uuid::new_v4(),0,Some(bad))],links:vec![]};
+   assert_eq!(s.apply(&batch),Err(Error::Invalid));assert_eq!(s.revision().unwrap(),2);
  }
 }
