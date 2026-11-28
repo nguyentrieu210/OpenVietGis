@@ -97,6 +97,8 @@ class _UnifiedPageState extends State<UnifiedPage>{
   }
   Future<void> _backup()async{
     final p=_project;if(p==null||_revision==null)return;
+    final confirmed=await showDialog<bool>(context:context,builder:(d)=>AlertDialog(title:const Text("Chia sẻ bản sao dự án?"),content:const Text("Backup chứa toàn bộ dữ liệu độc lập của dự án. Chỉ chia sẻ đến thiết bị hoặc ứng dụng tin cậy."),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text("Hủy")),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text("Sao lưu"))]));
+    if(confirmed!=true||!mounted)return;
     final name=await p.backup(exchangeRoot:_exchange!,expected:_revision!);
     if(!mounted)return;
     final f=File('$_exchange${Platform.pathSeparator}$name');
@@ -112,8 +114,9 @@ class _UnifiedPageState extends State<UnifiedPage>{
     final size=await src.length();if(size<=0||size>cap)throw StateError('Mobile import: tối đa 512 MiB');
     final name='${_uuid()}.sqlite';final dir=Directory(_exchange!);await dir.create(recursive:true);
     final target=File('${dir.path}${Platform.pathSeparator}$name');
+    var created=false;
     try{
-      await target.create(exclusive:true);
+      await target.create(exclusive:true);created=true;
       var copied=0;
       final sink=target.openWrite();
       try{await for(final b in src.openRead()){copied+=b.length;if(copied>cap||copied>size)throw StateError('SOURCE_CHANGED');sink.add(b);await sink.flush();}}
@@ -122,7 +125,7 @@ class _UnifiedPageState extends State<UnifiedPage>{
       final id=await restoreUnifiedProject(rootPath:_root!,exchangeRoot:_exchange!,name:name);
       final ids=await listUnifiedProjects(rootPath:_root!);
       if(!mounted)return;setState(()=>_ids=ids);await _open(id);
-    }finally{if(await target.exists())await target.delete();}
+    }finally{if(created&&await target.exists())await target.delete();}
   }
   @override Widget build(BuildContext context){
     final ready=_root!=null&&!_busy;
