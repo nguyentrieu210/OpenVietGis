@@ -1,4 +1,5 @@
 import type {LasCloud,LasPoint} from "./local-las";
+import {boundedParallel} from "./bounded-parallel";
 /** Bounded local EPT binary subset. See https://entwine.io/en/latest/entwine-point-tile.html */
 const ROOT="0-0-0-0",MAX_BYTES=64*1024*1024,MAX_POINTS=2000000,MAX_NODES=1024,R=6378137;
 type LocalEntry={size:number;text():Promise<string>;arrayBuffer():Promise<ArrayBuffer>};
@@ -103,16 +104,19 @@ export async function loadRemoteEpt(raw:string,crs:4326|3857,depth:number,signal
   }
  }
  await page(ROOT);
- const selected:Record<string,number>=Object.create(null);let count=0,nodes=0;
+ const selected:Record<string,number>=Object.create(null);let count=0,nodes=0,reserved=0;
+ const tiles:{path:string;length:number}[]=[];
  const sorted=[...queue].sort(([a],[b])=>node(a)[0]-node(b)[0]||a.localeCompare(b));
  for(const [k,n] of sorted){
   signal.throwIfAborted();
   const [d,x,y,z]=node(k),parent=[d-1,Math.floor(x/2),Math.floor(y/2),Math.floor(z/2)].join("-");
-  if(d>0&&!Object.hasOwn(selected,parent)||nodes>=MAX_REMOTE_NODES||count+n>MAX_REMOTE_POINTS||n*stride>MAX_REMOTE_BYTES-transferred){complete=false;continue}
-  const path="ept-data/"+k+".bin",blob=await get(path,n*stride);if(blob.size!==n*stride)throw Error("Truncated EPT tile");
-  selected[k]=n;files.set(path,blob);count+=n;nodes++;
+  if(d>0&&!Object.hasOwn(selected,parent)||nodes>=MAX_REMOTE_NODES||count+n>MAX_REMOTE_POINTS||n*stride>MAX_REMOTE_BYTES-transferred-reserved){complete=false;continue}
+  const path="ept-data/"+k+".bin",length=n*stride;
+  selected[k]=n;tiles.push({path,length});reserved+=length;count+=n;nodes++;
  }
  if(!Object.hasOwn(selected,ROOT)||count>datasetCount||complete&&count!==datasetCount)throw Error("Invalid or oversized EPT root/point count");
+ const loaded=await boundedParallel(tiles,4,async ({path,length})=>{const blob=await get(path,length);if(blob.size!==length)throw Error("Truncated EPT tile");return {path,blob}},signal);
+ for(const {path,blob} of loaded)files.set(path,blob);
  files.set("ept.json",new Blob([JSON.stringify({...meta,points:count})]));
  files.set("ept-hierarchy/"+ROOT+".json",new Blob([JSON.stringify(selected)]));
  const preview=await parseEpt(files,crs);

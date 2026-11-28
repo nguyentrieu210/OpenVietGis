@@ -3,6 +3,7 @@
  * Hierarchy pages and LAZ chunks have disjoint validated ranges and finite budgets.
  */
 import {decodeLazChunk} from "./laz-decoder";
+import {boundedParallel} from "./bounded-parallel";
 import {parseLasRecords,LAS_MAX_BYTES,type LasCloud} from "./local-las";
 export type CopcPreview=LasCloud&{datasetCount:number;nodeCount:number;complete:boolean};
 const MAX_BYTES=32*1024*1024,MAX_POINTS=500000,MAX_NODES=128,MAX_REQUESTS=320;
@@ -17,6 +18,8 @@ export function boundedRangeReader(url:URL,signal:AbortSignal,fetcher:typeof fet
  async function read(offset:number,length:number):Promise<ArrayBuffer>{
   signal.throwIfAborted();
   if(!Number.isSafeInteger(offset)||offset<0||!Number.isSafeInteger(length)||length<1||!Number.isSafeInteger(offset+length)||length>MAX_BYTES-transferred||size&&offset+length>size||++requests>MAX_REQUESTS)throw Error("COPC range budget");
+  // Reserve the full range before any await, including concurrent reads.
+  transferred+=length;
   const r=await fetcher(url,{method:"GET",headers:{Range:"bytes="+offset+"-"+(offset+length-1)},mode:"cors",credentials:"omit",referrerPolicy:"no-referrer",redirect:"error",cache:"no-store",signal});
   const fail=async(message:string)=>{await r.body?.cancel().catch(()=>{});throw Error(message)};
   const range=/^bytes (\d+)-(\d+)\/(\d+)$/.exec(r.headers.get("content-range")??""),tag=r.headers.get("etag")??"";
@@ -27,7 +30,7 @@ export function boundedRangeReader(url:URL,signal:AbortSignal,fetcher:typeof fet
   const reader=r.body.getReader(),out=new Uint8Array(length);let at=0;
   try{while(true){const next=await reader.read();if(next.done)break;if(at+next.value.byteLength>length)throw Error("Oversized COPC response");out.set(next.value,at);at+=next.value.byteLength}}catch(e){await reader.cancel().catch(()=>{});throw e}finally{reader.releaseLock()}
   if(at!==length)throw Error("Truncated COPC range");
-  transferred+=length;return out.buffer;
+  return out.buffer;
  }
  return {read,get size(){return size},get remaining(){return MAX_BYTES-transferred}};
 }
@@ -91,18 +94,23 @@ export async function readRemoteCopc(raw:string,crs:4326|3857,depth:number,signa
  await page(root,rootOffset,rootBytes);
  if(!entries.has(id(root)))throw Error("COPC root hierarchy unavailable");
  const sorted=[...entries.values()].sort((a,b)=>a.key[0]-b.key[0]||id(a.key).localeCompare(id(b.key)));
- const selected=new Set<string>(),chunks:Uint8Array[]=[];let count=0,nodeCount=0;
+ const selected=new Set<string>(),chunks:Uint8Array[]=[],planned:Entry[]=[];let count=0,nodeCount=0,reserved=0;
  for(const e of sorted){
   signal.throwIfAborted();
   if(e.key[0]>0&&!selected.has(id(parent(e.key)))){complete=false;continue}
   if(!e.count){selected.add(id(e.key));continue}
-  if(nodeCount>=MAX_NODES||count+e.count>MAX_POINTS||(count+e.count)*length>LAS_MAX_BYTES||e.bytes>reader.remaining){complete=false;continue}
+  if(nodeCount>=MAX_NODES||count+e.count>MAX_POINTS||(count+e.count)*length>LAS_MAX_BYTES||e.bytes>reader.remaining-reserved){complete=false;continue}
   claim(e.offset,e.bytes,offset,evlr);
-  const bytes=await reader.read(e.offset,e.bytes),raw=await decode(bytes,e.count,format,length);
-  if(raw.byteLength!==e.count*length)throw Error("COPC decoder returned wrong record count");
-  chunks.push(new Uint8Array(raw));count+=e.count;nodeCount++;selected.add(id(e.key));
+  planned.push(e);reserved+=e.bytes;count+=e.count;nodeCount++;selected.add(id(e.key));
  }
  if(!count||count>datasetCount||complete&&count!==datasetCount)throw Error("COPC empty, oversized or inconsistent point selection");
+ // Fetch at most four chunks concurrently, decode in deterministic order in
+ // the same isolated WASM worker; do not retain a second raw chunk cache.
+ for(let i=0;i<planned.length;i+=4){
+  const batch=planned.slice(i,i+4);
+  const loaded=await boundedParallel(batch,4,async e=>reader.read(e.offset,e.bytes),signal);
+  for(let j=0;j<batch.length;j++){signal.throwIfAborted();const e=batch[j]!,raw=await decode(loaded[j]!,e.count,format,length);if(raw.byteLength!==e.count*length)throw Error("COPC decoder returned wrong record count");chunks.push(new Uint8Array(raw))}
+ }
  const records=new Uint8Array(count*length);let pos=0;for(const chunk of chunks){records.set(chunk,pos);pos+=chunk.byteLength}
  // Preserve all original VLRs/scale/offset, pin the actual decoded subset.
  const h=new DataView(prefix.buffer);h.setBigUint64(235,0n,true);h.setUint32(243,0,true);h.setBigUint64(247,BigInt(count),true);
