@@ -514,23 +514,41 @@ pub(crate) async fn run_sync_diff(
 
 pub(crate) async fn run_import(upload: &[u8], mut req: Value) -> Result<Value, WorkerError> {
     let work = WorkDir(std::env::temp_dir().join(format!("ovg-e07-import-{}", Uuid::new_v4())));
-    let error = |message: &str| WorkerError { status: StatusCode::INTERNAL_SERVER_ERROR, message: message.to_owned() };
-    tokio::fs::create_dir_all(&work.0).await.map_err(|_| error("create import directory"))?;
-    #[cfg(unix)] {
+    let error = |message: &str| WorkerError {
+        status: StatusCode::INTERNAL_SERVER_ERROR,
+        message: message.to_owned(),
+    };
+    tokio::fs::create_dir_all(&work.0)
+        .await
+        .map_err(|_| error("create import directory"))?;
+    #[cfg(unix)]
+    {
         use std::os::unix::fs::PermissionsExt;
-        tokio::fs::set_permissions(&work.0, std::fs::Permissions::from_mode(0o700)).await.map_err(|_| error("secure import directory"))?;
+        tokio::fs::set_permissions(&work.0, std::fs::Permissions::from_mode(0o700))
+            .await
+            .map_err(|_| error("secure import directory"))?;
     }
     let input = work.0.join("upload.bin");
     let output = work.0.join("inspection.json");
-    tokio::fs::write(&input, upload).await.map_err(|_| error("write import file"))?;
+    tokio::fs::write(&input, upload)
+        .await
+        .map_err(|_| error("write import file"))?;
     req["upload_path"] = Value::String(input.to_string_lossy().into_owned());
     req["output_path"] = Value::String(output.to_string_lossy().into_owned());
     invoke(&work.0, req).await?;
-    let size = tokio::fs::metadata(&output).await.map_err(|_| error("missing import result"))?.len();
+    let size = tokio::fs::metadata(&output)
+        .await
+        .map_err(|_| error("missing import result"))?
+        .len();
     if size > 32 * 1024 * 1024 {
-        return Err(WorkerError { status: StatusCode::PAYLOAD_TOO_LARGE, message: "Import decoded result exceeds budget".into() });
+        return Err(WorkerError {
+            status: StatusCode::PAYLOAD_TOO_LARGE,
+            message: "Import decoded result exceeds budget".into(),
+        });
     }
-    let raw = tokio::fs::read(output).await.map_err(|_| error("read import result"))?;
+    let raw = tokio::fs::read(output)
+        .await
+        .map_err(|_| error("read import result"))?;
     serde_json::from_slice(&raw).map_err(|_| error("invalid import worker result"))
 }
 
@@ -546,9 +564,15 @@ async fn invoke(work_dir: &Path, request: Value) -> Result<Value, WorkerError> {
             status: StatusCode::INTERNAL_SERVER_ERROR,
             message: format!("create worker root: {err}"),
         })?;
-    #[cfg(unix)] {
+    #[cfg(unix)]
+    {
         use std::os::unix::fs::PermissionsExt;
-        tokio::fs::set_permissions(work_dir, std::fs::Permissions::from_mode(0o700)).await.map_err(|_|WorkerError{status:StatusCode::INTERNAL_SERVER_ERROR,message:"secure worker directory failed".into()})?;
+        tokio::fs::set_permissions(work_dir, std::fs::Permissions::from_mode(0o700))
+            .await
+            .map_err(|_| WorkerError {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                message: "secure worker directory failed".into(),
+            })?;
     }
     for init in PACKAGE_INITS {
         let p = work_dir.join(init);
@@ -603,8 +627,11 @@ async fn invoke(work_dir: &Path, request: Value) -> Result<Value, WorkerError> {
         })?;
 
     let python = if request["action"] == "inspect_import" || request["format"] == "shapefile_zip" {
-        std::env::var("OPENVIETGIS_VECTOR_CODEC_PYTHON").unwrap_or_else(|_| "/usr/bin/python3".into())
-    } else { "/usr/bin/python3".into() };
+        std::env::var("OPENVIETGIS_VECTOR_CODEC_PYTHON")
+            .unwrap_or_else(|_| "/usr/bin/python3".into())
+    } else {
+        "/usr/bin/python3".into()
+    };
     let mut cmd = tokio::process::Command::new(python);
     cmd.args(["-E", "-s", "-B"])
         .arg(&drv_path)
