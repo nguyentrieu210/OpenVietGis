@@ -1,5 +1,5 @@
 //! Read-only, bounded standard GeoPackage XY/EPSG:4326 single-feature-table import.
-use rusqlite::{Connection,OpenFlags,types::ValueRef};
+use rusqlite::{Connection,OpenFlags,OptionalExtension,types::ValueRef};
 use ovg_local_storage::{LocalStore,Mutation};
 use ovg_spatial::{parse_xy_wkb,encode_wkb,ValidationLimits,to_geojson,parse_geojson,PortableTransformKernel,TransformBackend,Coord2D};
 use serde::Serialize;
@@ -140,4 +140,77 @@ mod tests{
  use super::*;
  #[test]fn header_rejects_extended_or_wrong_srid(){let mut b=vec![b'G',b'P',0,1,0,0,0,0,1];assert!(wkb(&b,4326).is_err());b[3]=0x21;assert!(wkb(&b,4326).is_err());}
  #[test]fn quote_identifier(){assert_eq!(ident("a\"b").unwrap(),"\"a\"\"b\"");}
+}
+
+#[derive(Serialize)]
+pub struct DirectPage{pub data:Value,pub next:Option<String>}
+/// Explicitly granted read-only source. No import, snapshot or writeback.
+/// The initial profile is indexed EPSG:4326 XY feature tables only.
+pub struct Direct {
+ db:Connection,path:std::path::PathBuf,stamp:(u64,std::time::SystemTime),version:i64,
+ pub layers:Vec<Layer>,
+}
+fn stamp(p:&Path)->Result<(u64,std::time::SystemTime)>{
+ let m=std::fs::symlink_metadata(p).map_err(|_|"SOURCE_CHANGED")?;
+ if !m.file_type().is_file(){return Err("SOURCE_CHANGED")}
+ Ok((m.len(),m.modified().map_err(|_|"SOURCE_CHANGED")?))
+}
+impl Direct{
+ pub fn open(p:&Path)->Result<Self>{
+  let before=stamp(p)?;
+  let db=sql(Connection::open_with_flags(p,OpenFlags::SQLITE_OPEN_READ_ONLY|OpenFlags::SQLITE_OPEN_NO_MUTEX))?;
+  sql(db.pragma_update(None,"trusted_schema","OFF"))?;
+  sql(db.pragma_update(None,"query_only","ON"))?;
+  sql(db.busy_timeout(std::time::Duration::from_secs(1)))?;
+  let version=sql(db.pragma_query_value(None,"data_version",|r|r.get(0)))?;
+  let layers=layers(&db)?;
+  if before!=stamp(p)?{return Err("SOURCE_CHANGED")}
+  Ok(Self{db,path:p.to_path_buf(),stamp:before,version,layers})
+ }
+ fn unchanged(&self)->Result<()>{
+  let version:i64=sql(self.db.pragma_query_value(None,"data_version",|r|r.get(0)))?;
+  if self.stamp!=stamp(&self.path)?||self.version!=version{return Err("SOURCE_CHANGED_REOPEN")}
+  Ok(())
+ }
+ pub fn page(&self,table:&str,b:[f64;4],after:&str)->Result<DirectPage>{
+  self.unchanged()?;
+  if b.iter().any(|x|!x.is_finite())||b[0]>b[2]||b[1]>b[3]||b[0]< -180.||b[2]>180.||b[1]< -90.||b[3]>90.{return Err("INVALID_BBOX")}
+  let layer=self.layers.iter().find(|l|l.table==table).ok_or("LAYER_NOT_FOUND")?;
+  if layer.epsg!=4326||layer.z!=0||layer.m!=0{return Err("DIRECT_REQUIRES_WGS84_XY")}
+  let registered:i64=sql(self.db.query_row("SELECT count(*) FROM gpkg_spatial_ref_sys WHERE srs_id=4326 AND upper(organization)='EPSG' AND organization_coordsys_id=4326",[],|r|r.get(0)))?;
+  if registered!=1{return Err("UNSUPPORTED_CRS_METADATA")}
+  let genuine:i64=sql(self.db.query_row("SELECT count(*) FROM sqlite_master WHERE name=?1 AND type='table' AND upper(ltrim(sql)) LIKE 'CREATE TABLE%'",[table],|r|r.get(0)))?;
+  if genuine!=1{return Err("UNSUPPORTED_TABLE")}
+  let idx=format!("rtree_{}_{}",layer.table,layer.column);
+  let idx_sql:Option<String>=sql(self.db.query_row("SELECT sql FROM sqlite_master WHERE name=?1 AND type='table'",[&idx],|r|r.get(0)).optional())?;
+  if !idx_sql.is_some_and(|s|s.to_ascii_lowercase().contains("using rtree(")){return Err("DIRECT_REQUIRES_RTREE")}
+  let mut pk=sql(self.db.prepare("SELECT name,type FROM pragma_table_info(?1) WHERE pk>0 ORDER BY pk"))?;
+  let keys=sql(pk.query_map([table],|r|Ok((r.get::<_,String>(0)?,r.get::<_,String>(1)?))))?;
+  let keys=sql(keys.collect::<rusqlite::Result<Vec<_>>>())?;
+  if keys.len()!=1||!keys[0].1.eq_ignore_ascii_case("INTEGER"){return Err("UNSUPPORTED_PRIMARY_KEY")}
+  let id=ident(&keys[0].0)?;let g=ident(&layer.column)?;
+  let last=if after.is_empty(){i64::MIN}else{after.parse::<i64>().map_err(|_|"INVALID_CURSOR")?};
+  let statement=format!("SELECT f.{id},length(f.{g}),CASE WHEN length(f.{g})<=1048576 THEN f.{g} ELSE NULL END FROM {} i JOIN {} f ON f.{id}=i.id WHERE f.{id}>?1 AND i.maxx>=?2 AND i.maxy>=?3 AND i.minx<=?4 AND i.miny<=?5 ORDER BY f.{id} LIMIT 513",ident(&idx)?,ident(table)?);
+  let mut q=sql(self.db.prepare(&statement))?;let mut rows=sql(q.query(rusqlite::params![last,b[0],b[1],b[2],b[3]]))?;
+  let mut features=Vec::new();let mut next=None;let mut bytes=0usize;
+  let mut final_id=last;
+  while let Some(row)=sql(rows.next())?{
+   let fid:i64=sql(row.get(0))?;
+   if features.len()==512{next=Some(final_id.to_string());break}
+   let raw:Option<Vec<u8>>=sql(row.get(2))?;
+   let raw=raw.ok_or("GEOMETRY_TOO_LARGE_OR_NULL")?;
+   let g=ovg_spatial::parse_xy_wkb(&wkb(&raw,4326)?,&ValidationLimits::default()).map_err(|_|"INVALID_GEOMETRY")?;
+   let bb=ovg_spatial::compute_bbox(&g.geometry).ok_or("INVALID_GEOMETRY")?;
+   if bb.min_x<=b[2]&&bb.max_x>=b[0]&&bb.min_y<=b[3]&&bb.max_y>=b[1]{
+    let f=json!({"type":"Feature","id":fid.to_string(),"geometry":to_geojson(&g.geometry),"properties":{"source_fid":fid.to_string()}});
+    let size=f.to_string().len();
+    if bytes+size>1024*1024{if features.is_empty(){return Err("RESOURCE_LIMIT")}next=Some(final_id.to_string());break}
+    bytes+=size;features.push(f);
+   }
+   final_id=fid;
+  }
+  // A corrupt index can omit rows, so this profile requires separate index qualification.
+  drop(rows);drop(q);self.unchanged()?;
+  Ok(DirectPage{data:json!({"type":"FeatureCollection","features":features}),next})
+ }
 }
