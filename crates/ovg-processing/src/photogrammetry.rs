@@ -25,6 +25,7 @@ pub mod multispectral;
 pub mod distributed;
 pub mod geotiff;
 pub mod disk_store;
+pub mod pipeline;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
