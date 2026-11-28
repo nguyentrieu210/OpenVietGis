@@ -95,6 +95,7 @@ struct Snapshot {
     expected_count: Option<i64>,
     extent: Option<[f64; 4]>,
     transformation: Option<&'static TransformationProfile>,
+    datum_read:Option<crate::catalog::regional_crs::VerifiedDatumRead>,
 }
 
 impl ProjectRead<'_> {
@@ -161,7 +162,7 @@ impl ProjectRead<'_> {
                     THEN ST_AsBinary(prefix.geometry, 'NDR') END AS wkb
             FROM summary LEFT JOIN prefix ON total_positions - positions <= $14
             ORDER BY prefix.feature_id COLLATE \"C\"",
-            display_ctes(snapshot.transformation)
+            display_ctes(snapshot.transformation,snapshot.datum_read.as_ref())
         );
         let rows = self
             .bind_snapshot(sqlx::query(&sql), &snapshot, pins)
@@ -216,7 +217,7 @@ impl ProjectRead<'_> {
                     ST_Extent(geometry) FILTER (WHERE valid IS TRUE) AS extent
                 FROM display
             ) AS actual",
-            display_ctes(snapshot.transformation)
+            display_ctes(snapshot.transformation,snapshot.datum_read.as_ref())
         );
         let row = self
             .bind_snapshot(sqlx::query(&sql), &snapshot, pins)
@@ -260,7 +261,7 @@ impl ProjectRead<'_> {
         let snapshot = self
             .render_snapshot(layer_id, pins, RenderRead::Tile)
             .await?;
-        if snapshot.transformation.is_some() {
+        if snapshot.transformation.is_some() || snapshot.datum_read.is_some() {
             // shortcut: projected sources are viewport-only; add a fixed pipeline per CRS when tiles need them.
             return Err(unsupported_transformation());
         }
@@ -446,7 +447,10 @@ impl ProjectRead<'_> {
             .ok_or_else(|| AppError::internal("ready source requires native CRS"))?;
         let reference = reference_coordinate_wire(4326)
             .ok_or_else(|| AppError::internal("EPSG:4326 must be readable"))?;
+        let extended=ovg_core::crs::is_extended_native_vn2000(native);
+        let mut datum_read=None;
         let mut transformation = match native {
+            _ if extended=>None,
             4326 => None,
             _ => Some(
                 reference_transformation(native, 4326).ok_or_else(unsupported_transformation)?,
@@ -472,6 +476,11 @@ impl ProjectRead<'_> {
             RenderRead::Tile => None,
             RenderRead::WholeSource => Some(self.whole_source_count(source_id, &source).await?),
         };
+        if extended{
+            if self.gis_scoped||matches!(read,RenderRead::Tile){return Err(unsupported_transformation());}
+            let org=self.tx.organization_id();
+            datum_read=Some(crate::catalog::regional_crs::verify_extended_datum_read(self.tx.tx_mut(),org,self.project_id,source_id,native,"geometry").await?);
+        }
         if let Some(edge) = transformation.filter(|edge| requires_fixture(edge)) {
             if self.gis_scoped {
                 return Err(out_of_area());
@@ -499,7 +508,7 @@ impl ProjectRead<'_> {
                 "schema_revision": pins.schema_revision,
                 "geometry_included": true,
                 "response_crs": reference,
-                "transformation": transformation.map(TransformationProfile::to_wire)
+                "transformation": transformation.map(TransformationProfile::to_wire).or_else(||datum_read.as_ref().map(|r|r.wire.clone()))
             }),
             source_id,
             native_srid: i32::try_from(native)
@@ -508,6 +517,7 @@ impl ProjectRead<'_> {
             expected_count,
             extent,
             transformation,
+            datum_read,
         })
     }
 
@@ -564,7 +574,7 @@ impl ProjectRead<'_> {
 /// repeat the pin/SRID/type equality; topology is rechecked after a transform.
 /// The bound is the 50k render ceiling (not Python's `LIMIT 10001`), so only a
 /// larger snapshot fails the count check, never a valid layer above 10k.
-fn display_ctes(transformation: Option<&TransformationProfile>) -> String {
+fn display_ctes(transformation: Option<&TransformationProfile>,datum:Option<&crate::catalog::regional_crs::VerifiedDatumRead>) -> String {
     let lat = WEB_MERCATOR_MAX_LATITUDE;
     let native = format!(
         "SELECT feature_id, geometry,
@@ -579,7 +589,7 @@ fn display_ctes(transformation: Option<&TransformationProfile>) -> String {
         "ST_CoveredBy(geometry, ST_MakeEnvelope(-180, {:?}, 180, {lat:?}, 4326))",
         -lat
     );
-    let Some(edge) = transformation else {
+    let (transform,area)=if let Some(datum)=datum{(datum.expression.clone(),datum.bounds)}else if let Some(edge)=transformation{(crate::catalog::regional_crs::profile_expression(edge,"geometry"),edge.geographic_bounds)}else{
         return format!(
             "WITH display AS MATERIALIZED (
                 SELECT feature_id, geometry, valid AND {display_domain} AS valid
@@ -587,8 +597,6 @@ fn display_ctes(transformation: Option<&TransformationProfile>) -> String {
             )"
         );
     };
-    let transform = crate::catalog::regional_crs::profile_expression(edge, "geometry");
-    let area = edge.geographic_bounds;
     format!(
         "WITH native AS NOT MATERIALIZED ({native}),
         step0 AS NOT MATERIALIZED (

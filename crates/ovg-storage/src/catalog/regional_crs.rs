@@ -333,6 +333,20 @@ async fn verify_chain(tx:&mut Transaction<'_,Postgres>,org:Uuid,project:Uuid,
     }
     Ok(verified)
 }
+pub(crate) struct VerifiedDatumRead {
+    pub(crate) expression:String,
+    pub(crate) wire:Value,
+    pub(crate) bounds:ovg_core::crs::CoordinateBounds,
+}
+pub(crate) async fn verify_extended_datum_read(tx:&mut Transaction<'_,Postgres>,org:Uuid,project:Uuid,source:Uuid,native:u32,geometry:&str)->Result<VerifiedDatumRead,AppError>{
+    let evidence=verify_chain(tx,org,project,source).await?;
+    if !ovg_core::crs::is_extended_native_vn2000(native)||u32::try_from(evidence.crs).ok()!=Some(native){return Err(outside());}
+    let profile=effective_profile(evidence.provenance,reference_transformation(4756,4326).ok_or_else(outside)?)?;
+    let expression=datum_expression_from_native(tx,org,project,source,native,evidence.provenance,geometry).await?;
+    let mut wire=profile.to_wire();wire["source_code"]=json!(native);wire["operation_id"]=json!("verified-native-vn2000-to-wgs84");
+    wire["method"]=json!("inverse native projection then verified EPSG:6960 datum operation");
+    Ok(VerifiedDatumRead{expression,wire,bounds:profile.geographic_bounds})
+}
 pub(crate) async fn verify_extended_datum_source(tx:&mut Transaction<'_,Postgres>,org:Uuid,project:Uuid,source:Uuid,native:u32,geometry:&str)->Result<String,AppError>{
     let evidence=verify_chain(tx,org,project,source).await?;
     if !ovg_core::crs::is_extended_native_vn2000(native)||u32::try_from(evidence.crs).ok()!=Some(native){return Err(outside());}

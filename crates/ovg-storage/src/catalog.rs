@@ -825,6 +825,7 @@ impl<'a> ProjectRead<'a> {
         let count: Option<i64> = row.try_get("feature_count").map_err(db_error)?;
         let validation_state: &str = row.try_get("validation_state").map_err(db_error)?;
 
+        let extended_native=stored_crs.and_then(|v|u32::try_from(v).ok()).is_some_and(ovg_core::crs::is_extended_native_vn2000);
         let render_supported = render_supported(
             kind,
             reference_key,
@@ -873,7 +874,8 @@ impl<'a> ProjectRead<'a> {
             wire,
             ready: validation_state == "ready",
             render_supported,
-            edit_supported: render_supported && kind != "reference_fixture",
+            edit_supported: render_supported && kind != "reference_fixture" && !extended_native,
+            extended_native,
         })
     }
 
@@ -947,6 +949,7 @@ pub(crate) struct SourceRecord {
     ready: bool,
     render_supported: bool,
     edit_supported: bool,
+    extended_native:bool,
 }
 
 impl SourceRecord {
@@ -964,16 +967,16 @@ impl SourceRecord {
             ("feature_read", true, self.ready, "project.read"),
             ("render", self.render_supported, self.ready, "project.read"),
             ("style", self.render_supported, self.ready, "project.read"),
-            ("export", self.render_supported, self.ready, "project.read"),
-            ("query", self.render_supported, self.ready, "project.read"),
+            ("export", self.render_supported && !self.extended_native, self.ready, "project.read"),
+            ("query", self.render_supported && !self.extended_native, self.ready, "project.read"),
             ("edit", self.edit_supported, self.ready, "project.edit"),
             (
                 "analysis",
-                self.render_supported,
+                self.render_supported && !self.extended_native,
                 self.ready,
                 "project.edit",
             ),
-            ("offline", self.render_supported, self.ready, "project.read"),
+            ("offline", self.render_supported && !self.extended_native, self.ready, "project.read"),
         ]
         .into_iter()
         .map(|(name, supported, ready, permission)| {
@@ -1063,6 +1066,11 @@ fn render_supported(
     feature_count: Option<i64>,
     extent: Option<&Value>,
 ) -> bool {
+    if crs.and_then(|v|u32::try_from(v).ok()).is_some_and(ovg_core::crs::is_extended_native_vn2000){
+        // Technical rendering support only; every WGS84 read independently
+        // verifies the complete immutable regional chain, or fails closed.
+        return kind=="derived_processing" && matches!(geometry_family,"Point"|"LineString"|"Polygon") && dimensions=="XY" && feature_count.is_some_and(|n|n<=50_000);
+    }
     let regional_provenance = kind == "imported_file"
         || !matches!(crs, Some(4756 | 5899))
         || matches!(

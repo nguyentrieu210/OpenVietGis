@@ -136,13 +136,17 @@ def check_processing(post,get,foreign,fixtures):
     extended_pin=pinned_layer(extended["output_layer_id"],extended["output_source_id"])
     wire=get("/layers/"+extended_pin["layer_id"])
     assert wire["source"]["stored_crs"]["code"]==3405
-    assert not next(x for x in wire["capabilities"] if x["name"]=="render")["available"]
+    assert next(x for x in wire["capabilities"] if x["name"]=="render")["available"]
+    assert not next(x for x in wire["capabilities"] if x["name"]=="edit")["available"]
     query=("/layers/"+extended_pin["layer_id"]+"/features?content_revision="+extended_pin["content_revision"]
            +"&schema_revision="+extended_pin["schema_revision"]+"&response_crs=4756")
     page=get(query)
     assert page["context"]["response_crs"]["code"]==4756
     assert page["context"]["transformation"]["operation_id"]=="native-vn2000-projection"
     assert len(page["items"])==regional["feature_count"]
+    wgs_page=get(query.replace("response_crs=4756","response_crs=4326"))
+    assert wgs_page["context"]["transformation"]["operation_id"]=="verified-native-vn2000-to-wgs84"
+    assert len(wgs_page["items"])==regional["feature_count"]
     recovered,_=result(job("reproject",extended_pin,{"target_srid":4756}),regional["feature_count"],0)
     with psycopg.connect(OWNER) as conn:
         diff=conn.execute("""SELECT max(ST_Distance(a.geometry,b.geometry)),
