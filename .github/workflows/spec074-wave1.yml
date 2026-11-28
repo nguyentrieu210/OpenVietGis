@@ -57,6 +57,7 @@ jobs:
           toolchain: 1.85.1
       - run: cargo generate-lockfile --manifest-path crates/ovg-project-store/Cargo.toml
       - run: cargo test --locked --manifest-path crates/ovg-project-store/Cargo.toml
+      - run: cargo run --release --locked --manifest-path crates/ovg-project-store/Cargo.toml --example bulk_benchmark -- 100000 > bulk-benchmark.json
       - run: cargo metadata --locked --manifest-path crates/ovg-project-store/Cargo.toml --format-version 1 > project-store-metadata.json
       - run: python3 infra/desktop/wave0/check_native_graph.py project-store-metadata.json
       - uses: actions/upload-artifact@v4
@@ -66,6 +67,7 @@ jobs:
           path: |
             crates/ovg-project-store/Cargo.lock
             project-store-metadata.json
+            bulk-benchmark.json
   native-providers:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -82,3 +84,21 @@ jobs:
           path: |
             crates/ovg-native-providers/Cargo.lock
             native-providers-metadata.json
+  desktop-optional-profiles:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.21.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+      - uses: dtolnay/rust-toolchain@stable
+      - run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libgdal-dev libproj-dev
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @openvietgis/web-next build
+        env:
+          VITE_OVG_DESKTOP: '1'
+      - run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --features native-ogr,remote-copc,native-cad
