@@ -67,7 +67,8 @@ def main():
                     assert len(run(db,queries[0]))==2
                     pin=run(db,queries[1])[0][0];assert len(pin)==64
                     assert run(db,queries[2])[0][0] is False
-                    db.execute("INSERT INTO house_numbering.proposal_submission_pins(organization_id,project_id,proposal_id,submitted_revision,submitted_by,input_digest) VALUES(%s,%s,%s,2,%s,%s)",(org,project,proposal['id'],actor,pin))
+                    # Synthetic RLS sentinel, not the revision that the actual submit API creates.
+                    db.execute("INSERT INTO house_numbering.proposal_submission_pins(organization_id,project_id,proposal_id,submitted_revision,submitted_by,input_digest) VALUES(%s,%s,%s,999,%s,%s)",(org,project,proposal['id'],actor,pin))
                     assert not db.execute("SELECT has_table_privilege(current_user,'house_numbering.proposal_submission_pins','UPDATE')").fetchone()[0]
                     assert not db.execute("SELECT has_table_privilege(current_user,'house_numbering.proposal_submission_pins','DELETE')").fetchone()[0]
                 with psycopg.connect(owner) as db:
@@ -411,4 +412,40 @@ def main():
             assert len(expect(api.get(issue,headers=reviewer['csrf']),200)['history'])==5
             print('PASS issuance HTTP: external certificate registry, ordered plate states, permission, immutable history and revocation')
             print('PASS proposal: independent reviewer, stale geometry, unresolved case, changed evidence, resubmission, approved number, retained pins')
+            # All mutations below apply solely to the disposable qualification fixture.
+            number_url=root+'/addresses/'+number
+            current=expect(api.get(number_url+'/lookup',headers=h),200)
+            assert current['issuance_id']==new_id
+            history_url=root+'/buildings/'+building['id']+'/address-history'
+            history=expect(api.get(history_url,headers=h),200)['items']
+            prior=next(row for row in history if row['id']==number)
+            decision={'expected_revision':prior['revision'],'effective_date':'2026-11-03','decision_ref':'FIXTURE-RETIRE','reason':'Synthetic renumbering acceptance'}
+            expect(api.post(number_url+'/retire',json=decision,headers=editor['csrf']),403)
+            expect(api.post(number_url+'/retire',json={**decision,'expected_revision':prior['revision']+1},headers=reviewer['csrf']),409)
+            assert expect(api.get(number_url+'/lookup',headers=h),200)['issuance_id']==new_id
+            retired=expect(api.post(number_url+'/retire',json=decision,headers=reviewer['csrf']),200)
+            assert retired['retired_at'] is not None and retired['revision']==prior['revision']+1
+            expect(api.get(number_url+'/lookup',headers=h),404)
+            expect(api.get(root+'/address-lookup/'+new_id,headers=h),404)
+            expect(api.post(number_url+'/retire',json=decision,headers=reviewer['csrf']),409)
+            assert expect(api.get(root+'/issuances/'+new_id,headers=reviewer['csrf']),200)['history'][-1]['state']=='void'
+            history=expect(api.get(history_url,headers=h),200)['items']
+            assert next(row for row in history if row['id']==number)['retirement']['decision_ref']=='FIXTURE-RETIRE'
+            new_number=str(uuid4())
+            with psycopg.connect(owner) as db:
+                db.execute("""INSERT INTO house_numbering.address_numbers(id,organization_id,project_id,building_id,route_id,number_text,kind,side,measure_m,rule_id,created_by_actor_id,updated_by_actor_id,created_at,updated_at)
+                VALUES(%s,%s,%s,%s,%s,'3','proposed','left',10,%s,%s,%s,now(),now())""",(new_number,org,project,building['id'],route['id'],rule['id'],actor,actor))
+            new_proposal=expect(api.post(root+'/proposals',json={'scope_kind':'route','scope_id':route['id'],'rule_id':rule['id'],'building_ids':[building['id']]},headers=h),201)['proposal']
+            new_transition=root+'/proposals/'+new_proposal['id']+'/transition'
+            successor={'new_number_id':new_number,'proposal_id':new_proposal['id'],'effective_date':'2026-11-04','decision_ref':'FIXTURE-SUCCESSOR'}
+            expect(api.post(number_url+'/successor',json=successor,headers=reviewer['csrf']),409)
+            expect(api.post(new_transition,json={'action':'submit','expected_revision':1},headers=h),200)
+            expect(api.post(new_transition,json={'action':'approve','expected_revision':2},headers=reviewer['csrf']),200)
+            expect(api.post(number_url+'/successor',json=successor,headers=reviewer['csrf']),201)
+            expect(api.post(number_url+'/successor',json=successor,headers=reviewer['csrf']),409)
+            history=expect(api.get(history_url,headers=h),200)['items']
+            assert next(row for row in history if row['id']==number)['successor']['new_number_id']==new_number
+            assert next(row for row in history if row['id']==new_number)['number_text']=='3'
+            expect(api.get(number_url+'/lookup',headers=h),404)
+            print('PASS address changes HTTP: permission, stale revision, retirement and revocation, independently approved successor and retained history')
 if __name__=='__main__':main()
