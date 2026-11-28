@@ -35,7 +35,7 @@ def upgrade():
         CREATE OR REPLACE FUNCTION gis_access.feature_allowed(
             o uuid,p uuid,s uuid,f text,attrs jsonb,g public.geometry,a text DEFAULT 'read'
         ) RETURNS boolean
-        LANGUAGE sql STABLE SET search_path=pg_catalog AS $
+        LANGUAGE sql STABLE SET search_path=pg_catalog AS $$
           SELECT NOT gis_access.scoped(o,p) OR EXISTS(
             SELECT 1 FROM gis_access.subject_rules(o,p) r WHERE r.source_id=s AND a=ANY(r.actions)
               AND (r.feature_ids IS NULL OR f=ANY(r.feature_ids))
@@ -43,7 +43,7 @@ def upgrade():
               AND (r.region IS NULL OR CASE WHEN g IS NOT NULL AND public.ST_SRID(g)>0
                 THEN public.ST_CoveredBy(public.ST_Transform(g,4326),r.region) ELSE FALSE END)
           )
-        $
+        $$
     """)
     op.execute("ALTER TABLE editing.relations ENABLE ROW LEVEL SECURITY")
     op.execute("ALTER TABLE editing.relations FORCE ROW LEVEL SECURITY")
@@ -57,7 +57,7 @@ def upgrade():
     op.execute("GRANT SELECT,INSERT,DELETE ON editing.relations TO openvietgis_runtime")
     op.execute("""
         CREATE FUNCTION editing.relation_key(v jsonb, kind text) RETURNS text
-        LANGUAGE sql IMMUTABLE STRICT SET search_path=pg_catalog AS $$
+        LANGUAGE sql IMMUTABLE STRICT SET search_path=pg_catalog AS $$$
           SELECT CASE WHEN v='null'::jsonb THEN NULL
             WHEN kind IN ('integer','decimal') THEN trim_scale((v #>> '{}')::numeric)::text
             ELSE v #>> '{}' END
@@ -69,7 +69,7 @@ def upgrade():
     # Metadata guards do not expose the related layer or key in their error.
     op.execute("""
         CREATE FUNCTION editing.guard_relation_metadata() RETURNS trigger
-        LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+        LANGUAGE plpgsql SET search_path=pg_catalog AS $$$
         BEGIN
           IF TG_TABLE_NAME='source_fields' THEN
             IF NEW.type IS DISTINCT FROM OLD.type AND EXISTS (
@@ -95,7 +95,7 @@ def upgrade():
     # Revision-only and geometry-only updates cannot change relation keys.
     op.execute("""
         CREATE FUNCTION editing.lock_relation_write() RETURNS trigger
-        LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+        LANGUAGE plpgsql SET search_path=pg_catalog AS $$$
         DECLARE org uuid; project uuid; source uuid;
         BEGIN
           IF TG_OP='UPDATE' THEN
@@ -127,7 +127,7 @@ def upgrade():
     # multi-operation edits and deletes/reinserts are not rejected midway.
     op.execute("""
         CREATE FUNCTION editing.assert_relation_key(rule editing.relations, k text)
-        RETURNS void LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+        RETURNS void LANGUAGE plpgsql SET search_path=pg_catalog AS $$$
         DECLARE n integer;
         BEGIN
           IF k IS NULL THEN RETURN; END IF;
@@ -152,7 +152,7 @@ def upgrade():
     """)
     op.execute("""
         CREATE FUNCTION editing.check_relation_write() RETURNS trigger
-        LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+        LANGUAGE plpgsql SET search_path=pg_catalog AS $$$
         DECLARE org uuid; project uuid; source uuid; rule editing.relations;
                 before_attrs jsonb; after_attrs jsonb; before_key text; after_key text;
         BEGIN
@@ -204,7 +204,7 @@ def upgrade():
     # validate both fields plus the entire existing key population.
     op.execute("""
         CREATE FUNCTION editing.guard_relation_definition() RETURNS trigger
-        LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+        LANGUAGE plpgsql SET search_path=pg_catalog AS $$$
         DECLARE org uuid; project uuid; field_count integer; invalid boolean;
         BEGIN
           IF TG_OP='DELETE' THEN org:=OLD.organization_id; project:=OLD.project_id;
@@ -278,7 +278,7 @@ def downgrade():
         CREATE OR REPLACE FUNCTION gis_access.feature_allowed(
             o uuid,p uuid,s uuid,f text,attrs jsonb,g public.geometry,a text DEFAULT 'read'
         ) RETURNS boolean
-        LANGUAGE sql STABLE AS $
+        LANGUAGE sql STABLE AS $$
           SELECT NOT gis_access.scoped(o,p) OR EXISTS(
             SELECT 1 FROM gis_access.subject_rules(o,p) r WHERE r.source_id=s AND a=ANY(r.actions)
               AND (r.feature_ids IS NULL OR f=ANY(r.feature_ids))
@@ -286,6 +286,6 @@ def downgrade():
               AND (r.region IS NULL OR CASE WHEN g IS NOT NULL AND ST_SRID(g)>0
                 THEN ST_CoveredBy(ST_Transform(g,4326),r.region) ELSE FALSE END)
           )
-        $
+        $$
     """)
     op.execute("DROP FUNCTION editing.relation_key(jsonb,text)")
