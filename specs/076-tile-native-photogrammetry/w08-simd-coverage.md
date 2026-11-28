@@ -1,0 +1,2 @@
+# W08 SIMD checkpoint
+Adds runtime-dispatched AVX2 and AArch64 NEON exact integer opaque-pixel counting with scalar fallback and tails, integrated into serial and multi-tile coverage accounting. No change to pixel projection or interpolation; no claim of overall speedup or SIMD coverage of the entire rendering kernel. Tests for misaligned buffers and tails authored, not executed on either architecture.

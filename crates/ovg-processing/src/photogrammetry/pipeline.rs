@@ -92,7 +92,7 @@ fn run_inner(source:&mut impl Source,store:&disk_store::Store,expected:u64,grid_
    let start=((row+(c.y-h.y) as usize)*h.width as usize+(c.x-h.x) as usize)*4;
    core.extend_from_slice(&rgba[start..start+c.width as usize*4]);
  }
- let tile_covered=core.chunks_exact(4).filter(|q|q[3]==255).count() as u64;
+ let tile_covered=super::simd::opaque_rgba(&core);
  covered+=tile_covered;
  drop(rgba);drop(views);drop(imgs);drop(dem);
  let bytes=geotiff::rgba(subgrid(grid,c),epsg,&core,p.tile_bytes).map_err(Error::Tiff)?;
@@ -150,7 +150,7 @@ fn render_prepared(t:PreparedTile,g:ortho::Grid,epsg:u16,p:Policy,cancel:&std::s
  let start=((row+(c.y-h.y) as usize)*h.width as usize+(c.x-h.x) as usize)*4;
  core.extend_from_slice(&rgba[start..start+c.width as usize*4]);
  }
- let covered=core.chunks_exact(4).filter(|q|q[3]==255).count() as u64;
+ let covered=super::simd::opaque_rgba(&core);
  drop(rgba);drop(views);drop(t.images);drop(t.dem);
  let bytes=geotiff::rgba(subgrid(g,c),epsg,&core,p.tile_bytes).map_err(Error::Tiff)?;
  Ok((t.id,c,covered,bytes))

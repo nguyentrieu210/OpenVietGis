@@ -22,6 +22,7 @@ pub mod schur;
 pub mod hierarchy;
 pub mod gnss;
 pub mod ortho;
+pub mod simd;
 pub mod depth;
 pub mod surface;
 pub mod seam;
