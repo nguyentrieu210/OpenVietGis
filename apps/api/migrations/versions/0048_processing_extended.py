@@ -11,7 +11,8 @@ def upgrade() -> None:
     op.execute("ALTER TABLE processing.jobs DROP CONSTRAINT ck_processing_algo")
     op.execute(
         "ALTER TABLE processing.jobs ADD CONSTRAINT ck_processing_algo "
-        "CHECK (algorithm_id IN ('buffer','clip','dissolve','difference','intersection','union','reproject','spatial_join'))"
+        "CHECK (algorithm_id IN ('buffer','clip','dissolve','difference',"
+        "'intersection','union','reproject','spatial_join'))"
     )
 
 
