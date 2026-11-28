@@ -33,7 +33,7 @@ export async function requestAi<T>(s: AiWorkspaceSession, action: AiAction, payl
   if(new TextEncoder().encode(body).length>128000)throw new TypeError("AI request too large");
   const response=await fetchImpl("/ai-copilot/agent/"+s.session_id+"/"+action,{
     method:"POST",headers:{"X-OVG-AI":"1","X-OVG-Bridge":s.browser_token,"Content-Type":"application/json"},
-    credentials:"same-origin",redirect:"error",cache:"no-store",body,signal
+    credentials:"same-origin",redirect:"error",cache:"no-store",body,...(signal?{signal}:{})
   });
   if(!response.ok)throw new Error("AI Agent không khả dụng ("+response.status+")");
   const value:unknown=await response.json();

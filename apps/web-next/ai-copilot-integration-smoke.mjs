@@ -16,7 +16,7 @@ try{
  await page.route("**/ai-copilot/sessions**",route=>{
    const r=route.request(),path=new URL(r.url()).pathname;
    assert.equal(r.headers()["x-ovg-ai"],"1");
-   if(path.endsWith("/sessions")){sessionCalls++;assert.deepEqual(r.postDataJSON(),{organization_id:org,project_id:pid,workspace_version:2,workspace_mode:"gis"});return route.fulfill({status:201,json:{session_id:"session-fixture",browser_token:"browser-secret",expires_in:900}})}
+   if(path.endsWith("/sessions")){sessionCalls++;assert.deepEqual(r.postDataJSON(),{organization_id:org,project_id:pid,workspace_version:2,workspace_mode:"gis"});return route.fulfill({status:201,json:{session_id:"12345678-1234-4234-8234-123456789abc",browser_token:"browser-secret",expires_in:900}})}
    assert.equal(r.headers()["x-ovg-bridge"],"browser-secret");
    if(path.endsWith("/poll")){const item=command;command=null;return route.fulfill({json:{command:item}})}
    if(path.endsWith("/ping"))return route.fulfill({json:{alive:true}});
@@ -56,7 +56,7 @@ try{
    return route.fulfill({json:body});
  });
  await page.route("https://tile.openstreetmap.org/**",r=>r.fulfill({status:200,contentType:"image/png",body:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGPYce0sEDFAKABBrglttPhhlgAAAABJRU5ErkJggg==","base64")}));
- const open=async()=>{await page.goto(url,{waitUntil:"domcontentloaded"});await page.getByRole("button",{name:/^◈ Plugin/}).waitFor({timeout:25000})};
+ const open=async()=>{await page.goto(url,{waitUntil:"domcontentloaded"});await page.getByRole("group",{name:"Không gian làm việc"}).waitFor({timeout:25000})};
  const button=page.getByRole("button",{name:"AI Copilot",exact:true});
  await open();await page.waitForFunction(()=>document.querySelector(".ai-copilot-host")!==null,{}, {timeout:25000});
  await page.waitForTimeout(500);assert.equal(metadataChecks,1);assert.equal(await button.count(),0);assert.equal(sessionCalls,0);
