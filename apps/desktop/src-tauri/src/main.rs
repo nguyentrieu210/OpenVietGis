@@ -4,6 +4,8 @@ mod host;
 mod protocol;
 use host::{Host, Opened, Poll, Project};
 use serde::Serialize;
+use serde_json::Value;
+use tauri_plugin_dialog::DialogExt;
 use tauri::{Emitter, Manager, State, WebviewWindow};
 use uuid::Uuid;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -32,11 +34,11 @@ async fn run<T:Send+'static>(window:WebviewWindow,host:Host,f:impl FnOnce(Host)-
     tauri::async_runtime::spawn_blocking(move||{let _permit=permit;f(host)}).await.map_err(|_|"SESSION_FAILED".to_owned())?.map_err(str::to_owned)
 }
 #[derive(Serialize)]
-struct Capabilities { protocol_version:u32, standalone:bool, managed:bool, cloud:bool, local_tiles:bool, transform:bool }
+struct Capabilities { protocol_version:u32, standalone:bool, managed:bool, cloud:bool, local_tiles:bool, transform:bool, local_edit:bool, viewport:bool }
 #[tauri::command]
 fn desktop_capabilities(window:WebviewWindow)->Reply<Capabilities>{
     trusted(&window)?;
-    Ok(Capabilities{protocol_version:1,standalone:true,managed:false,cloud:false,local_tiles:false,transform:true})
+    Ok(Capabilities{protocol_version:1,standalone:true,managed:false,cloud:false,local_tiles:false,transform:true,local_edit:true,viewport:true})
 }
 #[tauri::command]
 async fn desktop_list(window:WebviewWindow,host:State<'_,Host>)->Reply<Vec<Project>>{
@@ -66,8 +68,69 @@ async fn desktop_poll(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,id:Uu
 async fn desktop_cancel(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,id:Uuid)->Reply<()>{
     run(window,host.inner().clone(),move|h|h.cancel(handle,id)).await
 }
+
+// A separate bounded binary read operation; never returns the full dataset.
+#[tauri::command]
+async fn desktop_viewport(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,bbox:[f64;4])->Reply<tauri::ipc::Response>{
+    let data=run(window,host.inner().clone(),move|h|h.viewport(handle,bbox)).await?;
+    let bytes=serde_json::to_vec(&data).map_err(|_|"INVALID_LOCAL_DATA".to_owned())?;
+    if bytes.len()>2*1024*1024{return Err("RESOURCE_LIMIT".into())}
+    Ok(tauri::ipc::Response::new(bytes))
+}
+#[tauri::command]
+async fn desktop_attributes(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,after:String,limit:u32,contains:String)->Reply<Value>{
+    run(window,host.inner().clone(),move|h|h.attributes(handle,after,limit,contains)).await
+}
+#[tauri::command]
+async fn desktop_feature(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,id:Uuid)->Reply<Value>{
+    run(window,host.inner().clone(),move|h|h.feature(handle,id)).await
+}
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct EditInput {command:Uuid,id:Uuid,revision:String,kind:Option<String>,xy:Vec<f64>,attributes:Value}
+#[tauri::command]
+async fn desktop_edit(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,edit:EditInput)->Reply<()>{
+    run(window,host.inner().clone(),move|h|h.edit(handle,edit.command,edit.id,edit.revision,edit.kind,edit.xy,edit.attributes)).await
+}
+#[tauri::command]
+async fn desktop_update_attributes(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,id:Uuid,revision:String,attributes:Value)->Reply<()>{
+    run(window,host.inner().clone(),move|h|h.update_attributes(handle,id,revision,attributes)).await
+}
+#[tauri::command]
+async fn desktop_history(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,redo:bool)->Reply<bool>{
+    run(window,host.inner().clone(),move|h|h.history(handle,redo)).await
+}
+#[tauri::command]
+async fn desktop_checkpoint(window:WebviewWindow,host:State<'_,Host>,handle:Uuid)->Reply<()>{
+    run(window,host.inner().clone(),move|h|h.checkpoint(handle)).await
+}
+#[tauri::command]
+async fn desktop_import_geojson(window:WebviewWindow,host:State<'_,Host>,handle:Uuid)->Reply<Option<u32>>{
+    let app=window.app_handle().clone();
+    run(window,host.inner().clone(),move|h|{
+        h.generation(handle)?;
+        let Some(file)=app.dialog().file().add_filter("GeoJSON",&["geojson","json"]).blocking_pick_file() else{return Ok(None)};
+        let path=file.into_path().map_err(|_|"INVALID_STORAGE")?;
+        h.import_geojson(handle,&path).map(Some)
+    }).await
+}
+#[tauri::command]
+async fn desktop_export(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,format:String)->Reply<bool>{
+    let app=window.app_handle().clone();
+    run(window,host.inner().clone(),move|h|{
+        h.generation(handle)?;
+        let (label,ext)=match format.as_str(){"gpkg"=>("GeoPackage snapshot","gpkg"),"geojson"=>("GeoJSON","geojson"),_=>return Err("UNSUPPORTED_FORMAT")};
+        let Some(file)=app.dialog().file().add_filter(label,&[ext]).set_file_name(format!("workspace.{ext}")).blocking_save_file() else{return Ok(false)};
+        let path=file.into_path().map_err(|_|"INVALID_STORAGE")?;
+        if path.extension().and_then(|x|x.to_str())!=Some(ext){return Err("UNSUPPORTED_FORMAT")}
+        if ext=="gpkg"{h.snapshot(handle,&path)?}else{h.export_geojson(handle,&path)?}
+        Ok(true)
+    }).await
+}
+
 fn main(){
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         // Separate read plane; no data provider is qualified in W1. Reject every
         // valid resource as unavailable, never return synthetic project data.
         .register_uri_scheme_protocol("ovg", |_ctx, req| {
@@ -100,6 +163,6 @@ fn main(){
                 if let Some(host)=window.try_state::<Host>(){let _=host.shutdown();}
             }
         })
-        .invoke_handler(tauri::generate_handler![desktop_capabilities,desktop_list,desktop_create,desktop_open,desktop_close,desktop_start_transform,desktop_poll,desktop_cancel])
+        .invoke_handler(tauri::generate_handler![desktop_capabilities,desktop_list,desktop_create,desktop_open,desktop_close,desktop_start_transform,desktop_poll,desktop_cancel,desktop_viewport,desktop_attributes,desktop_feature,desktop_edit,desktop_update_attributes,desktop_history,desktop_checkpoint,desktop_import_geojson,desktop_export])
         .run(tauri::generate_context!()).expect("Desktop host failed");
 }
