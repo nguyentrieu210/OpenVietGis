@@ -6,6 +6,9 @@ pub mod quality;
 pub mod hardware;
 pub mod tiles;
 pub mod admission;
+pub mod images;
+pub mod octree;
+pub mod dag;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
