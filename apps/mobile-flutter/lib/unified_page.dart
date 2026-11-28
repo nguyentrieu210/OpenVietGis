@@ -137,7 +137,7 @@ class _UnifiedPageState extends State<UnifiedPage>{
   @override Widget build(BuildContext context){
     final ready=_root!=null&&!_busy;
     final edit=ready&&_project!=null&&_layer!=null&&_revision!=null;
-    return Scaffold(appBar:AppBar(title:const Text('Unified Store · thử nghiệm')),
+    return PopScope(canPop:!_busy,child:Scaffold(appBar:AppBar(title:const Text('Unified Store · thử nghiệm')),
       body:ListView(padding:const EdgeInsets.all(16),children:[
         const Text('Kho độc lập dùng cùng SQLite kernel với Desktop. Không chuyển đổi GeoPackage cũ hoặc dữ liệu máy chủ.'),
         if(_busy)const LinearProgressIndicator(),
@@ -166,6 +166,6 @@ class _UnifiedPageState extends State<UnifiedPage>{
           ]),
           for(final row in _rows)ListTile(title:Text(row['id'].toString()),subtitle:Text(jsonEncode((row['image'] as Map)['attributes'])))
         ]
-      ]));
+      ])));
   }
 }
