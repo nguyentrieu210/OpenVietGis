@@ -109,3 +109,7 @@ See [execution ledger](evidence/execution-ledger.md), [auth/sync/plugin inventor
 
 ### W1 implementation status
 See [W1 implementation checkpoint](evidence/w1-implementation-checkpoint.md) and [execution ledger](evidence/execution-ledger.md). Portable engine and local repository initial native tests passed; Flutter/FRB, shared CRS/geometry regression, device and recovery evidence outstanding. No parent or leaf accepted by this update; A0 open.
+
+
+### W2 implementation evidence
+See [W2 checkpoint](evidence/w2-implementation-checkpoint.md) and [execution ledger](evidence/execution-ledger.md). Host native candidate 25 tests passed at 29380f4; full format, device rendering and earlier gate acceptance remain open.

@@ -21,19 +21,19 @@ Snapshot based on implementation commit db2ef12c08a9943ee805cec1ebb78725665f4a34
 | E08 | 1 | T016 | Storage | T015 | 3 | IN PROGRESS | cbc45a2; snapshot test PASS | Disk full/crash injection and quota proof |
 | E08 | 1 | T017 | Storage | T016 | 3 | IN PROGRESS | cbc45a2 local journal PASS | Managed encrypted outbox/receipt/cursor not implemented |
 | E16 | 1 | T018 | Security/QA/release | T011, T013, T014, T017 | 3 | IN PROGRESS | 46168095743 native tests PASS | Final integration and regression; A0 not accepted |
-| E04 | 2 | T019 | Map rendering | T011, T013 | 3 | WAITING | — | Await accepted dependencies |
-| E04 | 2 | T020 | Map rendering | T019, T015 | 3 | WAITING | — | Await accepted dependencies |
-| E04 | 2 | T021 | Map rendering | T020 | 3 | WAITING | — | Await accepted dependencies |
-| E04 | 2 | T022 | Map rendering | T019, T016 | 3 | WAITING | — | Await accepted dependencies |
-| E05 | 2 | T023 | Native file IO | T011, T016 | 3 | WAITING | — | Await accepted dependencies |
-| E05 | 2 | T024 | Native file IO | T023 | 3 | WAITING | — | Await accepted dependencies |
-| E05 | 2 | T025 | Native file IO | T023 | 3 | WAITING | — | Await accepted dependencies |
-| E05 | 2 | T026 | Native file IO | T024, T025 | 3 | WAITING | — | Await accepted dependencies |
-| E06 | 2 | T027 | CRS | T011, T003 | 3 | WAITING | — | Await accepted dependencies |
-| E06 | 2 | T028 | CRS | T027, T005 | 3 | WAITING | — | Await accepted dependencies |
-| E06 | 2 | T029 | CRS | T027 | 3 | WAITING | — | Await accepted dependencies |
-| E05 | 2 | T030 | Native file IO | T023, T027 | 3 | WAITING | — | Await accepted dependencies |
-| E16 | 2 | T031 | Security/QA/release | T021, T022, T026, T028, T029, T030 | 3 | WAITING | — | Await accepted dependencies |
+| E04 | 2 | T019 | Map rendering | T011, T013 | 3 | IN PROGRESS | e560b60 MapLibre source and lifecycle | Device rotation/background/source selection |
+| E04 | 2 | T020 | Map rendering | T019, T015 | 3 | IN PROGRESS | e560b60 local layer and hit state | Multi-layer styles and native hit-test device evidence |
+| E04 | 2 | T021 | Map rendering | T020 | 3 | IN PROGRESS | 29380f4 cache/viewport tests PASS | MVT/LOD and 10k/100k/1M physical benchmark |
+| E04 | 2 | T022 | Map rendering | T019, T016 | 3 | IN PROGRESS | 29380f4 MBTiles/PMTiles local tests PASS | Native renderer adapter and licensed download/resume/eviction |
+| E05 | 2 | T023 | Native file IO | T011, T016 | 3 | IN PROGRESS | de11161 picker/ZIP/companion tests PASS | OS share-in, UI cancellation and hostile archive coverage |
+| E05 | 2 | T024 | Native file IO | T023 | 3 | IN PROGRESS | 29380f4 strict GeoJSON local roundtrip PASS | GDAL independent oracle and GPKG/GPX/SHP/TAB/MIF/KML adapters |
+| E05 | 2 | T025 | Native file IO | T023 | 3 | IN PROGRESS | 29380f4 CSV explicit columns and CRS PASS | XLSX and DXF, UI mapping and loss oracle |
+| E05 | 2 | T026 | Native file IO | T024, T025 | 3 | IN PROGRESS | e560b60 bounded GeoJSON export/share | More formats, staged cleanup and independent GDAL/QGIS oracle |
+| E06 | 2 | T027 | CRS | T011, T003 | 3 | IN PROGRESS | 29380f4 shared CRS control suite PASS | Pin verified PROJ DB/grids, device tests |
+| E06 | 2 | T028 | CRS | T027, T005 | 3 | IN PROGRESS | 29380f4 VN-2000 same-datum oracle PASS | Regional provenance review/device qualification |
+| E06 | 2 | T029 | CRS | T027 | 3 | IN PROGRESS | 29380f4 GeographicLib oracle PASS | Projected area/bearing profiles and device integration |
+| E05 | 2 | T030 | Native file IO | T023, T027 | 3 | IN PROGRESS | 67cc9ec bounded GeoTIFF ABI | Build/runtime results, FFI, COG and hostile decoder evidence |
+| E16 | 2 | T031 | Security/QA/release | T021, T022, T026, T028, T029, T030 | 3 | IN PROGRESS | 46169490774 targeted tests PASS | Full format and physical device acceptance; prior gates open |
 | E07 | 3 | T032 | GIS editing | T020, T017, T027 | 3 | WAITING | — | Await accepted dependencies |
 | E07 | 3 | T033 | GIS editing | T032, T021, T029 | 3 | WAITING | — | Await accepted dependencies |
 | E07 | 3 | T034 | GIS editing | T032, T017 | 3 | WAITING | — | Await accepted dependencies |
@@ -103,3 +103,6 @@ Snapshot based on implementation commit db2ef12c08a9943ee805cec1ebb78725665f4a34
 
 ## W1 source implementation (owner-requested early work)
 See [W1 checkpoint](w1-implementation-checkpoint.md). W0 A0 not waived, no task formally accepted. Prior targeted native run passed five tests; latest strict XY and Flutter integration still need exact-candidate evidence.
+
+## W2 source implementation
+See [W2 checkpoint](w2-implementation-checkpoint.md). Targeted host native 25 tests PASS; prior gates and physical/render/format acceptance remain open. No mandatory checkbox changed.
