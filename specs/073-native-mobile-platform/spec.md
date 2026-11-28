@@ -1,5 +1,5 @@
 # SPEC 073 — OpenVietGIS Native Mobile Platform
-**Feature Branch**: `073-native-mobile-platform` | **Created**: 2026-11-28 | **Status**: Draft / implementation not started
+**Feature Branch**: `073-native-mobile-platform` | **Created**: 2026-11-28 | **Status**: Revision 2 / design contracts updated; implementation not started
 **Baseline**: a4ae85a5e3d956de1870dcf65ff3fb21da7f0367
 **Parent**: R002–R014, R015 for release; extends SPEC 013, 014, 064, 065, 066, 069, 070 (search and layer workspace), 071, 072. No replacement of existing Web/Server architecture.
 **Input**: One Flutter GIS app with vTools-style independent field usability, professional offline GIS, existing OpenVietGIS SDK/Marketplace integration and reusable Rust kernel. Android ARM64 first, iOS second; desktop/WASM reuse is a boundary goal, not a desktop release commitment.
@@ -43,14 +43,14 @@ Install signed Android artifact, migrate local schema, operate low-memory/low-ba
 - FR-009 Attribute editor, typed schema/default/required/constraints, selection/filter, virtualized table and schema-driven forms; server validates synced mutations.
 - FR-010 GPS accuracy, timestamp, provider, waypoint, track segments, distance/area/bearing, offline point navigation, optional elevation; background tracking explicit user session/permission and visible OS notification where required.
 - FR-011 Camera/photo attachment, QR and GNSS external adapter capability/permissions; no default location disclosure, strip/export metadata only on explicit choice, bounded upload queue, RTK fix state and corrections provenance.
-- FR-012 SQLite/GeoPackage transactional local repository, RTree, schema migration, outbox durability, atomic receipt application, storage quotas and corruption recovery; separate app metadata and interoperable export.
+- FR-012 standard GeoPackage for independent local data; encrypted private SQLite/GeoPackage-compatible managed store with single ACID domain, RTree, schema migration, outbox durability, atomic receipt application, storage quotas and corruption recovery; separate app metadata and interoperable export.
 - FR-013 Offline maps from licensed sources or user-provided archives; download estimate/cancel/resume/eviction, attribution, tile integrity; no bulk downloading public OSM endpoints against policy.
-- FR-014 Versioned incremental sync using existing APIs, scoped encrypted managed packages, cursor/revision/ACL epoch, stable operation IDs, idempotency, conflict UI, retry/backoff, tombstones, receipt reconciliation; no silent last-write-wins.
+- FR-014 Versioned incremental sync using existing APIs, scoped encrypted managed packages with mandatory bounded offline data lease, cursor/revision/ACL epoch, stable operation IDs, idempotency, conflict UI, retry/backoff, tombstones, receipt reconciliation; no silent last-write-wins.
 - FR-015 OIDC public client authorization-code + PKCE using external browser, verified redirect, secure keystore, refresh/revoke; reuse server identity, no service token in app, no arbitrary trusted origins or insecure TLS.
 - FR-016 Existing Plugin Registry/manifest/activation/SDK canonical; additive mobile contribution schema and capability discovery; unsupported plugins explicitly marked, signed manifest/assets verified, project-scoped permissions, lifecycle cleanup.
 - FR-017 Native declarative UI/form/tool/command host with bounded nodes/actions; no arbitrary Dart download, no eval, no unrestricted native FFI or WebView bridge. WASM experiment optional, no production execution unless store policy, sandbox and quota approval. Separate native compiled plugins.
 - FR-018 House-numbering reference end-to-end using same backend/API/IDs/rules; no domain imports in Core; approved-only data/publish rules; plugin close and disable preserve Core data.
-- FR-019 License/entitlement bound to org/plugin/version/permissions on server; signed offline lease with expiry and clock-rollback handling if offered. Core and data export stay available subject to data permissions. Payment integration/store review, publisher payout/tax/refund separate spec.
+- FR-019 License/entitlement bound to org/plugin/version/permissions on server; signed offline entitlement with expiry and clock-rollback handling if offered (distinct from the mandatory protected-data offline lease). Core and data export stay available subject to data permissions. Payment integration/store review, publisher payout/tax/refund separate spec.
 - FR-020 Local processing via approved adapters, same algorithm IDs/parameter semantics as Server; compare topology/CRS/tolerance and attributes; cancellation and bounded memory; unsupported algorithms server-only with explicit UI.
 - FR-021 Large data: progressive BBOX/LOD/tile/feature paging, bounded cache, off-main-thread IO/compute, FFI batches/ownership and cancellation; never transfer entire massive dataset to Dart.
 - FR-022 Advanced raster/terrain/3D/COPC and Arrow/GeoArrow/GeoParquet/DataFusion/wgpu behind capability flags; enable only measured mobile benefit, no second default renderer; unsupported mesh/DGN/format claims prohibited.
@@ -67,13 +67,23 @@ Install signed Android artifact, migrate local schema, operate low-memory/low-ba
 - SC-001 Android release build launches standalone, local workflow works in airplane mode including import/edit/export/reopen; independent QGIS/GDAL round-trip validates IDs/fields/geometry/CRS in declared supported profile.
 - SC-002 Cold start p95 <=2s to usable map shell (cached map not network dependent) on documented mid-tier ARM64 device; benchmark 30 cold launches. 60Hz pan target p95 frame <=16.7ms at defined visible-load profile; log jank and p99, no thermal throttling hidden.
 - SC-003 1M source feature indexed dataset opens by streaming, 10k/100k/1M profiles; 10M stretch target only; p95 snap <=50ms for declared visible dataset; peak RSS target <=512 MiB on 4GB reference device; no OOM on 30-minute pan/edit/track soak.
-- SC-004 Read >=10GB local/remote tiled raster fixture without full loading where driver supports range/block access; 100M-point source COPC LOD is gated stretch, not initial acceptance.
-- SC-005 CRS control point errors within independently specified survey tolerances for every enabled pipeline; native vs server comparisons with declared units/tolerances; all unsupported regional conversions reject. RTK validation on real hardware with fix metadata, no accuracy guarantees from phone GPS.
+- SC-004 Advanced raster profile only: read >=10GB local/remote tiled raster fixture without full loading where driver supports range/block access; 100M-point source COPC LOD is gated stretch, not initial acceptance.
+- SC-005 CRS control point errors within independently specified survey tolerances for every enabled pipeline; native vs server comparisons with declared units/tolerances; all unsupported regional conversions reject. RTK capability qualification separately on real hardware with fix metadata, no accuracy guarantees from phone GPS.
 - SC-006 100 kill/restart/sync/retry cases no lost acknowledged edit, duplicated mutation or unauthorized replay; conflict and revoked scope tested against isolated real PostGIS.
 - SC-007 2 organizations/2 users/2 projects + offline cache, plugin disable, expired lease, logout, malicious manifest/file and permission revocation tests: zero unauthorized reads/writes.
 - SC-008 Same house-numbering workflow and IDs on Web/Mobile, activation rules and scoped API; reference second generic plugin has zero Core domain dependency. Developer quickstart can build first supported plugin <=30min on clean documented environment.
 - SC-009 Signed Android ARM64 artifact with pinned dependencies/SBOM/license, upgrade/recovery/rollback evidence and source offer compliance; iOS separate real-device and App Store policy gate. Battery target <=10 percentage points/hour for documented screen-on tracking test on reference mid-tier device; report brightness, radios, sensor rate and thermal.
 - SC-010 All mandatory tasks mapped to executable evidence on exact merged candidate, independent review resolves critical/high defects, Web/API regression passes; no unsupported advertised capability.
 
+## Revision 2 normative contracts and release profiles
+- [Portable kernel and dependency boundary](contracts/portable-kernel-contract.md)
+- [Native build / Android 16KB / iOS qualification](contracts/native-build-contract.md)
+- [Human mobile authentication](contracts/mobile-auth-contract.md)
+- [Managed offline storage and sync](contracts/offline-sync-contract.md)
+- [Plugin runtime and signed assets](contracts/plugin-runtime-contract.md)
+- [Rendering and resource governor](contracts/mobile-render-contract.md)
+- [Format and CRS capability matrix](contracts/format-capability-matrix.md)
+- [Release acceptance matrix](acceptance-matrix.md) and [execution matrix](execution-matrix.md).
+Revision 2 contracts supersede ambiguous earlier wording. A1 local, A2 connected, A3 business, A4 Android 1.0; I1 iOS independently qualified. RTK and advanced raster/3D/COPC, optional accelerators and commercial distribution require separate capability evidence. Fresh offline install opens usable empty map shell, not a fictitious downloaded map. Local search/navigation to saved point works offline; remote search/routing requires authorized provider and connectivity.
 ## Non-goals
 Full QGIS/AutoCAD parity in first release, duplicate server, running PostGIS on phone, forcing all web plugins native, unrestricted downloaded code, payment settlement before commercial spec, custom GPU renderer without evidence, guaranteed survey/legal cadastral accuracy, desktop release.
