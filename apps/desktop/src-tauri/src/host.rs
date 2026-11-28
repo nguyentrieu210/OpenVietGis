@@ -75,7 +75,7 @@ impl Host {
         self.read(handle,|w|{
             let (_,a)=w.raster.as_ref().filter(|(key,_)|*key==id).ok_or("STALE_HANDLE")?;
             let b=a.tile(z,x,y).map_err(store_err)?.ok_or("TILE_NOT_FOUND")?;
-            if b.len()<33||b.len()>4*1024*1024||&b[..8]!=b"\\x89PNG\\r\\n\\x1a\\n"||&b[12..16]!=b"IHDR"{return Err("INVALID_TILE")}
+            if b.len()<33||b.len()>4*1024*1024||b[..8]!=[137,80,78,71,13,10,26,10]||&b[12..16]!=b"IHDR"{return Err("INVALID_TILE")}
             let width=u32::from_be_bytes(b[16..20].try_into().map_err(|_|"INVALID_TILE")?);
             let height=u32::from_be_bytes(b[20..24].try_into().map_err(|_|"INVALID_TILE")?);
             if !matches!(width,256|512)||height!=width{return Err("INVALID_TILE")}
