@@ -36,7 +36,7 @@ export const desktop={
     if(v.data?.type!=="FeatureCollection"||!Array.isArray(v.data.features)||v.data.features.length>512||typeof v.generation!=="string"||typeof v.truncated!=="boolean")throw new Error("INVALID_VIEWPORT");
     return v;
   },
-  attributes:(handle:string,after="0",limit=100,contains="")=>host().core.invoke<{generation:string;rows:FeatureRow[]}>("desktop_attributes",{handle,after,limit,contains}),
+  attributes:(handle:string,after="0",limit=100,contains="")=>host().core.invoke<{generation:string;rows:FeatureRow[];next:string|null}>("desktop_attributes",{handle,after,limit,contains}),
   feature:(handle:string,id:string)=>host().core.invoke<FeatureRecord>("desktop_feature",{handle,id}),
   edit:(handle:string,edit:EditInput)=>host().core.invoke<void>("desktop_edit",{handle,edit}),
   reshape:(handle:string,id:string,revision:string,geometry:unknown)=>host().core.invoke<void>("desktop_reshape",{handle,id,revision,geometry}),
@@ -48,6 +48,14 @@ export const desktop={
   importGeoJSON:(handle:string)=>host().core.invoke<number|null>("desktop_import_geojson",{handle}),
   exportFile:(handle:string,format:"geojson"|"gpkg")=>host().core.invoke<boolean>("desktop_export",{handle,format}),
   openAsset:(handle:string,kind:"cad"|"las"|"glb",epsg:number|null)=>host().core.invoke<AssetInfo|null>("desktop_open_asset",{handle,kind,epsg}),
+  cadViewport:async(handle:string,id:string,bbox:[number,number,number,number]):Promise<GeoJSON.FeatureCollection>=>{
+    const raw=await host().core.invoke<ArrayBuffer|number[]>("desktop_cad_viewport",{handle,id,bbox});
+    const b=raw instanceof ArrayBuffer?new Uint8Array(raw):Uint8Array.from(raw);
+    if(b.byteLength>2*1024*1024)throw Error("RESOURCE_LIMIT");
+    const v=JSON.parse(new TextDecoder("utf-8",{fatal:true}).decode(b)) as GeoJSON.FeatureCollection;
+    if(v.type!=="FeatureCollection"||!Array.isArray(v.features)||v.features.length>512)throw Error("INVALID_VIEWPORT");
+    return v;
+  },
   closeAsset:(handle:string,id:string)=>host().core.invoke<void>("desktop_close_asset",{handle,id}),
   openRaster:(handle:string)=>host().core.invoke<{id:string;attribution:string}|null>("desktop_open_raster",{handle}),
   closeRaster:(handle:string)=>host().core.invoke<void>("desktop_close_raster",{handle}),
