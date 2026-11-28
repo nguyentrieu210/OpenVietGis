@@ -21,3 +21,8 @@ This closes T017. The saved workspace mode remains a UI preference only; authori
 - This closes T030's profile/accuracy requirement. Whole-browser/GPU/load soak remains T044.
 
 No production service, database or user CAD document was modified.
+
+## Post-acceptance CAD selection regression gate
+- Direct CAD selection browser smoke now passes end-to-end: exact handle lookup/focus, unlinked handle state, dirty/clean navigation gate, stale lookup cancellation, spoof rejection, capability revocation and legacy-engine fallback.
+- Two defects exposed by that gate were fixed without weakening authorization: a missing historical revision link endpoint (404) is treated as an empty optional fallback only after the current revision lookup succeeds empty; other errors still fail closed. Legacy engines without native selection capability now render the manual-lookup fallback instead of hiding the entire selection panel.
+- Production web build (TypeScript + Vite + offline shell) PASS after these fixes.
