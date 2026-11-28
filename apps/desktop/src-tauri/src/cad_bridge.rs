@@ -474,3 +474,17 @@ pub async fn native_cad_gis_to_dxf(window:WebviewWindow,u:State<'_,Unified>,hand
   let edited=fs::read_to_string(dst).unwrap();assert_eq!(edited,original.replace("106\r\n","106.5\r\n").replace("20\r\n11\r\n","20\r\n11.5\r\n"));assert_eq!(fs::read_to_string(src).unwrap(),original);
  }
 }
+
+#[tauri::command]
+pub async fn native_cad_preview(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid,asset:Uuid,expected:String)->Reply<Value>{
+ work(window,u.inner().clone(),move|s|s.with(handle,|store|{
+  if store.revision().map_err(|_|"STORE_QUERY_FAILED")?!=unified::number(&expected)?{return Err("REVISION_CONFLICT")}
+  let a=store.assets().map_err(|_|"STORE_QUERY_FAILED")?.into_iter().find(|a|a.id==asset).ok_or("STALE_ASSET")?;
+  if a.kind!="cad-native-dxf"||a.bytes>4*1024*1024{return Err("DXF_PROFILE_REQUIRED")}
+  let dir=tempfile::tempdir().map_err(|_|"STORAGE_UNAVAILABLE")?;let p=dir.path().join("preview.dxf");
+  store.materialize_asset(asset,&p,&AtomicBool::new(false)).map_err(|_|"CAD_ASSET_READ_FAILED")?;
+  let strokes=crate::cad_preview::open(&p)?;
+  let v=serde_json::json!({"sha256":a.sha256,"strokes":strokes,"coordinate_system":"native-unassigned"});
+  if serde_json::to_vec(&v).map_err(|_|"INVALID_DXF")?.len()>4*1024*1024{return Err("RESOURCE_LIMIT")}Ok(v)
+ })).await
+}
