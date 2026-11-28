@@ -211,6 +211,7 @@ export type CadVersion={asset:string;parent:string;parent_sha:string};
 export type CadCanvasFeature={type:"Feature";geometry:{type:"Point";coordinates:number[]}|{type:"LineString";coordinates:number[][]};properties:{handle:string;layer:string;entity:string}};
 export type CadStroke={handle:string;layer:string;kind:string;paths:[number,number][][];fill:boolean};
 export const nativeCad={
+ syncLayer:(handle:string,layer:string,asset:string,child:string|null,expected:string)=>host().core.invoke<{revision?:string;features?:number;asset?:string;sha256?:string}>("native_cad_sync_layer",{handle,layer,asset,child,expected,operation:crypto.randomUUID(),assertWgs84:true}),
  preview:(handle:string,asset:string,expected:string)=>host().core.invoke<{sha256:string;strokes:CadStroke[];coordinate_system:string}>("native_cad_preview",{handle,asset,expected}),
  canvas:(handle:string,asset:string,expected:string)=>host().core.invoke<{sha256:string;features:CadCanvasFeature[]}>("native_cad_canvas",{handle,asset,expected,assertWgs84:true}),
  canvasCommit:(handle:string,asset:string,expected:string,sha256:string,entity:string,geometry:CadCanvasFeature["geometry"])=>host().core.invoke<PersistentAsset>("native_cad_canvas_commit",{handle,asset,expected,sha256,entity,geometry,assertWgs84:true}),
