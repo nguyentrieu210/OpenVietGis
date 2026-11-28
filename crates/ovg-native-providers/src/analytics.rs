@@ -7,7 +7,7 @@ pub struct Summary{pub count:u64,pub min_x:Option<f64>,pub min_y:Option<f64>,pub
 /// Only signed locally installed spatial extension, with auto-install/autoload disabled.
 /// Once loaded, disable external access before any query or supplied data.
 fn connection(spatial:bool)->Result<Connection>{
- let config=Config::default().enable_autoload_extension(false).map_err(|_|"DUCKDB_CONFIG")?
+ let config=Config::default().enable_external_access(spatial).map_err(|_|"DUCKDB_CONFIG")?.enable_autoload_extension(false).map_err(|_|"DUCKDB_CONFIG")?
   .max_memory("128MB").map_err(|_|"DUCKDB_CONFIG")?.threads(2).map_err(|_|"DUCKDB_CONFIG")?
   .with("allow_unsigned_extensions","false").map_err(|_|"DUCKDB_CONFIG")?
   .with("max_temp_directory_size","0B").map_err(|_|"DUCKDB_CONFIG")?;
