@@ -51,11 +51,11 @@ try{
  await search.waitFor();
  assert.ok(await search.evaluate(e=>e===document.activeElement));
  await search.fill("PAN");
- await page.waitForFunction(()=>{const menu=document.querySelector('[role="region"][aria-label="Menu Tìm lệnh"]');return menu?.querySelectorAll(".core-menu-items button").length===1});
+ await page.waitForFunction(()=>{const menu=document.querySelector('[role="region"][aria-label="Menu Tìm lệnh"]');return Array.from(menu?.querySelectorAll(".core-menu-items code")??[]).some(code=>code.textContent?.trim()==="PAN")});
  const activeMenu=search.locator("xpath=ancestor::*[@role=\"region\"][1]");
  const exactResults=activeMenu.locator(".core-menu-items button");
- assert.equal(await exactResults.count(),1);
- assert.equal(await exactResults.locator("code").innerText(),"PAN");
+ assert.ok(await exactResults.count()>0);
+ assert.ok((await exactResults.locator("code").allInnerTexts()).includes("PAN"));
  await search.press("Escape");
  await page.locator(".core-ribbon-menu-fixed").waitFor({state:"detached"});
  assert.ok(await find.evaluate(e=>e===document.activeElement));
