@@ -1,0 +1,2 @@
+# W07 GCP triangulation checkpoint
+Calibrated undistorted pixel marks across at most 64 distinct camera IDs, weighted ray intersections, bounded deterministic two-view hypotheses, minimum parallax, positive depth and pixel residual consensus, iterative refit, explicit rejected camera IDs and RMSE. This is a reference triangulator, not bundle adjustment; no UI marking, covariance propagation, lens distortion or real-data accuracy evidence. Tests authored, unexecuted.

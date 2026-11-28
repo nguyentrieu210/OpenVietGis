@@ -15,6 +15,7 @@ pub mod matching;
 pub mod geometry;
 pub mod survey;
 pub mod alignment3d;
+pub mod gcp;
 pub mod ortho;
 pub mod depth;
 pub mod surface;
