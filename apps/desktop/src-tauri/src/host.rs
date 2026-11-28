@@ -293,6 +293,9 @@ impl Host {
         };
         if b.len()>4*1024*1024{return Err("RESOURCE_LIMIT")}Ok(b)
     }
+    pub(crate) fn photo_project_dir(&self,handle:Uuid)->Result<PathBuf>{
+        self.read(handle,|w|{let p=self.root.join(w.project.to_string());real_dir(&p)?;Ok(p)})
+    }
     pub fn generation(&self,handle:Uuid)->Result<String>{self.read(handle,|w|Ok(w.generation.to_string()))}
     pub fn viewport(&self,handle:Uuid,bbox:[f64;4])->Result<Viewport>{
         if bbox.iter().any(|x|!x.is_finite())||bbox[0]< -180.||bbox[2]>180.||bbox[1]< -90.||bbox[3]>90.||bbox[0]>bbox[2]||bbox[1]>bbox[3]{return Err("INVALID_BBOX")}

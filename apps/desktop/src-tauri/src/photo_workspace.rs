@@ -60,3 +60,85 @@ pub async fn desktop_photo_inspect(window:WebviewWindow,host:State<'_,Host>,hand
  assert!(matches!(inspect(&[a.clone(),a]),Err("DUPLICATE_PHOTO")));
  }
 }
+
+use std::sync::{Arc,Mutex,OnceLock,atomic::{AtomicBool,AtomicU64,Ordering}};
+use ovg_processing::photogrammetry::ingest;
+const MAX_DATASET:u64=8*1024*1024*1024;
+#[derive(Debug,Clone,serde::Deserialize,Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Dataset{pub count:u32,pub bytes:u64,pub manifest_sha256:String}
+#[derive(Serialize)]pub struct Progress{pub completed:u64,pub copied:u64,pub total_files:u64,pub total_bytes:u64}
+struct Active{handle:Uuid,id:Uuid,cancel:AtomicBool,completed:AtomicU64,copied:AtomicU64,total_files:AtomicU64,total_bytes:AtomicU64}
+static ACTIVE:OnceLock<Mutex<Option<Arc<Active>>>>=OnceLock::new();
+fn active()->&'static Mutex<Option<Arc<Active>>>{ACTIVE.get_or_init(||Mutex::new(None))}
+struct Guard(Arc<Active>);
+impl Drop for Guard{fn drop(&mut self){if let Ok(mut s)=active().lock(){if s.as_ref().is_some_and(|v|Arc::ptr_eq(v,&self.0)){*s=None;}}}}
+fn acquire(handle:Uuid,id:Uuid)->Result<Guard,&'static str>{
+ let mut s=active().lock().map_err(|_|"SESSION_FAILED")?;
+ if s.is_some(){return Err("PHOTO_JOB_BUSY");}
+ let job=Arc::new(Active{handle,id,cancel:AtomicBool::new(false),completed:AtomicU64::new(0),copied:AtomicU64::new(0),total_files:AtomicU64::new(0),total_bytes:AtomicU64::new(0)});
+ *s=Some(job.clone());Ok(Guard(job))
+}
+fn read_dataset(project:&std::path::Path)->Result<Option<Dataset>,&'static str>{
+ let dir=project.join("photogrammetry-input");
+ match fs::symlink_metadata(&dir){Err(e)if e.kind()==std::io::ErrorKind::NotFound=>return Ok(None),
+ Ok(m)if m.file_type().is_dir()=>{},_=>return Err("INVALID_PHOTO_DATASET")}
+ let p=dir.join("dataset.json");let m=fs::symlink_metadata(&p).map_err(|_|"INVALID_PHOTO_DATASET")?;
+ if !m.file_type().is_file()||m.len()>4096{return Err("INVALID_PHOTO_DATASET");}
+ let mut b=Vec::new();File::open(p).map_err(|_|"INVALID_PHOTO_DATASET")?.take(4097).read_to_end(&mut b).map_err(|_|"INVALID_PHOTO_DATASET")?;
+ let d:Dataset=serde_json::from_slice(&b).map_err(|_|"INVALID_PHOTO_DATASET")?;
+ if d.count<2||d.count>4096||d.bytes==0||d.bytes>MAX_DATASET||d.manifest_sha256.len()!=64||
+ !d.manifest_sha256.bytes().all(|b|b.is_ascii_hexdigit()&&!b.is_ascii_uppercase()){return Err("INVALID_PHOTO_DATASET");}
+ Ok(Some(d))
+}
+#[tauri::command]
+pub async fn desktop_photo_dataset(window:WebviewWindow,host:State<'_,Host>,handle:Uuid)->Reply<Option<Dataset>>{
+ crate::run(window,host.inner().clone(),move|h|read_dataset(&h.photo_project_dir(handle)?)).await
+}
+#[tauri::command]
+pub fn desktop_photo_status(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,id:Uuid)->Reply<Option<Progress>>{
+ crate::trusted(&window)?;host.generation(handle).map_err(str::to_owned)?;
+ let s=active().lock().map_err(|_|"SESSION_FAILED".to_owned())?;
+ Ok(s.as_ref().filter(|v|v.handle==handle&&v.id==id).map(|v|Progress{completed:v.completed.load(Ordering::Acquire),copied:v.copied.load(Ordering::Acquire),total_files:v.total_files.load(Ordering::Acquire),total_bytes:v.total_bytes.load(Ordering::Acquire)}))
+}
+#[tauri::command]
+pub fn desktop_photo_cancel(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,id:Uuid)->Reply<()>{
+ crate::trusted(&window)?;host.generation(handle).map_err(str::to_owned)?;
+ let s=active().lock().map_err(|_|"SESSION_FAILED".to_owned())?;
+ if let Some(v)=s.as_ref().filter(|v|v.handle==handle&&v.id==id){v.cancel.store(true,Ordering::Release);}
+ Ok(())
+}
+#[tauri::command]
+pub async fn desktop_photo_stage(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,id:Uuid)->Reply<Option<Dataset>>{
+ let app=window.app_handle().clone();
+ crate::run(window,host.inner().clone(),move|h|{
+ let project=h.photo_project_dir(handle)?;
+ let guard=acquire(handle,id)?;let job=&guard.0;
+ if read_dataset(&project)?.is_some(){return Err("PHOTO_DATASET_EXISTS");}
+ let Some(files)=app.dialog().file().add_filter("JPEG flight images",&["jpg","jpeg","JPG","JPEG"]).blocking_pick_files() else{return Ok(None);};
+ if files.len()>4096{return Err("PHOTO_COUNT_LIMIT");}
+ let paths=files.into_iter().map(|f|f.into_path().map_err(|_|"INVALID_PHOTO")).collect::<Result<Vec<_>,_>>()?;
+ let inventory=inspect(&paths)?;if inventory.bytes>MAX_DATASET{return Err("PHOTO_DATASET_LIMIT");}
+ job.total_files.store(u64::from(inventory.count),Ordering::Release);
+ job.total_bytes.store(inventory.bytes,Ordering::Release);
+ let temp=tempfile::Builder::new().prefix(".photo-stage-").tempdir_in(&project).map_err(|_|"STORAGE_UNAVAILABLE")?;
+ let stage=temp.path().join("input");
+ let cancelled=||job.cancel.load(Ordering::Acquire)||h.generation(handle).is_err();
+ let p=ingest::Policy{max_files:4096,max_file_bytes:256*1024*1024,max_total_bytes:MAX_DATASET,
+ header:images::Limits{max_header_bytes:1024*1024,max_side:32768,max_pixels:80_000_000}};
+ let entries=ingest::stage_jpeg_controlled(&stage,&paths,p,cancelled,|n,b|{job.completed.store(n as u64,Ordering::Release);job.copied.store(b,Ordering::Release);})
+ .map_err(|e|if matches!(e,ingest::Error::Cancelled){"CANCELLED"}else{"PHOTO_STAGE_FAILED"})?;
+ let bytes=entries.iter().try_fold(0u64,|n,e|n.checked_add(e.bytes)).ok_or("RESOURCE_LIMIT")?;
+ let hash=ingest::verify_staged(&stage,entries.len() as u32,MAX_DATASET,cancelled).map_err(|_|if cancelled(){"CANCELLED"}else{"PHOTO_VERIFY_FAILED"})?;
+ let d=Dataset{count:entries.len() as u32,bytes,manifest_sha256:hash};
+ use std::io::Write;
+ let mut f=File::options().write(true).create_new(true).open(stage.join("dataset.json")).map_err(|_|"STORAGE_UNAVAILABLE")?;
+ f.write_all(&serde_json::to_vec(&d).map_err(|_|"INVALID_PHOTO_DATASET")?).map_err(|_|"STORAGE_UNAVAILABLE")?;
+ f.sync_all().map_err(|_|"STORAGE_UNAVAILABLE")?;drop(f);
+ if cancelled(){return Err("CANCELLED");}
+ // One dataset per project in this candidate. Never replace an existing dataset.
+ let dest=project.join("photogrammetry-input");if fs::symlink_metadata(&dest).is_ok(){return Err("PHOTO_DATASET_EXISTS");}
+ fs::rename(&stage,&dest).map_err(|_|"STORAGE_UNAVAILABLE")?;
+ Ok(Some(d))
+ }).await
+}
