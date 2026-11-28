@@ -16,6 +16,7 @@ class LocalTileServer {
  final String _token;
  final Set<Future<void>> _pending={};
  bool _closed=false;
+ Future<void>? _closeFuture;
  LocalTileServer._(this._server,this._layers,this._read,this._token);
  static Future<LocalTileServer> start(Set<String> layers,TileRead read)async{
   final uuid=RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$');
@@ -60,8 +61,9 @@ class LocalTileServer {
    res.persistentConnection=false;res.contentLength=data.length;res.add(data);await res.close();
   }catch(_){await _reject(r,409);}
  }
- Future<void> close()async{
-  if(_closed)return;_closed=true;
+ Future<void> close()=>_closeFuture??=_shutdown();
+ Future<void> _shutdown()async{
+  _closed=true;
   await _server.close(force:true);
   // Do not pretend that an outstanding Rust call has been cancelled. Keep
   // the route owner alive until each admitted read has actually returned.
