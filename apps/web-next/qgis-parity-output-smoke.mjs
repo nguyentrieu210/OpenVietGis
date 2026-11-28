@@ -92,6 +92,19 @@ try{
  await page.waitForFunction(()=>document.querySelector(".layout-print-sheet")?.getAttribute("viewBox")==="0 0 297 210",{},{timeout:10000});
  assert.equal(await paper.inputValue(),"A4");
 
+ const originalViewport=page.viewportSize();
+ for(const theme of ["light","dark"]){
+  await page.evaluate(value=>document.documentElement.dataset.ovgTheme=value,theme);
+  for(const width of [390,1280]){
+   await page.setViewportSize({width,height:850});
+   const metrics=await layout.evaluate(el=>{const r=el.getBoundingClientRect(),sheet=el.querySelector(".layout-print-sheet"),body=el.querySelector(".ld-body");return {left:r.left,right:r.right,bottom:r.bottom,bg:getComputedStyle(el).backgroundColor,paper:getComputedStyle(sheet).backgroundColor,bodyHeight:body.clientHeight,client:el.clientWidth,scroll:el.scrollWidth}});
+   assert.ok(metrics.left>=-1&&metrics.right<=width+1&&metrics.bottom<=850&&metrics.bodyHeight>0&&metrics.scroll<=metrics.client+1,JSON.stringify(metrics));
+   assert.equal(metrics.bg,theme==="dark"?"rgb(32, 43, 52)":"rgb(255, 255, 255)");
+   assert.equal(metrics.paper,"rgb(255, 255, 255)");
+  }
+ }
+ await page.evaluate(()=>document.documentElement.dataset.ovgTheme="light");await page.setViewportSize(originalViewport);
+ console.log("PASS SPEC072 layout chrome four responsive/theme combinations, paper remains white");
  const itemButtons=layout.locator(".ld-items button");
  assert.equal(await itemButtons.count(),7);
  await itemButtons.nth(0).focus();await page.keyboard.press("Tab");
