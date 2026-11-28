@@ -215,10 +215,15 @@ def bootstrap_managed_layer(
 def load_managed_snapshot(
     config: OpenVietGisConfig, *, layer_id: str, session_id: str,
     permission_epoch: int, limit: int = 1000, cancelled=lambda: False,
+    max_features: int | None = None,
 ) -> tuple[ManagedBootstrapPage, list[dict[str, Any]]]:
     """Load a coherent native snapshot before materializing any QGIS layer."""
     if type(limit) is not int or not 1 <= limit <= MAX_BOOTSTRAP_PAGE:
         raise ApiError("Giới hạn snapshot phải từ 1 đến 5000.")
+    if max_features is None:
+        max_features = MAX_MANAGED_FEATURES
+    if type(max_features) is not int or not 0 <= max_features <= MAX_MANAGED_FEATURES:
+        raise ApiError("Ngân sách snapshot không hợp lệ.")
     first = None
     offset = 0
     features: list[dict[str, Any]] = []
@@ -229,6 +234,8 @@ def load_managed_snapshot(
         page = bootstrap_managed_layer(
             config, layer_id=layer_id, session_id=session_id, limit=limit, offset=offset,
         )
+        if cancelled():
+            raise ApiError("Đã hủy tải lớp.")
         if page.layer_id != layer_id or page.permission_epoch != permission_epoch:
             raise ApiError("Phạm vi hoặc quyền của lớp đã thay đổi; hãy mở lại.")
         if page.crs_code not in (4326, 3857, 4756, 5899) or page.dimensions != "XY":
@@ -259,17 +266,19 @@ def load_managed_snapshot(
             raise ApiError("Lớp thay đổi trong lúc tải; hãy mở lại để tránh mất dữ liệu.")
         if len(page.features) > limit:
             raise ApiError("Trang dữ liệu vượt quá giới hạn.")
+        if len(features) + len(page.features) > max_features:
+            raise ApiError("Snapshot vượt quá ngân sách 1.000.000 đối tượng của phiên.")
         for item in page.features:
             oid = item.get("feature_id")
             if not isinstance(oid, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", oid) or oid in ids:
                 raise ApiError("Mã đối tượng không hợp lệ hoặc trùng lặp.")
             ids.add(oid)
             features.append(item)
-            if len(features) > MAX_MANAGED_FEATURES:
-                raise ApiError("Snapshot vượt quá 1.000.000 đối tượng.")
         if not page.has_more:
             if page.next_offset is not None:
                 raise ApiError("Con trỏ trang cuối không hợp lệ.")
+            if cancelled():
+                raise ApiError("Đã hủy tải lớp.")
             return first, features
         if not page.features or page.next_offset != offset + len(page.features):
             raise ApiError("Con trỏ phân trang không hợp lệ; hãy mở lại lớp.")
@@ -466,8 +475,12 @@ def native_geometry_wkt(geometry: dict[str, Any]) -> str:
     raise ApiError("Kiểu hình học chưa được hỗ trợ trong chế độ đồng bộ.")
 
 
-def catch_up_cached_layer(config, session, probe, record, cancelled):
+def catch_up_cached_layer(config, session, probe, record, cancelled, *, max_features=None):
     """Apply a bounded, complete event interval and verify the final server pin."""
+    if max_features is None:
+        max_features = MAX_MANAGED_FEATURES
+    if cancelled() or len(record["features"]) > max_features:
+        return None
     cursor = record["cursor"]
     if cursor < 0 or cursor > probe.cursor:
         return None
@@ -479,6 +492,8 @@ def catch_up_cached_layer(config, session, probe, record, cancelled):
         if cancelled():
             return None
         delta = fetch_managed_delta(config, session_id=session.id, cursor=cursor)
+        if cancelled():
+            return None
         if (delta.reset_required or delta.permission_epoch != probe.permission_epoch
                 or delta.next_cursor < cursor or delta.next_cursor > probe.cursor):
             return None
@@ -490,15 +505,22 @@ def catch_up_cached_layer(config, session, probe, record, cancelled):
             for oid in change.get("removals", []):
                 features.pop(str(oid), None)
             for f in change.get("upserts", []):
-                features[str(f["feature_id"])] = f
+                oid = str(f["feature_id"])
+                if oid not in features and len(features) >= max_features:
+                    return None
+                features[oid] = f
             revision = str(change["content_revision"])
         if not delta.has_more:
             if (delta.next_cursor != probe.cursor or revision != probe.content_revision
                     or len(features) != probe.feature_count):
                 return None
             # Delta queries read live rows. Re-probe to rule out a concurrent edit or ACL change.
+            if cancelled():
+                return None
             final = bootstrap_managed_layer(config, layer_id=probe.layer_id,
                                             session_id=session.id, limit=1, offset=0)
+            if cancelled():
+                return None
             if (not final.cacheable or final.cursor != probe.cursor
                     or final.permission_epoch != probe.permission_epoch
                     or final.content_revision != probe.content_revision
@@ -521,7 +543,10 @@ def load_managed_layers(
         return None
     session = create_managed_session(config, binding_id=binding_id)
     result = []
+    remaining = MAX_MANAGED_FEATURES
     for index, layer_id in enumerate(layer_ids):
+        if cancelled():
+            return None
         first = None
         features = []
         path = cache_path(cache_root, config, layer_id) if cache_root is not None else None
@@ -529,22 +554,30 @@ def load_managed_layers(
             # Tiny authenticated read validates current access and revisions before reuse.
             probe = bootstrap_managed_layer(config, layer_id=layer_id,
                                             session_id=session.id, limit=1, offset=0)
+            if cancelled():
+                return None
             if probe.permission_epoch != session.permission_epoch:
                 raise ApiError("Quyền thay đổi trong lúc tải; hãy mở lại.")
+            if probe.feature_count is not None and probe.feature_count > remaining:
+                raise ApiError("Snapshot vượt quá ngân sách 1.000.000 đối tượng của phiên.")
             record = read_cached_record(path, probe, allow_older=True)
             cached = None
-            if record is not None:
+            if cancelled():
+                return None
+            if record is not None and len(record["features"]) <= remaining:
                 if record["revision"] == probe.content_revision:
                     cached = record["features"]
                 else:
                     try:
-                        cached = catch_up_cached_layer(config, session, probe, record, cancelled)
+                        cached = catch_up_cached_layer(config, session, probe, record, cancelled,
+                                                       max_features=remaining)
                     except ApiError as exc:
                         if exc.status_code in (401, 403):
                             raise
                     if cached is not None and not cancelled():
                         write_snapshot(path, probe, cached)
             if cached is not None and not cancelled():
+                remaining -= len(cached)
                 result.append((probe, cached))
                 progress(100 * (index + 1) / len(layer_ids))
                 continue
@@ -552,15 +585,21 @@ def load_managed_layers(
             first, features = load_managed_snapshot(
                 config, layer_id=layer_id, session_id=session.id,
                 permission_epoch=session.permission_epoch, limit=5000, cancelled=cancelled,
+                max_features=remaining,
             )
         except ApiError:
             if cancelled():
                 return None
             raise
-        if path is not None and not cancelled():
+        if cancelled():
+            return None
+        if path is not None:
             write_snapshot(path, first, features)
+        remaining -= len(features)
         result.append((first, features))
         progress(100 * (index + 1) / len(layer_ids))
+    if cancelled():
+        return None
     return session, result
 
 

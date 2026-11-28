@@ -29,10 +29,37 @@ def test_frontend_dependency_layer_covers_all_workspace_manifests() -> None:
 
 
 def test_pr_cancellation_cannot_cancel_main_or_manual_runs() -> None:
-    for name in ("ci.yml", "e17-web-parity.yml", "rust-platform.yml"):
+    for name in ("ci.yml", "e17-web-parity.yml", "rust-platform.yml",
+                 "rust-mcp.yml", "e16-mcp-retained.yml", "qgis-connector.yml"):
         workflow = yaml.safe_load((ROOT / ".github/workflows" / name).read_text())
         policy = workflow["concurrency"]
         assert policy["cancel-in-progress"] == "${{ github.event_name == 'pull_request' }}"
         assert "github.workflow" in policy["group"]
         assert "github.event_name" in policy["group"]
         assert "github.event.pull_request.number || github.run_id" in policy["group"]
+
+
+def test_mcp_contract_changes_trigger_both_parity_implementations() -> None:
+    retained = yaml.load(
+        (ROOT / ".github/workflows/e16-mcp-retained.yml").read_text(), Loader=yaml.BaseLoader,
+    )
+    assert "main" in retained["on"]["push"]["branches"]
+    for event in ("push", "pull_request"):
+        assert "apps/mcp-rust/contracts/**" in retained["on"][event]["paths"]
+    runs = "\n".join(step.get("run", "") for step in retained["jobs"]["adapter-contracts"]["steps"])
+    assert "uv run --locked pytest -q" in runs
+    assert "tools/benchmark/spec066/mcp-contract-parity.py" in runs
+    assert "git rev-parse HEAD" in runs
+
+
+def test_qgis_sync_contracts_are_part_of_package_ci() -> None:
+    workflow = yaml.load(
+        (ROOT / ".github/workflows/qgis-connector.yml").read_text(), Loader=yaml.BaseLoader,
+    )
+    runs = "\n".join(step.get("run", "") for step in workflow["jobs"]["qgis-package"]["steps"])
+    for name in ("test_managed_snapshot_contract", "test_managed_delta_contract",
+                 "test_managed_sync_cancellation"):
+        path = f"tools/tests/{name}.py"
+        assert path in workflow["on"]["pull_request"]["paths"]
+        assert path in runs
+    assert "native-qgis-smoke" in workflow["jobs"]

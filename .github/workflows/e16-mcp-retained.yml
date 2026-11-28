@@ -2,15 +2,23 @@ name: E16 MCP adapter
 
 on:
   push:
-    branches: ["064-**"]
+    branches: ["main", "064-**"]
     paths:
       - 'apps/mcp/**'
+      - 'apps/mcp-rust/contracts/**'
+      - 'tools/benchmark/spec066/mcp-contract-parity.py'
       - '.github/workflows/e16-mcp-retained.yml'
   pull_request:
     paths:
       - 'apps/mcp/**'
+      - 'apps/mcp-rust/contracts/**'
+      - 'tools/benchmark/spec066/mcp-contract-parity.py'
       - '.github/workflows/e16-mcp-retained.yml'
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -29,3 +37,13 @@ jobs:
       - name: MCP protocol and relay policy contracts
         working-directory: apps/mcp
         run: uv run --locked pytest -q
+      - name: Record exact-source cross-language discovery evidence
+        run: |
+          mkdir -p dist/mcp
+          uv run --locked --project apps/mcp python tools/benchmark/spec066/mcp-contract-parity.py > dist/mcp/parity.json
+          git rev-parse HEAD > dist/mcp/source-sha.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mcp-parity-${{ github.sha }}
+          path: dist/mcp/
+          if-no-files-found: error

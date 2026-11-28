@@ -10,6 +10,9 @@ on:
       - "tools/tests/test_package_qgis_plugin.py"
       - "tools/tests/test_qgis_connector_simple_ui.py"
       - "tools/tests/test_qgis_managed_snapshots.py"
+      - "tools/tests/test_managed_snapshot_contract.py"
+      - "tools/tests/test_managed_delta_contract.py"
+      - "tools/tests/test_managed_sync_cancellation.py"
       - "tools/tests/test_qgis_desktop_recovery.py"
       - "apps/web-next/src/QgisConnectPage.tsx"
       - "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py"
@@ -24,12 +27,17 @@ on:
         default: true
         type: boolean
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
 jobs:
   qgis-package:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -51,6 +59,9 @@ jobs:
             tools/tests/test_package_qgis_plugin.py \
             tools/tests/test_qgis_connector_simple_ui.py \
             tools/tests/test_qgis_managed_snapshots.py \
+            tools/tests/test_managed_snapshot_contract.py \
+            tools/tests/test_managed_delta_contract.py \
+            tools/tests/test_managed_sync_cancellation.py \
             tools/tests/test_qgis_desktop_recovery.py \
             apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py
       - name: Package installable experimental QGIS plugin
@@ -70,6 +81,7 @@ jobs:
   native-qgis-smoke:
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.native_qgis }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - name: Install native QGIS with Qt offscreen support

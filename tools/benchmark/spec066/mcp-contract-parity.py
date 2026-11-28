@@ -5,7 +5,9 @@ production credentials or live GIS session is used.
 """
 from __future__ import annotations
 
+import copy
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -33,6 +35,9 @@ with TestClient(create_remote(CONFIG,identity=FakeIdentity(),
 
 mismatches=[]
 for name,expected in contract.items():
+    expected=copy.deepcopy(expected)
+    # tools::Registry applies this fail-closed rule to every frozen schema.
+    expected["inputSchema"]["additionalProperties"]=False
     actual=tools[name]
     schema=json.loads(json.dumps(actual["inputSchema"]))
     schema.get("properties",{}).pop("session_id",None)
@@ -44,14 +49,16 @@ for name,expected in contract.items():
         mismatches.append(name)
 
 report={
+    "candidate_sha":subprocess.check_output(["git","rev-parse","HEAD"],cwd=ROOT,text=True).strip(),
     "python_tools":len(tools),
     "rust_registry_tools":39,
     "workspace_contract_tools":len(contract),
     "workspace_schema_mismatches":mismatches,
     "shared_optional_scope_field":"session_id",
+    "runtime_schema_rule":"Rust Registry and Python both set root additionalProperties=false.",
     "extra_shared_tools":sorted(set(tools)-set(contract)),
     "protocols":{"current":"2026-07-28","legacy":"2025-11-25"},
-    "method":"In-process retained Python MCP tools/list with signed fixture OAuth; compared to checked-in Rust workspace contract after removing the shared optional root session_id field.",
+    "method":"In-process retained Python MCP tools/list with signed fixture OAuth; compared to checked-in Rust workspace contracts with the Registry root additionalProperties=false rule and after removing the shared optional root session_id field.",
     "live_network":False,
 }
 if report["python_tools"]!=39 or mismatches:

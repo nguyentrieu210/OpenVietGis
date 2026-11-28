@@ -109,3 +109,20 @@ def test_python_and_rust_tool_discovery_constraints_match():
         if name != "gis_workspaces":
             variants = schema["properties"]["session_id"]["anyOf"]
             assert {item.get("type") for item in variants} == {"string", "null"}
+
+
+def test_offline_parity_evidence_command_runs_the_same_contract_gate():
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "tools/benchmark/spec066/mcp-contract-parity.py")],
+        cwd=ROOT, capture_output=True, text=True, timeout=30, check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    report = json.loads(result.stdout)
+    assert report["workspace_schema_mismatches"] == []
+    assert report["python_tools"] == 39
+    assert report["candidate_sha"] == subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True,
+    ).strip()
