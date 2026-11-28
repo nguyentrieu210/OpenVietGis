@@ -7,6 +7,7 @@ export default function DesktopProject({rootHandle}:{rootHandle:string}){
  const [visible,setVisible]=useState<string[]>(["root"]),[name,setName]=useState(""),[error,setError]=useState(""),[busy,setBusy]=useState(false);
  const [catalog,setCatalog]=useState<Awaited<ReturnType<typeof desktop.inspectGPKG>>>(null),[table,setTable]=useState("");
  const [presentation,setPresentation]=useState<ProjectState>();
+ const [photoPreview,setPhotoPreview]=useState<string>();
  const view=useRef<ViewState>({lon:106.7,lat:11,zoom:5,bearing:0,pitch:0});
  const current=useRef(handles);current.current=handles;const alive=useRef(true);const lock=useRef(false);
  const reload=useCallback(async()=>{const x=await desktop.listLayers(rootHandle);if(alive.current)setLayers(x)},[rootHandle]);
@@ -75,7 +76,7 @@ export default function DesktopProject({rootHandle}:{rootHandle:string}){
      <label>Màu lớp <input type="color" value={styleFor(active).color} disabled={!presentation} onChange={e=>changeStyle(active,{...styleFor(active),color:e.target.value})}/></label><label>Độ mờ <input type="range" min="0" max="1" step=".05" value={styleFor(active).opacity} disabled={!presentation} onChange={e=>changeStyle(active,{...styleFor(active),opacity:Number(e.target.value)})}/></label><button disabled={busy||!presentation} onClick={()=>void run(save)}>Lưu cấu hình dự án</button>
      {error&&<span role="alert">{error}</span>}
    </div>
-   {presentation&&<PhotoWorkspacePanel key={rootHandle} handle={rootHandle}/>}
-   {presentation&&handles[active]&&<LocalWorkbench key={handles[active]} handle={handles[active]!} overlays={overlays} initialView={view.current} onView={v=>{view.current=v}} layerStyle={styleFor(active)}/>}
+   {presentation&&<PhotoWorkspacePanel key={rootHandle} handle={rootHandle} selected={photoPreview} onSelect={setPhotoPreview}/>}
+   {presentation&&handles[active]&&<LocalWorkbench key={handles[active]} handle={handles[active]!} overlays={overlays} photoPreview={photoPreview?{handle:rootHandle,id:photoPreview}:undefined} initialView={view.current} onView={v=>{view.current=v}} layerStyle={styleFor(active)}/>}
  </section>;
 }

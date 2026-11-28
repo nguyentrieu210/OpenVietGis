@@ -211,3 +211,24 @@ pub async fn desktop_photo_previews(window:WebviewWindow,host:State<'_,Host>,han
  Ok(out)
  }).await
 }
+
+#[tauri::command]
+pub async fn desktop_photo_overview(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,id:Uuid,request_id:Uuid)->Reply<tauri::ipc::Response>{
+ crate::trusted(&window)?;
+ let read=crate::ReadPermit::acquire(request_id)?;
+ let bytes=crate::run(window,host.inner().clone(),move|h|{
+ let runs=h.photo_project_dir(handle)?.join("photogrammetry-preview");let root=runs.join(id.to_string());
+ for p in [&runs,&root, &root.join("objects"),&root.join("revisions"),&root.join("checkpoints")]{
+ if !fs::symlink_metadata(p).map_err(|_|"INVALID_PREVIEW")?.file_type().is_dir(){return Err("INVALID_PREVIEW");}
+ }
+ let stop=||read.token.flag.load(Ordering::Acquire)||h.generation(handle).is_err();
+ let o=ovg_processing::photogrammetry::preview::read(&root,1024,stop)
+ .map_err(|e|if matches!(e,ovg_processing::photogrammetry::preview::Error::Cancelled){"CANCELLED"}else{"INVALID_PREVIEW"})?;
+ if stop(){return Err("CANCELLED");}
+ let meta=serde_json::to_vec(&o.info).map_err(|_|"INVALID_PREVIEW")?;
+ if meta.len()>2048||o.rgba.len()>4*1024*1024{return Err("RESOURCE_LIMIT");}
+ let mut out=Vec::with_capacity(4+meta.len()+o.rgba.len());
+ out.extend((meta.len() as u32).to_le_bytes());out.extend(meta);out.extend(o.rgba);Ok(out)
+ }).await?;
+ Ok(tauri::ipc::Response::new(bytes))
+}

@@ -26,7 +26,27 @@ export type PhotoDataset={count:number;bytes:number;manifest_sha256:string};
 export type PhotoProgress={completed:number;copied:number;total_files:number;total_bytes:number};
 export type PhotoRenderProgress={completed_tiles:number;total_tiles:number;cancelling:boolean};
 export type PhotoRenderReceipt={job_id:string;result:{revision:number;tiles:number;pixels:number;covered:number;written_bytes:number;epsg:number}};
+export type PhotoOverview={width:number;height:number;corners:[[number,number],[number,number],[number,number],[number,number]];rgba:Uint8ClampedArray};
 export const desktop={
+  photoOverview:async(handle:string,id:string,signal:AbortSignal):Promise<PhotoOverview>=>{
+    const requestId=crypto.randomUUID();
+    if(signal.aborted)throw new DOMException("Aborted","AbortError");
+    const cancel=()=>{void host().core.invoke<void>("desktop_cancel_resource",{requestId}).catch(()=>{})};
+    signal.addEventListener("abort",cancel,{once:true});
+    try{
+      const raw=await host().core.invoke<ArrayBuffer|number[]>("desktop_photo_overview",{handle,id,requestId});
+      if(signal.aborted)throw new DOMException("Aborted","AbortError");
+      const b=raw instanceof ArrayBuffer?new Uint8Array(raw):Uint8Array.from(raw);
+      if(b.length<4||b.length>4+2048+4194304)throw Error("INVALID_PREVIEW");
+      const n=new DataView(b.buffer,b.byteOffset,b.byteLength).getUint32(0,true);
+      if(n===0||n>2048||n+4>b.length)throw Error("INVALID_PREVIEW");
+      const m=JSON.parse(new TextDecoder("utf-8",{fatal:true}).decode(b.subarray(4,4+n))) as Omit<PhotoOverview,"rgba">;
+      if(!Number.isInteger(m.width)||!Number.isInteger(m.height)||m.width<1||m.height<1||m.width>1024||m.height>1024||
+        !Array.isArray(m.corners)||m.corners.length!==4||m.corners.some(p=>!Array.isArray(p)||p.length!==2||!p.every(Number.isFinite)||Math.abs(p[0])>180||Math.abs(p[1])>84)||
+        b.length-4-n!==4*m.width*m.height)throw Error("INVALID_PREVIEW");
+      return {...m,rgba:new Uint8ClampedArray(b.subarray(4+n))};
+    }finally{signal.removeEventListener("abort",cancel)}
+  },
   photoRenderPrepared:(handle:string,id:string)=>host().core.invoke<PhotoRenderReceipt|null>("desktop_photo_render_prepared",{handle,id}),
   photoRenderStatus:(handle:string,id:string)=>host().core.invoke<PhotoRenderProgress|null>("desktop_photo_render_status",{handle,id}),
   photoPreviews:(handle:string)=>host().core.invoke<PhotoRenderReceipt[]>("desktop_photo_previews",{handle}),

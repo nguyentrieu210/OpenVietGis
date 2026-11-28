@@ -1,0 +1,2 @@
+# W13 map overview integration
+Project handle + preview UUID scoped binary IPC, shared read permit and cancellation, max 4MiB RGBA plus bounded metadata. Existing MapLibre standalone workbench displays one selected overview via image source, fits bounds, removes source and revokes blob URL on switch/unmount. No filesystem path to JS, no network. Four-corner UTM approximation and 1024-pixel downsample are preview only; not native-resolution XYZ streaming or survey-grade overlay. Selection not persisted in project state. No CI, browser or Desktop run.

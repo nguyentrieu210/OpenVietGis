@@ -7,7 +7,7 @@ import {vertices,moveVertex} from "./vertices";
 type Kind="point"|"line"|"polygon";
 const empty=():GeoJSON.FeatureCollection=>({type:"FeatureCollection",features:[]});
 type Overlay={id:string;handle:string;name:string;style:LayerStyle};
-export default function LocalWorkbench({handle,overlays=[],initialView,onView,layerStyle}:{handle:string;overlays?:Overlay[];initialView?:ViewState;onView?:(v:ViewState)=>void;layerStyle?:LayerStyle}){
+export default function LocalWorkbench({handle,overlays=[],initialView,onView,layerStyle,photoPreview}:{handle:string;photoPreview?:{handle:string;id:string};overlays?:Overlay[];initialView?:ViewState;onView?:(v:ViewState)=>void;layerStyle?:LayerStyle}){
   const viewAtStart=useRef(initialView);const viewCallback=useRef(onView);viewCallback.current=onView;
   const styleRef=useRef(layerStyle);styleRef.current=layerStyle;
   const [direct,setDirect]=useState<Awaited<ReturnType<typeof desktop.directOpen>>>(null),[directTable,setDirectTable]=useState("");
@@ -209,6 +209,27 @@ export default function LocalWorkbench({handle,overlays=[],initialView,onView,la
       if(m.getLayer(prefix+"-point"))m.setPaintProperty(prefix+"-point","circle-color",layerStyle.color);
     }
   },[ready,layerStyle?.color,layerStyle?.opacity]);
+  useEffect(()=>{
+    const m=map.current;if(!ready||!m||!styleReady.current||!photoPreview)return;
+    const abort=new AbortController();const id="photo-overview";let url:string|undefined;
+    const remove=()=>{if(map.current===m){if(m.getLayer(id))m.removeLayer(id);if(m.getSource(id))m.removeSource(id)}if(url){URL.revokeObjectURL(url);url=undefined}};
+    void (async()=>{
+      const o=await desktop.photoOverview(photoPreview.handle,photoPreview.id,abort.signal);
+      if(abort.signal.aborted||map.current!==m)return;
+      const c=document.createElement("canvas");c.width=o.width;c.height=o.height;
+      const ctx=c.getContext("2d");if(!ctx)throw Error("CANVAS_UNAVAILABLE");
+      const image=ctx.createImageData(o.width,o.height);image.data.set(o.rgba);ctx.putImageData(image,0,0);
+      const blob=await new Promise<Blob>((resolve,reject)=>c.toBlob(b=>b?resolve(b):reject(Error("PREVIEW_ENCODE_FAILED")),"image/png"));
+      if(abort.signal.aborted||map.current!==m)return;
+      url=URL.createObjectURL(blob);
+      m.addSource(id,{type:"image",url,coordinates:o.corners});
+      m.addLayer({id,type:"raster",source:id,paint:{"raster-opacity":0.9,"raster-fade-duration":0}},"local-fill");
+      const bounds=new maplibregl.LngLatBounds();for(const corner of o.corners)bounds.extend(corner);
+      m.fitBounds(bounds,{padding:48,maxZoom:20,duration:0});
+      setNotice("Orthomosaic · xem trước giảm mẫu, vị trí xấp xỉ");
+    })().catch(e=>{if(!abort.signal.aborted){remove();setNotice(String(e))}});
+    return()=>{abort.abort();remove()};
+  },[ready,photoPreview?.handle,photoPreview?.id]);
   const saveSchema=()=>run(async()=>{
     const f:unknown=JSON.parse(schemaText);
     if(!Array.isArray(f)||f.length>128)throw Error("Schema phải là danh sách tối đa 128 trường");
