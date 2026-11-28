@@ -156,7 +156,7 @@ export default function UnifiedWorkbench(){
  <select aria-label="Loại tài nguyên" value={assetKind} onChange={e=>setAssetKind(e.target.value as UnifiedAssetKind)}>{["cad","las","laz","copc","glb","mbtiles","tiff"].map(k=><option key={k} value={k} disabled={k==="tiff"&&!native?.ogr_linked}>{k.toUpperCase()}</option>)}</select>
  <label>EPSG điểm <input value={assetEpsg} onChange={e=>setAssetEpsg(e.target.value)} maxLength={10}/></label><button disabled={busy||!ready} onClick={()=>void run(loadAsset)}>Mở tài nguyên</button><button disabled={busy||!ready} onClick={()=>void run(attachAsset)}>Lưu bản sao vào dự án</button>
  <p>Tài nguyên lưu trong SQLite (đi kèm backup)</p>
- {persisted.map(a=><div key={a.id}><span>{a.kind.toUpperCase()} · {(a.bytes/1048576).toFixed(1)} MiB · {a.id.slice(0,8)}</span><button disabled={busy||!ready} onClick={()=>void run(()=>restoreAsset(a.id))}>Mở lại</button><button disabled={busy} onClick={()=>void run(async()=>{if(!window.confirm("Xóa bản sao tài nguyên trong dự án? File gốc không bị thay đổi."))return;await unifiedAssets.detach(opened.handle,a.id,catalog.revision);if(asset?.id===a.id){setAsset(undefined);setAssetPreview("");setRasterImage("")}await refresh(opened.handle)})}>Gỡ khỏi dự án</button></div>)}
+ {persisted.filter(a=>!a.kind.startsWith("cad-native-")).map(a=><div key={a.id}><span>{a.kind.toUpperCase()} · {(a.bytes/1048576).toFixed(1)} MiB · {a.id.slice(0,8)}</span><button disabled={busy||!ready} onClick={()=>void run(()=>restoreAsset(a.id))}>Mở lại</button><button disabled={busy} onClick={()=>void run(async()=>{if(!window.confirm("Xóa bản sao tài nguyên trong dự án? File gốc không bị thay đổi."))return;await unifiedAssets.detach(opened.handle,a.id,catalog.revision);if(asset?.id===a.id){setAsset(undefined);setAssetPreview("");setRasterImage("")}await refresh(opened.handle)})}>Gỡ khỏi dự án</button></div>)}
  
  {asset&&<><button disabled={busy} onClick={()=>void run(async()=>{await unifiedAssets.close(opened.handle,asset.id);setAsset(undefined);setAssetPreview("");setRasterImage("")})}>Đóng</button>
  {["las","laz","copc"].includes(asset.kind)&&<label>Khối điểm <input value={assetChunk} onChange={e=>setAssetChunk(e.target.value)} maxLength={10}/></label>}
@@ -172,7 +172,7 @@ export default function UnifiedWorkbench(){
  </details>
  <RemoteTiffPanel key={opened.handle} handle={opened.handle}/>
  <RemoteCopcPanel key={"copc-"+opened.handle} handle={opened.handle}/>
- <NativeCadBridgePanel key={"cad-"+opened.handle} handle={opened.handle}/>
+ <NativeCadBridgePanel key={"cad-"+opened.handle} handle={opened.handle} revision={catalog.revision} assets={persisted} onChanged={()=>refresh(opened.handle)}/>
  <details><summary>Native Data Providers (GDAL / PROJ / DuckDB)</summary>
  <p>GDAL/PROJ: {native?.ogr_linked?"đã liên kết · thử nghiệm":"chưa liên kết"} · DuckDB: {native?.analytics_linked?"đã liên kết · thử nghiệm":"chưa liên kết"}</p>
  <label>Chỉ số lớp OGR <input value={ogrIndex} onChange={e=>setOgrIndex(e.target.value)} maxLength={2}/></label><button disabled={busy||!native?.ogr_linked||!layer} onClick={()=>void run(async()=>{const i=Number(ogrIndex);if(!Number.isInteger(i)||i<0||i>=64)throw Error("INVALID_LAYER");const r=await nativeProviders.importOGR(opened.handle,layer,i,catalog.revision);if(r){await refresh(opened.handle);setMessage("Đã nhập OGR revision "+r.revision)}})}>Nhập SHP / FGB / GeoParquet</button>
