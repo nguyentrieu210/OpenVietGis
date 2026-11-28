@@ -224,3 +224,32 @@ pub async fn native_cad_edit_list(window:WebviewWindow,editors:State<'_,CadEdito
   map.iter_mut().filter(|(_,e)|e.owner==handle).map(|(id,e)|e.poll(*id)).collect()
  }).await.map_err(|_|"SESSION_FAILED".to_owned())?.map_err(str::to_owned)
 }
+
+#[cfg(test)]
+mod editor_tests{
+ use super::*;
+ fn drawing_fixture(p:&Path,comment:&str){
+  fs::write(p,format!("0\nSECTION\n2\nHEADER\n999\n{comment}\n0\nENDSEC\n0\nEOF\n")).unwrap();
+ }
+ #[test]fn edit_publish_checks_owner_digest_and_no_clobber(){
+  let d=tempfile::tempdir().unwrap();let original=d.path().join("original.dxf");
+  drawing_fixture(&original,"source");let original_bytes=fs::read(&original).unwrap();
+  let stage=tempfile::tempdir_in(d.path()).unwrap();let copy=stage.path().join("drawing.dxf");
+  let hash=stage_copy(&original,&copy,"dxf").unwrap();
+  drawing_fixture(&copy,"changed");let editors=CadEditors::default();let owner=Uuid::new_v4();let id=Uuid::new_v4();
+  editors.sessions.lock().unwrap().insert(id,Editor{owner,dir:stage,path:copy,format:"dxf".into(),original:hash,child:None,failed:false});
+  let ready=editors.poll(owner,id).unwrap();assert!(ready.changed);assert_eq!(ready.state,"ready");
+  assert!(editors.poll(Uuid::new_v4(),id).is_err());
+  let dest=d.path().join("edited.dxf");
+  assert!(editors.publish(owner,id,&dest,&"0".repeat(64)).is_err());assert!(!dest.exists());
+  drawing_fixture(&dest,"existing");let saved=fs::read(&dest).unwrap();
+  assert!(editors.publish(owner,id,&dest,&ready.sha256).is_err());assert_eq!(fs::read(&dest).unwrap(),saved);
+  let dest=d.path().join("new.dxf");let r=editors.publish(owner,id,&dest,&ready.sha256).unwrap();
+  assert_eq!(r.sha256,ready.sha256);assert_eq!(fs::read(&original).unwrap(),original_bytes);assert!(editors.poll(owner,id).is_err());
+ }
+ #[test]fn exit_retains_staged_drawing(){
+  let root=tempfile::tempdir().unwrap();let stage=tempfile::tempdir_in(root.path()).unwrap();let p=stage.path().join("drawing.dxf");drawing_fixture(&p,"recover");
+  let ed=CadEditors::default();ed.sessions.lock().unwrap().insert(Uuid::new_v4(),Editor{owner:Uuid::new_v4(),dir:stage,path:p.clone(),format:"dxf".into(),original:"unused".into(),child:None,failed:true});
+  ed.preserve_on_exit();assert!(p.exists());assert!(ed.sessions.lock().unwrap().is_empty());
+ }
+}
