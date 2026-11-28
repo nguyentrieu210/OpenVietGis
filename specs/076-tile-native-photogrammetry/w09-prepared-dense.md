@@ -1,0 +1,2 @@
+# W09 prepared-model dense candidate
+Adds a second NVIDIA CDI entry point using a fresh private snapshot of already-undistorted images and binary sparse model. Generates bounded stereo/fusion config, invokes PatchMatch and Stereo Fusion without re-undistortion, binds prepared images/model read-only, verifies fused PLY. Host must bind binary/text model provenance and immutable snapshot, qualify local image, driver, CDI, rootless isolation, disk quota and actual COLMAP CLI. VRAM hard limit remains absent. No GPU execution or CI performed.

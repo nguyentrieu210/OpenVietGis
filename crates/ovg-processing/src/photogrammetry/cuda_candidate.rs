@@ -48,7 +48,7 @@ pub fn run(root:&Path,c:&colmap::Config,model_index:u32,source_views:u16,cache_g
  let plan=colmap::dense_plan(&layout,c,Some(model_index),source_views,cache_gib).map_err(|_|Error::Invalid)?;
  fs::create_dir(root.join("dense"))?;
  let started=Instant::now();
- step(&root,&plan[0],p,started,&mut cancelled)?;
+ step(&root,&plan[0],p,started,false,&mut cancelled)?;
  let image_dir=root.join("dense/images");
  if !fs::symlink_metadata(&image_dir)?.file_type().is_dir(){return Err(Error::Invalid);}
  let mut names=BTreeSet::new();
@@ -61,14 +61,64 @@ pub fn run(root:&Path,c:&colmap::Config,model_index:u32,source_views:u16,cache_g
  if !fs::symlink_metadata(&target)?.file_type().is_file(){return Err(Error::Invalid);}
  let temp=stereo.join(format!(".cfg-{}",uuid::Uuid::new_v4()));
  let mut f=fs::OpenOptions::new().write(true).create_new(true).open(&temp)?;f.write_all(cfg.as_bytes())?;f.sync_all()?;drop(f);fs::rename(temp,target)?;
- for s in &plan[1..]{step(&root,s,p,started,&mut cancelled)?;}
+ for s in &plan[1..]{step(&root,s,p,started,false,&mut cancelled)?;}
  let path=root.join("dense/fused.ply");let m=fs::symlink_metadata(&path)?;
  if !m.file_type().is_file()||m.len()>p.cloud.max_bytes{return Err(Error::Invalid);}
  fused_ply::verify(fs::File::open(path)?,p.cloud,&mut cancelled).map_err(Error::Cloud)
  }
 }
+/// Dense-only candidate for an already-undistorted private snapshot.
+/// Host stages the exact prepared binary model, images and their provenance.
+/// No second undistortion: GCP pixel observations remain in the same frame.
+pub fn run_prepared(root:&Path,c:&colmap::Config,source_views:u16,cache_gib:u16,p:&Policy,
+ names:&[String],mut cancelled:impl FnMut()->bool)->Result<fused_ply::Summary,Error>{
+ if !valid(p)||!root.is_absolute()||c.device!=Device::Cuda||c.gpu_index!=Some(0)||
+ c.threads>p.threads||u64::from(cache_gib)*(1<<30)>p.host_bytes/2||
+ names.len()!=c.image_count as usize{return Err(Error::Invalid);}
+ #[cfg(not(target_os="linux"))]{let _=(source_views,&mut cancelled);Err(Error::Unsupported)}
+ #[cfg(target_os="linux")]{
+ use std::{fs,io::Write,collections::BTreeSet,time::Instant};
+ if !Path::new("/usr/bin/podman").is_file(){return Err(Error::Unsupported);}
+ let root=root.canonicalize()?;let path=root.to_str().ok_or(Error::Invalid)?;
+ if root==Path::new("/")||path.contains([',',':','\n','\r']){return Err(Error::Invalid);}
+ for n in ["images","sparse","dense","dense/images","dense/sparse"]{
+ if !fs::symlink_metadata(root.join(n))?.file_type().is_dir(){return Err(Error::Invalid);}
+ }
+ let dense=root.join("dense");
+ if dense.join("stereo").exists()||dense.join("fused.ply").exists(){return Err(Error::Invalid);}
+ let expected:BTreeSet<_>=names.iter().map(String::as_str).collect();
+ if expected.len()!=names.len(){return Err(Error::Invalid);}
+ let mut total=0u64;let mut actual=BTreeSet::new();
+ for e in fs::read_dir(dense.join("images"))?{
+ let e=e?;let name=e.file_name().into_string().map_err(|_|Error::Invalid)?;
+ if !e.file_type()?.is_file()||!expected.contains(name.as_str())||!actual.insert(name){return Err(Error::Invalid);}
+ let n=e.metadata()?.len();if n==0{return Err(Error::Invalid);}total=total.checked_add(n).ok_or(Error::Limit)?;
+ if total>p.max_input_bytes{return Err(Error::Limit);}
+ }
+ if actual.len()!=expected.len(){return Err(Error::Invalid);}
+ for n in ["cameras.bin","images.bin","points3D.bin"]{
+ let m=fs::symlink_metadata(dense.join("sparse").join(n))?;
+ if !m.file_type().is_file()||m.len()==0{return Err(Error::Invalid);}
+ total=total.checked_add(m.len()).ok_or(Error::Limit)?;if total>p.max_input_bytes{return Err(Error::Limit);}
+ }
+ let cfg=colmap::patch_match_config(names,source_views).map_err(|_|Error::Invalid)?;
+ let stereo=dense.join("stereo");fs::create_dir(&stereo)?;
+ for n in ["depth_maps","normal_maps","consistency_graphs"]{fs::create_dir(stereo.join(n))?;}
+ for (name,data) in [("patch-match.cfg",cfg),("fusion.cfg",format!("{}\n",names.join("\n")))]{
+ let mut file=fs::OpenOptions::new().write(true).create_new(true).open(stereo.join(name))?;
+ file.write_all(data.as_bytes())?;file.sync_all()?;
+ }
+ let layout=colmap::Layout::from_host_root("/work".into()).map_err(|_|Error::Invalid)?;
+ let plan=colmap::dense_plan(&layout,c,Some(0),source_views,cache_gib).map_err(|_|Error::Invalid)?;
+ let started=Instant::now();
+ for stage in &plan[1..]{step(&root,stage,p,started,true,&mut cancelled)?;}
+ let path=dense.join("fused.ply");let m=fs::symlink_metadata(&path)?;
+ if !m.file_type().is_file()||m.len()>p.cloud.max_bytes{return Err(Error::Invalid);}
+ fused_ply::verify(fs::File::open(path)?,p.cloud,&mut cancelled).map_err(Error::Cloud)
+ }
+}
 #[cfg(target_os="linux")]
-fn step(root:&Path,s:&colmap::Step,p:&Policy,started:std::time::Instant,cancelled:&mut impl FnMut()->bool)->Result<(),Error>{
+fn step(root:&Path,s:&colmap::Step,p:&Policy,started:std::time::Instant,prepared:bool,cancelled:&mut impl FnMut()->bool)->Result<(),Error>{
  use std::{process::{Command,Stdio},time::Instant};
  if cancelled(){return Err(Error::Cancelled);}
  let remaining=p.timeout.checked_sub(started.elapsed()).ok_or(Error::Timeout)?;
@@ -84,7 +134,11 @@ fn step(root:&Path,s:&colmap::Step,p:&Policy,started:std::time::Instant,cancelle
  .arg("--mount").arg(format!("type=bind,src={},destination=/work",root.display()))
  .arg("--mount").arg(format!("type=bind,src={},destination=/work/images,ro",root.join("images").display()))
  .arg("--mount").arg(format!("type=bind,src={},destination=/work/sparse,ro",root.join("sparse").display()))
- .args(["--workdir=/work","--entrypoint=/usr/bin/colmap","--env=QT_QPA_PLATFORM=offscreen"])
+ ; 
+ if prepared{
+ for n in ["images","sparse"]{cmd.arg("--mount").arg(format!("type=bind,src={},destination=/work/dense/{n},ro",root.join("dense").join(n).display()));}
+ }
+ cmd.args(["--workdir=/work","--entrypoint=/usr/bin/colmap","--env=QT_QPA_PLATFORM=offscreen"])
  .arg(&p.image_id).args(&s.args).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
  let mut child=cmd.spawn()?;
  let result=loop{
