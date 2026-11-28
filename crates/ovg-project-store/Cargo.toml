@@ -20,3 +20,5 @@ tempfile = "3"
 ovg-local-storage = { git = "https://github.com/nguyentrieu210/OpenVietGis", rev = "b2c7a1fcbf80ae0da70a4c8e495efd25f2cb3517" }
 geo = { version = "=0.31.0", default-features = false }
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+chacha20poly1305 = "=0.10.1"
+zeroize = "=1.8.1"
