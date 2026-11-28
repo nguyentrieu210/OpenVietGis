@@ -2,7 +2,7 @@ export type Point = [number, number];
 export type Place = {label:string;point:Point;extent?:number[]|null;osm_id?:number;osm_type?:string;source:string};
 export type Places = {items:Place[];crs:string;attribution:string};
 export type Maneuver = {instruction:string;length:number;time:number};
-export type RouteResult = {route:{trip:{summary:{length:number;time:number};legs:{shape:string;maneuvers:Maneuver[]}[]}};attribution:string};
+export type RouteResult = {source?:string;route:{trip:{summary:{length:number;time:number};legs:{shape:string;maneuvers:Maneuver[]}[]}};attribution:string};
 export function validPoint(p:Point){return p.every(Number.isFinite)&&Math.abs(p[0])<=180&&Math.abs(p[1])<=85.05112878}
 export function parsePoint(text:string):Point|null{
  const m=/^\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+))\s*[,;]\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+))\s*$/.exec(text);

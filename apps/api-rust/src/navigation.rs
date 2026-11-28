@@ -1,11 +1,16 @@
-//! Read-only OSM provider gateway. Only operator configuration selects destinations.
+//! Read-only navigation gateway. Only operator configuration selects destinations.
+mod geoapify;
 use crate::{identity::HumanSession, ApiError, AppState};
 use axum::{extract::Query, routing::get, Json, Router};
 use ovg_core::AppError;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::{process::Stdio, sync::LazyLock, time::Duration};
-use tokio::{io::AsyncReadExt, process::Command, sync::Semaphore};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    process::Command,
+    sync::Semaphore,
+};
 use url::Url;
 
 static REQUESTS: LazyLock<Semaphore> = LazyLock::new(|| Semaphore::new(8));
@@ -56,16 +61,27 @@ async fn request(url: Url) -> Result<Value, ApiError> {
             "8",
             "--max-filesize",
             "2097152",
-            "--url",
-            url.as_str(),
+            "--config",
+            "-",
         ])
         .env_clear()
-        .stdin(Stdio::null())
+        .stdin(Stdio::piped())
         .stderr(Stdio::null())
         .stdout(Stdio::piped())
         .kill_on_drop(true)
         .spawn()
         .map_err(|_| unavailable())?;
+    // Feed URLs via a private pipe so hosted credentials never appear in argv.
+    let config = format!(
+        "url = \"{}\"\n",
+        url.as_str().replace('\\', "\\\\").replace('"', "\\\"")
+    );
+    let mut stdin = child.stdin.take().ok_or_else(unavailable)?;
+    stdin
+        .write_all(config.as_bytes())
+        .await
+        .map_err(|_| unavailable())?;
+    drop(stdin);
     let stdout = child.stdout.take().ok_or_else(unavailable)?;
     let data = tokio::time::timeout(Duration::from_secs(9), async {
         let mut body = Vec::new();
@@ -105,6 +121,13 @@ struct Route {
     profile: Option<String>,
     via: Option<String>,
     alternatives: Option<u8>,
+}
+fn search_input(q: &Search) -> Result<Option<(f64, f64)>, ApiError> {
+    match (q.lon, q.lat) {
+        (Some(lon), Some(lat)) if point(lon, lat) => Ok(Some((lon, lat))),
+        (None, None) => Ok(None),
+        _ => Err(invalid("Invalid search bias coordinates.")),
+    }
 }
 fn label(p: &Value) -> String {
     let parts = [
@@ -146,9 +169,13 @@ fn normalize_places(v: Value) -> Result<Json<Value>, ApiError> {
 }
 async fn search(_auth: HumanSession, Query(q): Query<Search>) -> Result<Json<Value>, ApiError> {
     let term = q.q.trim();
-    if term.chars().count() < 2 || term.chars().count() > 200 || term.chars().any(char::is_control)
+    if term.chars().count() < 3 || term.chars().count() > 200 || term.chars().any(char::is_control)
     {
-        return Err(invalid("Search must contain 2–200 characters."));
+        return Err(invalid("Suggestions must contain 3–200 characters."));
+    }
+    let bias = search_input(&q)?;
+    if geoapify::enabled()? {
+        return geoapify::places("geocode/autocomplete", Some(term), bias).await;
     }
     let mut url = endpoint("OVG_PHOTON_URL", "/api/")?;
     url.query_pairs_mut()
@@ -200,12 +227,27 @@ async fn geocode(auth: HumanSession, Query(q): Query<Search>) -> Result<Json<Val
     {
         return Err(invalid("Search must contain 2–200 characters."));
     }
-    if !matches!((q.lon, q.lat), (None, None))
-        && !matches!((q.lon,q.lat),(Some(lon),Some(lat)) if point(lon,lat))
-    {
-        return Err(invalid("Invalid search bias coordinates."));
+    let bias = search_input(&q)?;
+    if geoapify::enabled()? {
+        return geoapify::places("geocode/search", Some(&term), bias).await;
     }
-    match search(auth, Query(q)).await {
+    let _ = auth;
+    let mut photon = endpoint("OVG_PHOTON_URL", "/api/");
+    if let Ok(url) = &mut photon {
+        url.query_pairs_mut()
+            .append_pair("q", &term)
+            .append_pair("limit", "10");
+        if let Some((lon, lat)) = bias {
+            url.query_pairs_mut()
+                .append_pair("lon", &lon.to_string())
+                .append_pair("lat", &lat.to_string());
+        }
+    }
+    let response = match photon {
+        Ok(url) => request(url).await.and_then(normalize_places),
+        Err(e) => Err(e),
+    };
+    match response {
         Ok(response)
             if response.0["items"]
                 .as_array()
@@ -236,6 +278,9 @@ async fn geocode(auth: HumanSession, Query(q): Query<Search>) -> Result<Json<Val
 async fn reverse(_auth: HumanSession, Query(q): Query<Reverse>) -> Result<Json<Value>, ApiError> {
     if !point(q.lon, q.lat) {
         return Err(invalid("Invalid coordinates."));
+    }
+    if geoapify::enabled()? {
+        return geoapify::places("geocode/reverse", None, Some((q.lon, q.lat))).await;
     }
     if let Ok(mut url) = endpoint("OVG_PHOTON_URL", "/reverse") {
         url.query_pairs_mut()
@@ -271,7 +316,6 @@ async fn route(_auth: HumanSession, Query(q): Query<Route>) -> Result<Json<Value
     ) {
         return Err(invalid("Unsupported routing profile."));
     }
-    let mut url = endpoint("OVG_VALHALLA_URL", "/route")?;
     let mut locations = vec![json!({"lon":q.from_lon,"lat":q.from_lat})];
     if let Some(via) = q.via {
         if via.len() > 512 {
@@ -301,6 +345,10 @@ async fn route(_auth: HumanSession, Query(q): Query<Route>) -> Result<Json<Value
     if alternates > 2 {
         return Err(invalid("At most two alternatives."));
     }
+    if geoapify::enabled()? {
+        return geoapify::route(&locations, profile, alternates).await;
+    }
+    let mut url = endpoint("OVG_VALHALLA_URL", "/route")?;
     let payload = json!({"locations":locations,"costing":profile,"units":"kilometers","language":"en-US","shape_format":"polyline6","alternates":alternates});
     url.query_pairs_mut()
         .append_pair("json", &payload.to_string());
