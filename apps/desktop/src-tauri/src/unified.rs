@@ -5,7 +5,7 @@ use ovg_project_store::{Store,Batch,Edit,Image,Link,virtual_query::{Plan,Cursor}
 use std::{fs,path::PathBuf};
 use serde::{Deserialize,Serialize};
 #[derive(Clone)]
-pub struct Unified{root:PathBuf,open:Arc<Mutex<HashMap<Uuid,(Uuid,Store)>>>}
+pub struct Unified{root:PathBuf,open:Arc<Mutex<HashMap<Uuid,(Uuid,Store)>>>,assets:Arc<Mutex<HashMap<(Uuid,Uuid),crate::unified_assets::Entry>>>}
 fn err(e:ovg_project_store::Error)->&'static str{match e{
  ovg_project_store::Error::Conflict=>"REVISION_CONFLICT",ovg_project_store::Error::Reused=>"OPERATION_ID_REUSED",ovg_project_store::Error::Relation=>"RELATION_CONSTRAINT",ovg_project_store::Error::Limit=>"RESOURCE_LIMIT",ovg_project_store::Error::Unsupported=>"UNSUPPORTED_STORE",_=>"UNIFIED_STORE_ERROR"
 }}
@@ -28,7 +28,7 @@ fn geo(v:Value)->UResult<Vec<u8>>{
  ovg_spatial::encode_wkb(&g,None).map_err(|_|"INVALID_GEOMETRY")
 }
 impl Unified{
- pub fn new(root:PathBuf)->UResult<Self>{fs::create_dir_all(&root).map_err(|_|"STORAGE_UNAVAILABLE")?;if !fs::symlink_metadata(&root).map_err(|_|"STORAGE_UNAVAILABLE")?.file_type().is_dir(){return Err("INVALID_STORAGE")}Ok(Self{root,open:Arc::new(Mutex::new(HashMap::new()))})}
+ pub fn new(root:PathBuf)->UResult<Self>{fs::create_dir_all(&root).map_err(|_|"STORAGE_UNAVAILABLE")?;if !fs::symlink_metadata(&root).map_err(|_|"STORAGE_UNAVAILABLE")?.file_type().is_dir(){return Err("INVALID_STORAGE")}Ok(Self{root,open:Arc::new(Mutex::new(HashMap::new())),assets:Arc::new(Mutex::new(HashMap::new()))})}
  fn path(&self,id:Uuid)->PathBuf{self.root.join(format!("{id}.sqlite"))}
  pub fn list(&self)->UResult<Vec<Project>>{
   let mut out=Vec::new();for e in fs::read_dir(&self.root).map_err(|_|"STORAGE_UNAVAILABLE")?{
@@ -60,9 +60,42 @@ impl Unified{
   let id=Uuid::new_v4();
   Store::restore_copy(path,&self.path(id),&AtomicBool::new(false)).map_err(err)?;Ok(Project{id})
  }
- pub fn shutdown(&self)->UResult<()>{let mut s=self.open.lock().map_err(|_|"SESSION_FAILED")?;for (_,store) in s.values(){store.checkpoint().map_err(err)?;}s.clear();Ok(())}
- pub fn close(&self,h:Uuid)->UResult<()>{let mut s=self.open.lock().map_err(|_|"SESSION_FAILED")?;s.get(&h).ok_or("STALE_HANDLE")?.1.checkpoint().map_err(err)?;s.remove(&h);Ok(())}
+ pub fn shutdown(&self)->UResult<()>{let mut s=self.open.lock().map_err(|_|"SESSION_FAILED")?;for (_,store) in s.values(){store.checkpoint().map_err(err)?;}s.clear();self.assets.lock().map_err(|_|"SESSION_FAILED")?.clear();Ok(())}
+ pub fn close(&self,h:Uuid)->UResult<()>{let mut s=self.open.lock().map_err(|_|"SESSION_FAILED")?;s.get(&h).ok_or("STALE_HANDLE")?.1.checkpoint().map_err(err)?;s.remove(&h);self.assets.lock().map_err(|_|"SESSION_FAILED")?.retain(|(handle,_),_|*handle!=h);Ok(())}
  pub fn with<T>(&self,h:Uuid,f:impl FnOnce(&Store)->UResult<T>)->UResult<T>{let s=self.open.lock().map_err(|_|"SESSION_FAILED")?;f(&s.get(&h).ok_or("STALE_HANDLE")?.1)}
+ pub fn open_asset(&self,h:Uuid,path:&std::path::Path,kind:&str,epsg:Option<u32>)->UResult<crate::unified_assets::Info>{
+  self.with(h,|_|{
+   let mut assets=self.assets.lock().map_err(|_|"SESSION_FAILED")?;
+   if assets.keys().filter(|(k,_)|*k==h).count()>=3||assets.len()>=12{return Err("RESOURCE_LIMIT")}
+   let entry=crate::unified_assets::Entry::open(path,kind,epsg)?;
+   let info=entry.info.clone();assets.insert((h,info.id),entry);Ok(info)
+  })
+ }
+ pub fn close_asset(&self,h:Uuid,id:Uuid)->UResult<()>{
+  self.with(h,|_|{self.assets.lock().map_err(|_|"SESSION_FAILED")?.remove(&(h,id)).ok_or("STALE_HANDLE")?;Ok(())})
+ }
+ pub fn with_asset<T>(&self,h:Uuid,id:Uuid,f:impl FnOnce(&mut crate::unified_assets::Entry)->UResult<T>)->UResult<T>{
+  self.with(h,|_|{let mut a=self.assets.lock().map_err(|_|"SESSION_FAILED")?;f(a.get_mut(&(h,id)).ok_or("STALE_HANDLE")?)})
+ }
+ #[cfg(feature="native-ogr")]
+ pub fn export_parquet(&self,h:Uuid,layer:Uuid,path:&std::path::Path,expected:u64)->UResult<u64>{
+  self.with(h,|s|{
+   let mut queue=std::collections::VecDeque::new();let mut after=0;let mut done=false;
+   let rows=std::iter::from_fn(||{
+    if queue.is_empty()&&!done{
+     match s.query(layer,[-180.,-90.,180.,90.],after,100,expected){
+      Ok(p)=>{queue.extend(p.rows);match p.next{Some(n) if n>after=>after=n,Some(_)=>{done=true;return Some(Err("INVALID_CURSOR"))},None=>done=true}},
+      Err(e)=>{done=true;return Some(Err(err(e)))}
+     }
+    }
+    queue.pop_front().map(|r|{
+     let g=ovg_spatial::parse_xy_wkb(&r.image.wkb,&ovg_spatial::ValidationLimits::default()).map_err(|_|"INVALID_GEOMETRY")?;
+     Ok((r.id.to_string(),ovg_spatial::to_geojson(&g.geometry),r.image.attributes))
+    })
+   });
+   ovg_native_providers::ogr::export_parquet(path,rows)
+  })
+ }
  pub fn apply(&self,h:Uuid,input:Input)->UResult<Value>{
   if input.edits.len()+input.links.len()>64{return Err("RESOURCE_LIMIT")}
   let mut edits=Vec::new();let mut size=0usize;
