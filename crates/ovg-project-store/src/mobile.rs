@@ -203,6 +203,16 @@ impl NativeProject{
  pub fn vector_tile(&self,layer:&str,z:u8,x:u32,y:u32,expected:&str)->Result<Vec<u8>>{
   self.with(|s|mvt::unified_tile(s,id(layer)?,revision(expected)?,z,x,y,&AtomicBool::new(false)).map_err(|e|match e{"STALE_REVISION"=>Error::Conflict,"TILE_DENSITY_LIMIT"|"RESOURCE_LIMIT"=>Error::Limit,_=>Error::Invalid}))
  }
+ pub fn media_inventory(&self,layer:&str,after:&str,expected:&str)->Result<String>{
+  self.with(|s|encode(&serde_json::json!({"scope":s.media_domain()?,"locked":true,"items":s.media_list(id(layer)?,after,100,revision(expected)?)?})))
+ }
+ /// Native platform integration only. Never annotate this method for FFI.
+ pub fn migrate_media_native(&self,source_root:&Path,source_scope:Uuid,destination_scope:Uuid,refs:&[media::ImportRef],keys:&impl media::MediaKeys,expected:&str,cancel:&AtomicBool)->Result<(u64,Vec<media::MediaMeta>)>{
+  self.with(|s|s.import_encrypted_media(source_root,source_scope,destination_scope,refs,keys,revision(expected)?,cancel))
+ }
+ pub fn read_media_native(&self,attachment:Uuid,expected:&str,keys:&impl media::MediaKeys)->Result<zeroize::Zeroizing<Vec<u8>>>{
+  self.with(|s|s.read_encrypted_media(attachment,revision(expected)?,keys))
+ }
  pub fn integrity(&self)->Result<bool>{self.with(|s|s.integrity())}
  /// Backup into private exchange directory, never caller path or cloud.
  pub fn backup(&self,exchange:&Path,expected:&str)->Result<String>{
