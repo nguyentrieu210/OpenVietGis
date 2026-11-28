@@ -1,0 +1,26 @@
+/* Generated from tokens.json; do not edit. */
+/* Import after the prefixed Tailwind theme; no Preflight. */
+@theme inline {
+  --color-ui-danger: var(--ovg-ui-danger);
+  --color-ui-focus: var(--ovg-ui-focus);
+  --color-ui-ink: var(--ovg-ui-ink);
+  --color-ui-line: var(--ovg-ui-line);
+  --color-ui-line-strong: var(--ovg-ui-line-strong);
+  --color-ui-muted: var(--ovg-ui-muted);
+  --color-ui-on-primary: var(--ovg-ui-on-primary);
+  --color-ui-panel: var(--ovg-ui-panel);
+  --color-ui-primary: var(--ovg-ui-primary);
+  --color-ui-success: var(--ovg-ui-success);
+  --color-ui-surface: var(--ovg-ui-surface);
+  --color-ui-warning: var(--ovg-ui-warning);
+  --radius-ui-lg: var(--ovg-ui-radius-lg);
+  --radius-ui-md: var(--ovg-ui-radius-md);
+  --radius-ui-sm: var(--ovg-ui-radius-sm);
+  --radius-ui: var(--ovg-ui-radius-ui);
+  --text-ui-xs: var(--ovg-ui-type-xs);
+  --text-ui-sm: var(--ovg-ui-type-sm);
+  --text-ui-body: var(--ovg-ui-type-body);
+  --text-ui-heading: var(--ovg-ui-type-heading);
+  --font-ui: var(--ovg-ui-type-font-family);
+  --font-ui-mono: var(--ovg-ui-type-mono-family);
+}

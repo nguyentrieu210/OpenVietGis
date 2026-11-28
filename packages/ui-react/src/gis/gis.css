@@ -1,0 +1,8 @@
+.ovg-gis-panel{display:grid;align-content:start;gap:var(--ovg-ui-gap);min-width:0;color:var(--ovg-ui-ink);font:var(--ovg-ui-type-body)/1.4 var(--ovg-ui-type-font-family)}
+.ovg-gis-panel p{margin:0;overflow-wrap:anywhere}.ovg-gis-tree-list{list-style:none;padding:0;margin:0;min-width:0}.ovg-gis-tree-list .ovg-gis-tree-list{padding-inline-start:12px}
+.ovg-gis-layer-row{display:flex;align-items:center;flex-wrap:wrap;gap:4px;min-width:0;padding:2px;border-radius:var(--ovg-ui-radius)}
+.ovg-gis-layer-row[data-selected]{background:var(--ovg-ui-panel);outline:1px solid var(--ovg-ui-focus)}.ovg-gis-layer-row span,.ovg-gis-layer-row b{overflow-wrap:anywhere;min-width:0}
+.ovg-gis-symbol{width:40px;height:24px;flex:none}.ovg-gis-ramp{display:flex;min-height:24px;min-width:0;border:1px solid var(--ovg-ui-line-strong)}.ovg-gis-ramp span{flex:1}
+.ovg-gis-panel button[aria-pressed=true]{background:var(--ovg-ui-primary);color:var(--ovg-ui-on-primary)}
+.ovg-gis-panel input[type=checkbox]{accent-color:var(--ovg-ui-primary);min-width:18px;min-height:18px}
+.ovg-gis-panel input[type=checkbox]:focus-visible{outline:2px solid var(--ovg-ui-focus);outline-offset:2px}

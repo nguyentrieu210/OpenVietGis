@@ -1,0 +1,36 @@
+/* Owned shadcn-style composition; Base UI interaction primitives. No global reset. */
+.ovg-v2-button,.ovg-v2-input,.ovg-v2-checkbox,.ovg-v2-switch,.ovg-v2-tab,.ovg-v2-menu-item{box-sizing:border-box;font:inherit;color:var(--ovg-ui-ink);min-width:0}
+.ovg-v2-button,.ovg-v2-tab{display:inline-flex;align-items:center;justify-content:center;min-height:var(--ovg-ui-control-height);max-width:100%;padding:4px var(--ovg-ui-gap);gap:var(--ovg-ui-field-gap);border:1px solid var(--ovg-ui-line-strong);border-radius:var(--ovg-ui-radius);background:var(--ovg-ui-surface);white-space:normal;overflow-wrap:anywhere;cursor:pointer}
+.ovg-v2-button-primary,.ovg-v2-tab[data-active]{background:var(--ovg-ui-primary);color:var(--ovg-ui-on-primary);border-color:var(--ovg-ui-primary)}
+.ovg-v2-button-danger{border-color:var(--ovg-ui-danger);color:var(--ovg-ui-danger)}
+.ovg-v2-button-ghost{border-color:transparent;background:transparent}
+.ovg-v2-button:disabled,.ovg-v2-input:disabled,.ovg-v2-tab:disabled,.ovg-v2-menu-item[data-disabled],.ovg-v2-checkbox[data-disabled],.ovg-v2-switch[data-disabled]{opacity:.5;cursor:not-allowed}
+.ovg-v2-button:focus-visible,.ovg-v2-input:focus-visible,.ovg-v2-tab:focus-visible,.ovg-v2-menu-item:focus-visible,.ovg-v2-checkbox:focus-visible,.ovg-v2-switch:focus-visible{outline:2px solid var(--ovg-ui-focus);outline-offset:2px}
+.ovg-v2-input{width:100%;max-width:100%;min-height:var(--ovg-ui-control-height);border:1px solid var(--ovg-ui-line-strong);border-radius:var(--ovg-ui-radius);background:var(--ovg-ui-surface);padding:4px var(--ovg-ui-gap)}
+textarea.ovg-v2-input{min-height:calc(var(--ovg-ui-control-height)*2);resize:vertical}
+.ovg-v2-input[aria-invalid=true]{border-color:var(--ovg-ui-danger)}
+.ovg-v2-field{display:grid;gap:var(--ovg-ui-field-gap);min-width:0;overflow-wrap:anywhere}
+.ovg-v2-field small,.ovg-v2-description{color:var(--ovg-ui-muted)}
+.ovg-v2-error{color:var(--ovg-ui-danger)}
+.ovg-v2-actions,.ovg-v2-tabs{display:flex;align-items:center;flex-wrap:wrap;gap:var(--ovg-ui-gap);min-width:0}
+.ovg-v2-scroll,.ovg-v2-table-scroll{min-width:0;min-height:0;max-width:100%;overscroll-behavior:contain}
+.ovg-v2-scroll{overflow-y:auto;overflow-x:hidden}.ovg-v2-table-scroll{overflow:auto}
+.ovg-v2-check-label{display:inline-flex;align-items:center;gap:var(--ovg-ui-gap);min-height:var(--ovg-ui-control-height)}
+.ovg-v2-checkbox,.ovg-v2-switch{display:inline-grid;place-items:center;min-height:var(--ovg-ui-touch-target);min-width:var(--ovg-ui-touch-target);background:var(--ovg-ui-surface);border:1px solid var(--ovg-ui-line-strong);border-radius:var(--ovg-ui-radius);cursor:pointer}
+.ovg-v2-checkbox[data-checked],.ovg-v2-switch[data-checked]{background:var(--ovg-ui-primary);color:var(--ovg-ui-on-primary)}
+.ovg-v2-switch{min-width:calc(var(--ovg-ui-touch-target)*1.5);border-radius:999px;justify-items:start;padding:4px}
+.ovg-v2-thumb{width:calc(var(--ovg-ui-touch-target) - 12px);height:calc(var(--ovg-ui-touch-target) - 12px);border-radius:50%;background:var(--ovg-ui-line-strong)}
+.ovg-v2-switch[data-checked] .ovg-v2-thumb{justify-self:end;background:var(--ovg-ui-on-primary)}
+.ovg-v2-tabpanel{min-width:0;padding-block:var(--ovg-ui-gap)}
+.ovg-v2-backdrop{position:fixed;inset:0;background:rgb(0 0 0/.5);z-index:1000}
+.ovg-v2-dialog{box-sizing:border-box;position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);width:min(var(--ovg-dialog-width,640px),calc(100vw - 24px));max-height:calc(100dvh - 24px);display:flex;flex-direction:column;min-width:0;color:var(--ovg-ui-ink);background:var(--ovg-ui-surface);border:1px solid var(--ovg-ui-line-strong);border-radius:var(--ovg-ui-radius-md);font:var(--ovg-ui-type-body)/1.5 var(--ovg-ui-type-font-family);overflow:hidden}
+.ovg-v2-dialog[data-size=xs]{--ovg-dialog-width:380px}.ovg-v2-dialog[data-size=sm]{--ovg-dialog-width:480px}.ovg-v2-dialog[data-size=lg]{--ovg-dialog-width:960px}.ovg-v2-dialog[data-size=xl]{--ovg-dialog-width:1100px}.ovg-v2-dialog[data-size=workbench]{--ovg-dialog-width:1280px}
+.ovg-v2-dialog-header,.ovg-v2-dialog-footer{display:flex;align-items:center;justify-content:space-between;gap:var(--ovg-ui-gap);padding:var(--ovg-ui-gap) var(--ovg-ui-inset);flex-shrink:0;min-width:0}
+.ovg-v2-dialog-header{border-bottom:1px solid var(--ovg-ui-line)}.ovg-v2-dialog-footer{border-top:1px solid var(--ovg-ui-line);flex-wrap:wrap;justify-content:flex-end}
+.ovg-v2-dialog-body{padding:var(--ovg-ui-inset);overflow:auto;min-width:0;min-height:0;overflow-wrap:anywhere}
+.ovg-v2-title{font-size:var(--ovg-ui-type-heading);font-weight:600;margin:0;min-width:0;overflow-wrap:anywhere}
+.ovg-v2-positioner{z-index:1010;max-width:calc(100vw - 16px)}
+.ovg-v2-popup{box-sizing:border-box;max-width:calc(100vw - 16px);max-height:min(var(--available-height,70vh),70vh);overflow:auto;background:var(--ovg-ui-surface);color:var(--ovg-ui-ink);border:1px solid var(--ovg-ui-line-strong);border-radius:var(--ovg-ui-radius);padding:4px;font:var(--ovg-ui-type-body)/1.5 var(--ovg-ui-type-font-family);box-shadow:0 4px 16px rgb(0 0 0/.16)}
+.ovg-v2-menu-item{display:flex;align-items:center;min-height:var(--ovg-ui-control-height);padding:4px var(--ovg-ui-gap);cursor:pointer;overflow-wrap:anywhere}
+.ovg-v2-menu-item[data-highlighted]{background:var(--ovg-ui-panel);outline:2px solid var(--ovg-ui-focus);outline-offset:-2px}
+.ovg-v2-popover,.ovg-v2-tooltip{padding:var(--ovg-ui-gap);overflow-wrap:anywhere}

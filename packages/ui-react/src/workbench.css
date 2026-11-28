@@ -1,0 +1,6 @@
+.ovg-workbench{height:100%;min-height:0;min-width:0;display:flex;flex-direction:column;color:var(--ovg-ui-ink);background:var(--ovg-ui-surface)}
+.ovg-workbench-tools{display:flex;flex-wrap:wrap;gap:4px;padding:4px;align-items:center;flex-shrink:0}
+.ovg-workbench-body{flex:1;min-height:0;min-width:0;position:relative}
+.ovg-workbench-body>.dockview{height:100%;width:100%}
+.dockview-theme-ovg{--dv-group-view-background-color:var(--ovg-ui-surface);--dv-tabs-and-actions-container-background-color:var(--ovg-ui-panel);--dv-activegroup-visiblepanel-tab-background-color:var(--ovg-ui-surface);--dv-activegroup-visiblepanel-tab-color:var(--ovg-ui-ink);--dv-activegroup-hiddenpanel-tab-background-color:var(--ovg-ui-panel);--dv-activegroup-hiddenpanel-tab-color:var(--ovg-ui-muted);--dv-inactivegroup-visiblepanel-tab-color:var(--ovg-ui-ink);--dv-inactivegroup-hiddenpanel-tab-color:var(--ovg-ui-muted);--dv-separator-border:var(--ovg-ui-line-strong);--dv-active-sash-color:var(--ovg-ui-primary);--dv-tabs-and-actions-container-height:var(--ovg-ui-control-height)}
+.ovg-workbench-tab{display:flex;align-items:center;gap:6px}.ovg-workbench-tab button{font:inherit;color:inherit;background:transparent;border:0;cursor:pointer}.ovg-workbench-tab button[hidden]{display:none}

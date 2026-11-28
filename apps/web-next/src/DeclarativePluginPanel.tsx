@@ -1,3 +1,5 @@
+import {PluginDocumentView,type UniversalNode} from "@openvietgis/ui-react/plugin";
+import "@openvietgis/ui-react/styles.css";
 import React,{useEffect,useRef,useState} from "react";
 import {getPluginV2Runtime,invokePluginV2,confirmPluginProcessing,setPluginV2Grant,loadCsrfToken,type ApiClient,type PluginV2Runtime,type PluginV2Widget,type PluginProcessingProposal} from "@openvietgis/client-sdk";
 
@@ -7,7 +9,7 @@ export function DeclarativePluginPanel({client,org,project,manifest,canManage,on
  const active=useRef<AbortController|null>(null),flight=useRef(false),generation=useRef(0),runtimeIdentity=useRef("");
  useEffect(()=>{
   const ctrl=new AbortController();active.current=ctrl;setRuntime(null);setProposal(null);setValues({});setOutput("");setError("");setBusy(false);flight.current=false;runtimeIdentity.current="";
-  const refresh=()=>{if(flight.current)return;const revision=++generation.current;void getPluginV2Runtime(client,org,project,manifest,ctrl.signal).then(r=>{if(!ctrl.signal.aborted&&!flight.current&&revision===generation.current){const identity=r.release_digest+":"+r.lock_digest+":"+r.grant_revision+":"+r.catalog_epoch;if(runtimeIdentity.current!==identity||!r.granted){setOutput("");setProposal(null)}runtimeIdentity.current=identity;setRuntime(r);setError("")}}).catch(()=>{if(!ctrl.signal.aborted&&!flight.current&&revision===generation.current){setRuntime(null);setProposal(null);setOutput("");setError("Plugin khai báo chưa được bật hoặc không còn đủ quyền.")}})};
+  const refresh=()=>{if(flight.current)return;const revision=++generation.current;void getPluginV2Runtime(client,org,project,manifest,ctrl.signal).then(r=>{if(!ctrl.signal.aborted&&!flight.current&&revision===generation.current){const identity=r.release_digest+":"+r.lock_digest+":"+r.grant_revision+":"+r.catalog_epoch;if(runtimeIdentity.current!==identity||!r.granted){setValues({});setOutput("");setProposal(null)}runtimeIdentity.current=identity;setRuntime(r);setError("")}}).catch(()=>{if(!ctrl.signal.aborted&&!flight.current&&revision===generation.current){setRuntime(null);setProposal(null);setOutput("");setError("Plugin khai báo chưa được bật hoặc không còn đủ quyền.")}})};
   refresh();const timer=window.setInterval(refresh,15000);
   return()=>{window.clearInterval(timer);ctrl.abort();active.current=null};
  },[client,org,project,manifest]);
@@ -42,7 +44,7 @@ export function DeclarativePluginPanel({client,org,project,manifest,canManage,on
   ++generation.current;flight.current=true;setBusy(true);setError("");setOutput("");setProposal(null);
   try{await loadCsrfToken(client);if(ctrl.signal.aborted)return;
    const result=await setPluginV2Grant(client,org,project,runtime,enabled,ctrl.signal);
-   if(!ctrl.signal.aborted){runtimeIdentity.current=runtime.release_digest+":"+runtime.lock_digest+":"+result.grant_revision+":"+runtime.catalog_epoch;setRuntime({...runtime,granted:result.granted,grant_revision:result.grant_revision})}
+   if(!ctrl.signal.aborted){runtimeIdentity.current=runtime.release_digest+":"+runtime.lock_digest+":"+result.grant_revision+":"+runtime.catalog_epoch;setValues({});setRuntime({...runtime,granted:result.granted,grant_revision:result.grant_revision})}
   }catch{if(!ctrl.signal.aborted)setError("Không thể cập nhật quyền. Hãy mở lại plugin.")}
   finally{if(!ctrl.signal.aborted){flight.current=false;setBusy(false)}}
  };
@@ -55,14 +57,14 @@ export function DeclarativePluginPanel({client,org,project,manifest,canManage,on
   }catch{if(!ctrl.signal.aborted)setError("Không thể xác nhận. Đề xuất có thể hết hạn hoặc dữ liệu đã đổi.")}
   finally{if(!ctrl.signal.aborted){flight.current=false;setBusy(false)}}
  };
- const render=(nodes:PluginV2Widget[],depth=1):React.ReactNode=>depth>16?null:nodes.map(node=>{
+ const presentation=(nodes:PluginV2Widget[]):UniversalNode[]=>nodes.map(node=>{
   switch(node.kind){
-   case "text":return <p key={node.id}>{node.text}</p>;
-   case "group":return <div key={node.id}>{render(node.children,depth+1)}</div>;
-   case "input":return <label key={node.id}>{node.label}<input maxLength={4096} value={Object.hasOwn(values,node.field)?values[node.field]:""} onChange={e=>setValues(old=>({...old,[node.field]:e.target.value}))}/></label>;
-   case "button":return <button key={node.id} disabled={busy} onClick={()=>void execute(node.action)}>{node.label}</button>;
-   default:return null;
+   case "text":return {id:node.id,kind:"text",label:node.text,children:[]};
+   case "group":return {id:node.id,kind:"group",label:"",children:presentation(node.children)};
+   case "input":return {id:node.id,kind:"input",label:node.label,binding:node.field,children:[]};
+   case "button":return {id:node.id,kind:"button",label:node.label,binding:node.action,children:[]};
   }
  });
- return <section className="partner-form" aria-label="Plugin khai báo v2"><button onClick={onClose}>Đóng plugin v2</button><p className="live-note">Runtime thử nghiệm · đọc và đề xuất xử lý · không chạy mã tải về.</p>{!runtime&&!error&&<p>Đang xác minh plugin…</p>}{runtime&&<div><p>Quyền thực thi: {runtime.granted?"Đã cấp":"Chưa cấp"}</p><ul>{runtime.permissions.map(p=><li key={p}>{p.endsWith(".map_view")?"Đọc tên lớp, loại hình học, số đối tượng và mã lớp trong dự án":p.endsWith(".processing_plan")?"Đề xuất job GIS, chỉ quản lý dự án xác nhận mới được xếp hàng":p}</li>)}</ul>{runtime.dependency_lock.length>0&&<details><summary>Phiên bản đã khóa ({runtime.dependency_lock.length})</summary><ul>{runtime.dependency_lock.map(p=><li key={p.key}>{p.key} · {p.version}</li>)}</ul></details>}{canManage&&<button disabled={busy} onClick={()=>void changeGrant(!runtime.granted)}>{runtime.granted?"Thu hồi quyền":"Cấp quyền cho phiên bản này"}</button>}{runtime.granted&&render(runtime.document.widgets)}</div>}{error&&<p role="alert">{error}</p>}{output&&<pre aria-live="polite">{output}</pre>}{proposal&&canManage&&<div><p>Đề xuất hết hạn sau 5 phút. Xác nhận sẽ tạo job có thể xuất lớp dữ liệu mới qua Core; chưa chạy thuật toán.</p><button disabled={busy} onClick={()=>void confirm()}>Xác nhận đưa job vào hàng đợi</button><button disabled={busy} onClick={()=>{setProposal(null);setOutput("")}}>Bỏ đề xuất</button></div>}</section>
+
+ return <section className="partner-form" aria-label="Plugin khai báo v2"><button onClick={onClose}>Đóng plugin v2</button><p className="live-note">Runtime thử nghiệm · đọc và đề xuất xử lý · không chạy mã tải về.</p>{!runtime&&!error&&<p>Đang xác minh plugin…</p>}{runtime&&<div><p>Quyền thực thi: {runtime.granted?"Đã cấp":"Chưa cấp"}</p><ul>{runtime.permissions.map(p=><li key={p}>{p.endsWith(".map_view")?"Đọc tên lớp, loại hình học, số đối tượng và mã lớp trong dự án":p.endsWith(".processing_plan")?"Đề xuất job GIS, chỉ quản lý dự án xác nhận mới được xếp hàng":p}</li>)}</ul>{runtime.dependency_lock.length>0&&<details><summary>Phiên bản đã khóa ({runtime.dependency_lock.length})</summary><ul>{runtime.dependency_lock.map(p=><li key={p.key}>{p.key} · {p.version}</li>)}</ul></details>}{canManage&&<button disabled={busy} onClick={()=>void changeGrant(!runtime.granted)}>{runtime.granted?"Thu hồi quyền":"Cấp quyền cho phiên bản này"}</button>}{runtime.granted&&<PluginDocumentView document={{nodes:presentation(runtime.document.widgets),actions:new Set(runtime.document.actions.map(a=>a.id)),fields:new Set(runtime.document.actions.flatMap(a=>Object.keys(a.input)))}} values={values} busy={busy} onValue={(field,value)=>setValues(old=>({...old,[field]:value}))} onAction={id=>void execute(id)} unavailableLabel="Plugin không khả dụng"/>}</div>}{error&&<p role="alert">{error}</p>}{output&&<pre aria-live="polite">{output}</pre>}{proposal&&canManage&&<div><p>Đề xuất hết hạn sau 5 phút. Xác nhận sẽ tạo job có thể xuất lớp dữ liệu mới qua Core; chưa chạy thuật toán.</p><button disabled={busy} onClick={()=>void confirm()}>Xác nhận đưa job vào hàng đợi</button><button disabled={busy} onClick={()=>{setProposal(null);setOutput("")}}>Bỏ đề xuất</button></div>}</section>
 }

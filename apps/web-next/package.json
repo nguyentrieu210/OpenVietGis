@@ -20,7 +20,8 @@
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router-dom": "7.18.5",
-    "terra-draw": "1.40.0"
+    "terra-draw": "1.40.0",
+    "@openvietgis/ui-react": "workspace:*"
   },
   "devDependencies": {
     "@types/geojson": "7946.0.16",
