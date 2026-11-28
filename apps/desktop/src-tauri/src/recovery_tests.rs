@@ -93,3 +93,35 @@ fn rejects_snapshot_with_untrusted_trigger(){
  db.execute_batch("CREATE TRIGGER unexpected AFTER INSERT ON features BEGIN DELETE FROM features; END;").unwrap();drop(db);
  assert!(h.restore_snapshot(&snap).is_err());assert_eq!(h.list().unwrap().len(),1);
 }
+
+#[test]
+fn named_layers_persist_and_remain_isolated(){
+ let d=tempfile::tempdir().unwrap();let h=Host::new(d.path().to_path_buf()).unwrap();
+ let p=h.create().unwrap();let w=h.open(p.id).unwrap();let layer=h.create_layer(w.handle,"Survey".into(),None).unwrap();
+ let child=h.open_layer(w.handle,layer.id).unwrap();let id=Uuid::new_v4();
+ h.edit(child.handle,Uuid::new_v4(),id,"0".into(),Some("point".into()),vec![106.,11.],json!({"layer":"survey"})).unwrap();
+ assert!(h.feature(w.handle,id).is_err());assert_eq!(h.list_layers(w.handle).unwrap().len(),1);
+ h.close(w.handle).unwrap();assert!(h.feature(child.handle,id).is_err());
+ let w=h.open(p.id).unwrap();assert_eq!(h.list_layers(w.handle).unwrap()[0].name,"Survey");
+ let child=h.open_layer(w.handle,layer.id).unwrap();assert_eq!(h.feature(child.handle,id).unwrap()["attributes"]["layer"],"survey");
+ h.close(w.handle).unwrap();
+}
+#[test]
+fn multi_table_catalog_imports_only_selected_layer_and_reprojects(){
+ use rusqlite::{Connection,params};
+ let d=tempfile::tempdir().unwrap();let src=d.path().join("multi.gpkg");
+ let db=Connection::open(&src).unwrap();
+ db.execute_batch("PRAGMA application_id=1196444487; CREATE TABLE gpkg_contents(table_name TEXT,data_type TEXT); CREATE TABLE gpkg_geometry_columns(table_name TEXT,column_name TEXT,srs_id INTEGER,z INTEGER,m INTEGER); CREATE TABLE a(fid INTEGER PRIMARY KEY,geom BLOB,name TEXT); CREATE TABLE b(fid INTEGER PRIMARY KEY,geom BLOB,name TEXT); INSERT INTO gpkg_contents VALUES('a','features'),('b','features'); INSERT INTO gpkg_geometry_columns VALUES('a','geom',4326,0,0),('b','geom',3857,0,0);").unwrap();
+ let mut blob=vec![b'G',b'P',0,1];blob.extend(3857_i32.to_le_bytes());
+ let mut point_wkb=vec![1,1,0,0,0];point_wkb.extend(111319.49079327357_f64.to_le_bytes());point_wkb.extend(0_f64.to_le_bytes());blob.extend(point_wkb);
+ db.execute("INSERT INTO b VALUES(1,?1,'mercator')",params![blob]).unwrap();drop(db);
+ let h=Host::new(d.path().join("projects")).unwrap();let p=h.create().unwrap();let w=h.open(p.id).unwrap();
+ let c=h.inspect_gpkg(w.handle,&src).unwrap();assert_eq!(c["layers"].as_array().unwrap().len(),2);
+ let grant=Uuid::parse_str(c["id"].as_str().unwrap()).unwrap();
+ let layer=h.create_layer(w.handle,"B".into(),Some((grant,"b".into()))).unwrap();
+ assert_eq!(layer.source_epsg,Some(3857));
+ let child=h.open_layer(w.handle,layer.id).unwrap();
+ let v=h.viewport(child.handle,[0.9,-0.1,1.1,0.1]).unwrap();assert_eq!(v.data["features"].as_array().unwrap().len(),1);
+ assert!(h.viewport(w.handle,[0.9,-0.1,1.1,0.1]).unwrap().data["features"].as_array().unwrap().is_empty());
+ h.close(w.handle).unwrap();
+}
