@@ -13,6 +13,11 @@ test("public shell exposes skip navigation and visible keyboard focus", async ({
   await page.keyboard.press("Tab");
   await expect(skip).toBeFocused();
   await expect(skip).toHaveCSS("outline-style", "solid");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL("/#main-content");
+  const main = page.locator("#main-content");
+  await expect(main).toHaveAttribute("tabindex", "-1");
+  await expect(main).toBeFocused();
 });
 
 test("authenticated shell stays within viewport at reference widths", async ({
