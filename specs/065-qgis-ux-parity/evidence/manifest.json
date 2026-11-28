@@ -517,9 +517,11 @@
         "apps/web-next/src/topology-review.ts",
         "apps/web-next/src/topology-review.test.ts",
         "apps/web-next/src/ProfessionalTools.tsx",
-        "tests/spec065/topology.py"
+        "tests/spec065/topology.py",
+        "apps/web-next/src/advanced-geometry.ts",
+        "apps/web-next/src/advanced-geometry.test.ts"
       ],
-      "blocker": "Actual Rust/PostGIS topology duplicate, selected overlap, gap/outside, dangling, omitted geometry and boundary pins verified. No auto-fix; source cap 50k, output 200, EPSG:4326 only. Shared-boundary editing and avoid-overlap transactions, paired QGIS remain."
+      "blocker": "Rust/PostGIS topology checks plus exact coincident vertex move for a complete revision-pinned source in one existing changeset (up to 100 features, 5000 source features); no automatic segment noding, avoid-overlap transactional policy or paired QGIS. New tests unexecuted."
     },
     {
       "id": "EDIT-06",
@@ -529,9 +531,11 @@
         "apps/web-next/src/AdvancedEditor.tsx",
         "apps/api-rust/src/professional.rs",
         "apps/api-rust/src/editing.rs",
-        "tests/spec065/topology.py"
+        "tests/spec065/topology.py",
+        "apps/web-next/src/advanced-geometry.ts",
+        "apps/web-next/src/advanced-geometry.test.ts"
       ],
-      "blocker": "Actual authenticated split/merge preview and changeset commit/replay with golden planar area, retained keeper FID and attributes; disconnected/noncrossing rejected. Reshape, multipart editing, ring create/delete and paired QGIS remain."
+      "blocker": "Authenticated split/merge preview and changeset; polygon hole add/remove in existing vertex editor, local containment and boundary intersection checks, undo/redo, authoritative PostGIS commit. Reshape and multipart part creation/deletion, browser/QGIS acceptance remain. New tests unexecuted."
     },
     {
       "id": "EDIT-07",

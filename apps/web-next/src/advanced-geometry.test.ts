@@ -1,6 +1,6 @@
 import {describe,expect,it} from "vitest";
 import type {Geometry} from "geojson";
-import {geometryPartCount,geometryRingCount,geometryVertices,segmentEditable,vertexEditable,withGeometryVertices} from "./advanced-geometry";
+import {geometryPartCount,geometryRingCount,geometryVertices,segmentEditable,vertexEditable,withGeometryVertices,addPolygonHole,removePolygonHole,sharedVertexChanges} from "./advanced-geometry";
 
 describe("multipart vertex editing",()=>{
  it("exposes editable multipart lines while keeping split and merge capability scoped",()=>{
@@ -32,5 +32,35 @@ describe("multipart vertex editing",()=>{
   expect(geometryVertices(polygon,0,1)).toEqual([[.5,.5],[1,.5],[.5,1]]);
   expect(withGeometryVertices(polygon,0,1,[[.5,.5],[1.2,.5],[.5,1]])).toMatchObject({type:"Polygon",coordinates:[polygon.coordinates[0],[[.5,.5],[1.2,.5],[.5,1],[.5,.5]]]});
   expect(vertexEditable({type:"Point",coordinates:[0,0]})).toBe(false);
+ });
+});
+
+describe("polygon hole operations",()=>{
+ const g:Geometry={type:"Polygon",coordinates:[[[0,0],[4,0],[4,4],[0,4],[0,0]]]};
+ it("adds and removes an interior ring without changing source",()=>{
+  const h=addPolygonHole(g,0,[[1,1],[2,1],[2,2],[1,2]]);
+  expect(geometryRingCount(h)).toBe(2);expect(geometryRingCount(g)).toBe(1);
+  expect(removePolygonHole(h,0,1)).toEqual(g);
+  expect(()=>removePolygonHole(h,0,0)).toThrow();
+ });
+ it("rejects outside, boundary crossing, touching and nested holes",()=>{
+  expect(()=>addPolygonHole(g,0,[[5,5],[6,5],[6,6]])).toThrow();
+  expect(()=>addPolygonHole(g,0,[[1,1],[5,1],[1,2]])).toThrow();
+  expect(()=>addPolygonHole(g,0,[[0,1],[1,1],[1,2]])).toThrow();
+  const h=addPolygonHole(g,0,[[1,1],[3,1],[3,3],[1,3]]);
+  expect(()=>addPolygonHole(h,0,[[1.5,1.5],[2,1.5],[2,2]])).toThrow();
+ });
+});
+describe("exact shared vertex changes",()=>{
+ it("updates matching vertices in both polygons and keeps closed rings",()=>{
+  const a:Geometry={type:"Polygon",coordinates:[[[0,0],[1,0],[1,1],[0,1],[0,0]]]};
+  const b:Geometry={type:"Polygon",coordinates:[[[1,0],[2,0],[2,1],[1,1],[1,0]]]};
+  const rows=[{id:"a",geometry:a},{id:"b",geometry:b}];
+  const changes=sharedVertexChanges(rows,"a",[1,0],[1.1,0]);
+  expect(changes.map(x=>x.id)).toEqual(["a","b"]);
+  expect(changes[1]!.geometry).toEqual({type:"Polygon",coordinates:[[[1.1,0],[2,0],[2,1],[1,1],[1.1,0]]]});
+  expect(a.coordinates[0]![1]).toEqual([1,0]);
+  expect(()=>sharedVertexChanges(rows,"a",[1,0],[1,1])).toThrow();
+  expect(()=>sharedVertexChanges(rows,"a",[3,0],[3,1])).toThrow();
  });
 });
