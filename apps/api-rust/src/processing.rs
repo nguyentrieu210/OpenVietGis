@@ -103,6 +103,9 @@ const fn algorithm_str(id: AlgorithmId) -> &'static str {
         AlgorithmId::Dissolve => "dissolve",
         AlgorithmId::Difference => "difference",
         AlgorithmId::Intersection => "intersection",
+        AlgorithmId::Union => "union",
+        AlgorithmId::Reproject => "reproject",
+        AlgorithmId::SpatialJoin => "spatial_join",
     }
 }
 
@@ -361,7 +364,7 @@ mod tests {
     fn registry_matches_the_frozen_python_contract() {
         let body = algorithm_registry_wire();
         let items = body["items"].as_array().unwrap();
-        assert_eq!(items.len(), 5);
+        assert_eq!(items.len(), 8);
         assert_eq!(items[0]["id"], "buffer");
         assert_eq!(items[0]["parameters_schema"]["quad_segs"]["default"], 8);
         assert_eq!(items[1]["required_inputs"][1], "overlay_layer_id");

@@ -20,6 +20,9 @@ pub enum AlgorithmId {
     Dissolve,
     Difference,
     Intersection,
+    Union,
+    Reproject,
+    SpatialJoin,
 }
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -37,7 +40,7 @@ pub struct AlgorithmDescriptor {
 
 /// Descriptors in the order returned by the existing processing catalog.
 #[must_use]
-pub fn algorithm_registry() -> [AlgorithmDescriptor; 5] {
+pub fn algorithm_registry() -> [AlgorithmDescriptor; 8] {
     [
         AlgorithmDescriptor {
             id: AlgorithmId::Buffer,
@@ -108,6 +111,43 @@ pub fn algorithm_registry() -> [AlgorithmDescriptor; 5] {
             required_inputs: &["input_layer_id", "overlay_layer_id"],
             parameters_schema: json!({}),
         },
+        AlgorithmDescriptor {
+            id: AlgorithmId::Union,
+            provider_id: "openvietgis",
+            provider_name: "OpenVietGIS Core",
+            category: "vector",
+            capabilities: &["vector.read", "geometry.union", "vector.overlay"],
+            name: "Union",
+            description: "Polygon overlay union with both input schemas, including unmatched parts.",
+            required_inputs: &["input_layer_id", "overlay_layer_id"],
+            parameters_schema: json!({}),
+        },
+        AlgorithmDescriptor {
+            id: AlgorithmId::Reproject,
+            provider_id: "openvietgis",
+            provider_name: "OpenVietGIS Core",
+            category: "vector",
+            capabilities: &["vector.read", "geometry.reproject"],
+            name: "Reproject",
+            description: "Transforms geometries using the approved EPSG:4326 / EPSG:3857 pipeline; retains source attributes.",
+            required_inputs: &["input_layer_id"],
+            parameters_schema: json!({"target_srid":{"type":"integer","enum":[4326,3857]}}),
+        },
+        AlgorithmDescriptor {
+            id: AlgorithmId::SpatialJoin,
+            provider_id: "openvietgis",
+            provider_name: "OpenVietGIS Core",
+            category: "vector",
+            capabilities: &["vector.read", "geometry.spatial_join", "vector.overlay"],
+            name: "Spatial Join",
+            description: "Join attributes by a spatial predicate, retaining input geometry with inner or left join and deterministic first or all matches.",
+            required_inputs: &["input_layer_id", "overlay_layer_id"],
+            parameters_schema: json!({
+                "predicate":{"type":"string","enum":["intersects","within","contains","touches","overlaps","crosses","equals"],"default":"intersects"},
+                "join_type":{"type":"string","enum":["left","inner"],"default":"left"},
+                "match_mode":{"type":"string","enum":["all","first"],"default":"all"}
+            }),
+        },
     ]
 }
 
@@ -124,13 +164,40 @@ pub fn validate_algorithm_parameters(
             "unknown clip parameter",
         )),
         AlgorithmId::Dissolve => validate_dissolve(parameters),
-        AlgorithmId::Difference | AlgorithmId::Intersection if parameters.is_empty() => {
+        AlgorithmId::Difference | AlgorithmId::Intersection | AlgorithmId::Union if parameters.is_empty() => {
             Ok(json!({}))
         }
-        AlgorithmId::Difference | AlgorithmId::Intersection => Err(AppError::validation(
+        AlgorithmId::Difference | AlgorithmId::Intersection | AlgorithmId::Union => Err(AppError::validation(
             "INVALID_PARAMETERS",
             "unknown overlay parameter",
         )),
+        AlgorithmId::Reproject => {
+            let srid = parameters.get("target_srid").and_then(Value::as_i64);
+            if parameters.len() != 1 || !matches!(srid, Some(4326 | 3857)) {
+                return Err(AppError::validation("INVALID_PARAMETERS", "target_srid must be 4326 or 3857"));
+            }
+            Ok(json!({"target_srid": srid}))
+        }
+        AlgorithmId::SpatialJoin => {
+            if parameters.keys().any(|k| !matches!(k.as_str(), "predicate" | "join_type" | "match_mode")) {
+                return Err(AppError::validation("INVALID_PARAMETERS", "unknown spatial join parameter"));
+            }
+            let pick = |key: &str, default: &str, allowed: &[&str]| -> Result<String, AppError> {
+                let value = match parameters.get(key) {
+                    None => default,
+                    Some(v) => v.as_str().ok_or_else(|| AppError::validation("INVALID_PARAMETERS", "spatial join parameter must be a string"))?,
+                };
+                if !allowed.contains(&value) {
+                    return Err(AppError::validation("INVALID_PARAMETERS", "unsupported spatial join option"));
+                }
+                Ok(value.to_owned())
+            };
+            Ok(json!({
+                "predicate":pick("predicate","intersects",&["intersects","within","contains","touches","overlaps","crosses","equals"])?,
+                "join_type":pick("join_type","left",&["left","inner"])?,
+                "match_mode":pick("match_mode","all",&["all","first"])?
+            }))
+        }
     }
 }
 
@@ -268,6 +335,18 @@ mod tests {
             assert_eq!(validate(algorithm, json!({})).unwrap(), json!({}));
             assert!(validate(algorithm, json!({"unexpected": 1})).is_err());
         }
+    }
+
+    #[test]
+    fn validates_new_vector_algorithms() {
+        assert_eq!(algorithm_registry().len(), 8);
+        assert_eq!(validate(AlgorithmId::Union, json!({})).unwrap(), json!({}));
+        assert_eq!(validate(AlgorithmId::Reproject, json!({"target_srid":3857})).unwrap(), json!({"target_srid":3857}));
+        assert!(validate(AlgorithmId::Reproject, json!({"target_srid":"3857"})).is_err());
+        assert!(validate(AlgorithmId::Reproject, json!({"target_srid":3405})).is_err());
+        assert_eq!(validate(AlgorithmId::SpatialJoin, json!({})).unwrap(), json!({"predicate":"intersects","join_type":"left","match_mode":"all"}));
+        assert!(validate(AlgorithmId::SpatialJoin, json!({"predicate":"ST_Anything"})).is_err());
+        assert!(validate(AlgorithmId::SpatialJoin, json!({"match_mode":"random"})).is_err());
     }
 
     #[test]

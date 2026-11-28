@@ -44,7 +44,7 @@ function algorithmLabel(id: string): string {
     clip: "Cắt lớp",
     dissolve: "Gộp vùng",
     difference: "Hiệu hình học",
-    intersection: "Giao hình học"
+    intersection: "Giao hình học", union: "Hợp lớp", reproject: "Chuyển CRS", spatial_join: "Nối không gian"
   };
   return labels[id] ?? id;
 }
@@ -59,6 +59,11 @@ export function ProcessingWorkbenchPage() {
   const [overlayLayerId, setOverlayLayerId] = useState("");
   const [distance, setDistance] = useState("500");
   const [segments,setSegments]=useState("8");
+  const [targetSrid,setTargetSrid]=useState(3857);
+  const [predicate,setPredicate]=useState("intersects");
+  const [joinType,setJoinType]=useState("left");
+  const [matchMode,setMatchMode]=useState("all");
+  const options={targetSrid,predicate,joinType,matchMode};
   const [filter,setFilter]=useState("");
   const [busy,setBusy]=useState(false);
   const inFlight=useRef(false);
@@ -104,7 +109,7 @@ export function ProcessingWorkbenchPage() {
   const overlay=layers.find(l=>l.id===overlayLayerId);
   const algorithms=(algosQuery.data?.items??[]).filter(a=>supportedAlgorithm(a.id));
   const descriptor=algorithms.find(a=>a.id===algo);
-  const validation=(()=>{if(!canWrite)return "Chưa xác minh quyền tạo tác vụ.";if(!descriptor)return "Thuật toán chưa được máy chủ cung cấp.";try{processingRequest(algo,input,overlay,distance,segments,groupField,outputName,"preview");return ""}catch(e){return e instanceof Error?e.message:"Tham số không hợp lệ."}})();
+  const validation=(()=>{if(!canWrite)return "Chưa xác minh quyền tạo tác vụ.";if(!descriptor)return "Thuật toán chưa được máy chủ cung cấp.";try{processingRequest(algo,input,overlay,distance,segments,groupField,outputName,"preview",options);return ""}catch(e){return e instanceof Error?e.message:"Tham số không hợp lệ."}})();
   const jobs=(jobsQuery.data?.items??[]).filter(j=>!filter||j.status===filter);
   const mutate=async(fn:()=>Promise<unknown>)=>{if(inFlight.current)return;inFlight.current=true;setBusy(true);setError(null);try{await fn();await qc.invalidateQueries({queryKey:["r008",organizationId,projectId]})}catch(e){setError(e instanceof Error?e.message:"Thao tác thất bại.")}finally{inFlight.current=false;setBusy(false)}};
 
@@ -114,7 +119,7 @@ export function ProcessingWorkbenchPage() {
     inFlight.current=true;setBusy(true);setError(null);setNotice(null);
     let request:ProcessingRequest|undefined;
     try{
-      request=pending??processingRequest(algo,input,overlay,distance,segments,groupField,outputName,crypto.randomUUID());
+      request=pending??processingRequest(algo,input,overlay,distance,segments,groupField,outputName,crypto.randomUUID(),options);
       remember(request); // fail closed if recovery storage is unavailable
       const csrf=await loadCsrfToken(apiClient);
       const job=verifyProcessingReceipt(await createProcessingJob(apiClient,organizationId,projectId,request,csrf),request);
@@ -130,7 +135,7 @@ export function ProcessingWorkbenchPage() {
 
   function addBatch(){
     if(!canWrite||validation||pending||busy||batchError||uncertainBatch)return;
-    try{storeBatch(appendBatch(batch,processingRequest(algo,input,overlay,distance,segments,groupField,outputName,crypto.randomUUID())));setError(null)}catch(e){setError(e instanceof Error?e.message:String(e))}
+    try{storeBatch(appendBatch(batch,processingRequest(algo,input,overlay,distance,segments,groupField,outputName,crypto.randomUUID(),options)));setError(null)}catch(e){setError(e instanceof Error?e.message:String(e))}
   }
   async function runBatch(){
     if(!canWrite||pending||batchError||inFlight.current||nextBatchRow(batch)<0)return;
@@ -181,7 +186,7 @@ export function ProcessingWorkbenchPage() {
           <h2>Tham số phân tích không gian ({algorithms.length} thuật toán)</h2>
           <div className="ovg-algorithm-picker" aria-label="Chọn thuật toán">{algorithms.map(a=><button type="button" key={a.id} className="ovg-algorithm-choice" aria-pressed={algo===a.id} disabled={busy||!!pending} onClick={()=>{setAlgo(a.id);setOverlayLayerId("");setGroupField("")}}><b>{algorithmLabel(a.id)}</b><small>{a.name}</small></button>)}</div>
           {algosQuery.isError&&<p role="alert">Không tải được danh mục. <button type="button" onClick={()=>void algosQuery.refetch()}>Thử lại</button></p>}
-          {descriptor&&<p className="ovg-processing-description">{algo==="buffer"?"Tạo vùng đệm theo khoảng cách. Đầu vào địa lý được xử lý trong Web Mercator; không phải phép đo trắc địa chính xác.":algo==="clip"?"Cắt theo hợp các vùng phủ polygon.":algo==="difference"?"Trừ hợp các vùng phủ polygon; giữ ID nguồn.":algo==="intersection"?"Giao từng cặp đối tượng với vùng phủ polygon; giữ hai ID, không nối toàn bộ thuộc tính.":"Gộp hình học toàn lớp hoặc theo trường thuộc tính."}</p>}
+          {descriptor&&<p className="ovg-processing-description">{algo==="buffer"?"Tạo vùng đệm theo khoảng cách. Đầu vào địa lý được xử lý trong Web Mercator; không phải phép đo trắc địa chính xác.":algo==="clip"?"Cắt theo hợp các vùng phủ polygon.":algo==="difference"?"Trừ hợp các vùng phủ polygon; giữ ID nguồn.":algo==="intersection"?"Giao từng cặp đối tượng với vùng phủ polygon; giữ hai ID, không nối toàn bộ thuộc tính.":algo==="union"?"Hợp hai lớp polygon, giữ thuộc tính hai phía.":algo==="reproject"?"Chuyển CRS theo pipeline EPSG:4326/3857 đã duyệt, giữ thuộc tính.":algo==="spatial_join"?"Nối thuộc tính theo quan hệ không gian, giữ hình học đầu vào.":"Gộp hình học toàn lớp hoặc theo trường thuộc tính."}</p>}
           {pending&&<p role="status">Chưa xác minh phản hồi: {pending.algorithm_id} · {pending.output_name} · mã {pending.operation_id}. Gửi lại cùng yêu cầu, không tạo tác vụ mới.</p>}
           <fieldset disabled={busy||!!pending} className="ovg-form-row">
             <label>
@@ -209,7 +214,7 @@ export function ProcessingWorkbenchPage() {
                 Lớp phủ cắt (Overlay)
                 <select aria-label="Lớp phủ cắt" value={overlayLayerId} onChange={(e) => setOverlayLayerId(e.target.value)}>
                   <option value="">Chọn lớp chồng phủ</option>
-                  {layers.filter(l=>l.source.schema.geometry_family==="Polygon"&&l.id!==activeInput&&l.source_id!==input?.source_id).map((l) => (
+                  {layers.filter(l=>(algo==="spatial_join"||l.source.schema.geometry_family==="Polygon")&&l.id!==activeInput&&l.source_id!==input?.source_id).map((l) => (
                     <option key={l.id} value={l.id}>
                       {l.name}
                     </option>
@@ -217,6 +222,12 @@ export function ProcessingWorkbenchPage() {
                 </select>
               </label>
             )}
+            {algo==="reproject"&&<label>CRS đích<select value={targetSrid} onChange={e=>setTargetSrid(Number(e.target.value))}><option value={4326}>EPSG:4326</option><option value={3857}>EPSG:3857</option></select></label>}
+            {algo==="spatial_join"&&<>
+              <label>Quan hệ<select value={predicate} onChange={e=>setPredicate(e.target.value)}>{["intersects","within","contains","touches","overlaps","crosses","equals"].map(v=><option key={v}>{v}</option>)}</select></label>
+              <label>Kiểu nối<select value={joinType} onChange={e=>setJoinType(e.target.value)}><option value="left">Giữ mọi đối tượng đầu vào</option><option value="inner">Chỉ đối tượng khớp</option></select></label>
+              <label>Số kết quả<select value={matchMode} onChange={e=>setMatchMode(e.target.value)}><option value="all">Tất cả</option><option value="first">Khớp đầu tiên theo ID</option></select></label>
+            </>}
             {algo === "buffer" && (
               <><label>Khoảng cách (mét)<input type="number" min="0.1" max="500000" step="any" value={distance} onChange={e=>setDistance(e.target.value)}/></label><label>Số đoạn cung tròn<input type="number" min="2" max="16" step="1" value={segments} onChange={e=>setSegments(e.target.value)}/></label></>
             )}

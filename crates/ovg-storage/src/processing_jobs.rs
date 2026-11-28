@@ -30,7 +30,7 @@ use crate::spatial_pins::{
 pub const MAX_PROCESSING_FEATURES: i64 = 50_000;
 
 fn overlay_algorithm(algorithm: &str) -> bool {
-    matches!(algorithm, "clip" | "difference" | "intersection")
+    matches!(algorithm, "clip" | "difference" | "intersection" | "union" | "spatial_join")
 }
 pub const MAX_PROCESSING_POSITIONS: i64 = 1_000_000;
 const PROCESSING_STATEMENT_TIMEOUT: &str = "30s";
@@ -619,10 +619,10 @@ pub async fn submit_job_pinned(
                 "overlay changed after request preparation",
             ));
         }
-        if overlay_source.geometry_family != "Polygon" {
+        if overlay_source.id == input_source.id || (algorithm_id != "spatial_join" && overlay_source.geometry_family != "Polygon") || (algorithm_id == "union" && input_source.geometry_family != "Polygon") {
             return Err(EditError::validation(
                 "INVALID_OVERLAY",
-                "clip overlay must be Polygon",
+                "overlay requires distinct compatible sources; union requires two Polygon layers",
             ));
         }
         input_refs.insert("overlay_layer_id".into(), json!(ov_layer_id.to_string()));
@@ -952,6 +952,27 @@ pub async fn lock_and_prepare_execution(
 }
 
 #[allow(clippy::too_many_arguments)]
+type ProcessingField = (String, String, String, bool);
+
+async fn processing_source_fields(
+    sp: &mut sqlx::Transaction<'_, sqlx::Postgres>, org: Uuid, project: Uuid, source: Uuid,
+) -> Result<Vec<ProcessingField>, EditError> {
+    sqlx::query_as::<_, ProcessingField>(
+        "SELECT field_id,name,type,nullable FROM spatial.source_fields
+         WHERE organization_id=$1 AND project_id=$2 AND source_id=$3 ORDER BY ordinal,field_id")
+        .bind(org).bind(project).bind(source).fetch_all(&mut **sp).await.map_err(edit_db_error)
+}
+
+fn processing_raw_row(row: &PgRow, feature_id: String, attributes: Value) -> Result<RawOutputRow, EditError> {
+    Ok(RawOutputRow {
+        feature_id, attributes,
+        srid: row.try_get("srid").map_err(edit_db_error)?,
+        total_count: row.try_get::<Option<i64>, _>("total_count").map_err(edit_db_error)?.unwrap_or(0),
+        total_positions: row.try_get::<Option<i64>, _>("total_positions").map_err(edit_db_error)?.unwrap_or(0),
+        wkb: row.try_get("wkb").map_err(edit_db_error)?,
+    })
+}
+
 async fn prepare_inside_savepoint(
     sp: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     job_id: Uuid,
@@ -973,10 +994,10 @@ async fn prepare_inside_savepoint(
     if overlay_algorithm(&algorithm_id) {
         let overlay_source =
             validate_pinned_source(sp, org_id, project_id, &input_refs, "overlay").await?;
-        if overlay_source.geometry_family != "Polygon" {
+        if overlay_source.id == input_source.id || (algorithm_id != "spatial_join" && overlay_source.geometry_family != "Polygon") || (algorithm_id == "union" && input_source.geometry_family != "Polygon") {
             return Err(EditError::validation(
                 "INVALID_OVERLAY",
-                "clip overlay must be Polygon",
+                "overlay requires distinct compatible sources; union requires two Polygon layers",
             ));
         }
     }
@@ -1011,6 +1032,7 @@ async fn prepare_inside_savepoint(
     let mut raw_rows = Vec::new();
     let mut output_family = input_source.geometry_family.clone();
     let output_fields;
+    let mut output_srid = input_srid;
 
     let geom_cols = RESULT_GEOMETRY_COLUMNS
         .replace("$max_features", &MAX_PROCESSING_FEATURES.to_string())
@@ -1268,6 +1290,132 @@ async fn prepare_inside_savepoint(
                 });
             }
         }
+        "reproject" => {
+            output_srid = parameters.get("target_srid").and_then(Value::as_i64)
+                .and_then(|v| i32::try_from(v).ok())
+                .filter(|v| matches!(v, 4326 | 3857))
+                .ok_or_else(|| EditError::validation("INVALID_PARAMETERS", "unsupported target CRS"))?;
+            let expr = if input_srid == output_srid {
+                "rf.geometry".to_owned()
+            } else {
+                let (expr, _, _) = web_transform_expr("rf.geometry", input_srid, output_srid)?;
+                require_web_domain(sp, org_id, project_id, WebDomainCheck {
+                    source_id: input_src_id, native_srid: input_srid,
+                    expression: "geometry", expression_srid: input_srid, margin: 0.0,
+                }).await?;
+                expr
+            };
+            output_fields = processing_source_fields(sp, org_id, project_id, input_src_id).await?;
+            let sql = format!(
+                "WITH transformed AS (
+                   SELECT feature_id, attributes, {expr} AS geom
+                   FROM spatial.reference_features rf
+                   WHERE organization_id=$1 AND project_id=$2 AND source_id=$3
+                 ) SELECT feature_id, attributes, {geom_cols}
+                   FROM transformed ORDER BY feature_id LIMIT $4");
+            let rows = sqlx::query(&sql).bind(org_id).bind(project_id)
+                .bind(input_src_id).bind(max_rows).fetch_all(&mut **sp).await.map_err(edit_db_error)?;
+            for row in rows {
+                raw_rows.push(processing_raw_row(&row, row.try_get("feature_id").map_err(edit_db_error)?,
+                    row.try_get("attributes").map_err(edit_db_error)?)?);
+            }
+        }
+        "union" | "spatial_join" => {
+            let overlay_src_id = Uuid::parse_str(input_refs.get("overlay_source_id").and_then(Value::as_str).unwrap_or_default())
+                .map_err(|_| EditError::conflict("STALE_INPUT_PIN", "invalid overlay source pin"))?;
+            let overlay_srid = input_refs.get("overlay_stored_crs").and_then(Value::as_i64)
+                .and_then(|v| i32::try_from(v).ok())
+                .ok_or_else(|| EditError::conflict("STALE_INPUT_PIN", "invalid overlay crs pin"))?;
+            let transformed = if overlay_srid == input_srid {
+                "ov.geometry".to_owned()
+            } else {
+                let (expr, _, _) = web_transform_expr("ov.geometry", overlay_srid, input_srid)?;
+                require_web_domain(sp, org_id, project_id, WebDomainCheck {
+                    source_id: overlay_src_id, native_srid: overlay_srid,
+                    expression: "geometry", expression_srid: overlay_srid, margin: 0.0,
+                }).await?;
+                expr
+            };
+            let input_fields = processing_source_fields(sp, org_id, project_id, input_src_id).await?;
+            let overlay_fields = processing_source_fields(sp, org_id, project_id, overlay_src_id).await?;
+            let mut fields = vec![
+                ("source_feature_id".into(), "Source Feature ID".into(), "text".into(), true),
+                ("overlay_feature_id".into(), "Overlay Feature ID".into(), "text".into(), true),
+            ];
+            for (prefix, original) in [("input", &input_fields), ("overlay", &overlay_fields)] {
+                for (i, (_, name, kind, _)) in original.iter().enumerate() {
+                    fields.push((format!("{prefix}_{i}"), format!("{prefix}: {name}"), kind.clone(), true));
+                }
+            }
+            output_fields = fields;
+            let cte = format!("WITH a AS (
+                SELECT feature_id AS aid, attributes AS aa, geometry AS ag
+                FROM spatial.reference_features WHERE organization_id=$1 AND project_id=$2 AND source_id=$3
+              ), b AS (
+                SELECT feature_id AS bid, attributes AS ba, {transformed} AS bg
+                FROM spatial.reference_features ov WHERE organization_id=$1 AND project_id=$2 AND source_id=$4
+              )");
+            let sql = if algorithm_id == "union" {
+                format!("{cte}, am AS (SELECT ST_Union(ag) AS g FROM a),
+                    bm AS (SELECT ST_Union(bg) AS g FROM b),
+                    pieces AS (
+                      SELECT aid, bid, aa, ba, ST_Intersection(ag,bg) AS g
+                      FROM a JOIN b ON ST_Intersects(ag,bg)
+                      UNION ALL
+                      SELECT aid, NULL::text, aa, NULL::jsonb,
+                        CASE WHEN bm.g IS NULL THEN ag ELSE ST_Difference(ag,bm.g) END
+                      FROM a CROSS JOIN bm
+                      UNION ALL
+                      SELECT NULL::text, bid, NULL::jsonb, ba,
+                        CASE WHEN am.g IS NULL THEN bg ELSE ST_Difference(bg,am.g) END
+                      FROM b CROSS JOIN am
+                    ), dumped AS (
+                      SELECT aid,bid,aa,ba,part.geom,part.path
+                      FROM pieces CROSS JOIN LATERAL ST_Dump(g) part
+                    ) SELECT aid,bid,aa,ba,{geom_cols} FROM dumped
+                      WHERE ST_GeometryType(geom)='ST_Polygon' AND NOT ST_IsEmpty(geom)
+                      ORDER BY aid NULLS FIRST,bid NULLS FIRST,path LIMIT $5")
+            } else {
+                let predicate = match parameters.get("predicate").and_then(Value::as_str) {
+                    Some("intersects") => "ST_Intersects", Some("within") => "ST_Within",
+                    Some("contains") => "ST_Contains", Some("touches") => "ST_Touches",
+                    Some("overlaps") => "ST_Overlaps", Some("crosses") => "ST_Crosses",
+                    Some("equals") => "ST_Equals",
+                    _ => return Err(EditError::validation("INVALID_PARAMETERS", "unsupported spatial predicate")),
+                };
+                let join = match parameters.get("join_type").and_then(Value::as_str) {
+                    Some("left") => "LEFT JOIN", Some("inner") => "JOIN",
+                    _ => return Err(EditError::validation("INVALID_PARAMETERS", "unsupported join type")),
+                };
+                let limit = match parameters.get("match_mode").and_then(Value::as_str) {
+                    Some("first") => "LIMIT 1", Some("all") => "",
+                    _ => return Err(EditError::validation("INVALID_PARAMETERS", "unsupported match mode")),
+                };
+                format!("{cte}, joined AS (
+                    SELECT aid, hit.bid, aa, hit.ba, ag AS geom
+                    FROM a {join} LATERAL (
+                      SELECT bid,ba FROM b WHERE {predicate}(ag,bg) ORDER BY bid {limit}
+                    ) hit ON true
+                ) SELECT aid,bid,aa,ba,{geom_cols} FROM joined ORDER BY aid,bid NULLS FIRST LIMIT $5")
+            };
+            let rows = sqlx::query(&sql).bind(org_id).bind(project_id).bind(input_src_id)
+                .bind(overlay_src_id).bind(max_rows).fetch_all(&mut **sp).await.map_err(edit_db_error)?;
+            for (i, row) in rows.iter().enumerate() {
+                let aid: Option<String> = row.try_get("aid").map_err(edit_db_error)?;
+                let bid: Option<String> = row.try_get("bid").map_err(edit_db_error)?;
+                let aa: Option<Value> = row.try_get("aa").map_err(edit_db_error)?;
+                let ba: Option<Value> = row.try_get("ba").map_err(edit_db_error)?;
+                let mut attrs = Map::new();
+                attrs.insert("source_feature_id".into(), json!(aid));
+                attrs.insert("overlay_feature_id".into(), json!(bid));
+                for (prefix, original, values) in [("input", &input_fields, aa.as_ref()), ("overlay", &overlay_fields, ba.as_ref())] {
+                    for (j, (id, _, _, _)) in original.iter().enumerate() {
+                        attrs.insert(format!("{prefix}_{j}"), values.and_then(|v| v.get(id)).cloned().unwrap_or(Value::Null));
+                    }
+                }
+                raw_rows.push(processing_raw_row(row, format!("{algorithm_id}_{}", i+1), Value::Object(attrs))?);
+            }
+        }
         "dissolve" => {
             let group_field = parameters
                 .get("group_by_field")
@@ -1412,7 +1560,7 @@ async fn prepare_inside_savepoint(
         parameters,
         output_name,
         engine_version,
-        input_srid,
+        input_srid: output_srid,
         output_family,
         output_fields,
         raw_rows,

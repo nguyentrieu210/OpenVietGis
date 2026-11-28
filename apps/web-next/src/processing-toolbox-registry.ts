@@ -12,7 +12,10 @@ const commandByAlgorithm: Readonly<Record<ProcessingAlgorithm["id"], string>> = 
   clip: "CLIP",
   dissolve: "DISSOLVE",
   difference: "DIFFERENCE",
-  intersection: "INTERSECTION"
+  intersection: "INTERSECTION",
+  union: "UNION",
+  reproject: "REPROJECT",
+  spatial_join: "SPATIALJOIN"
 };
 
 const normalize = (value: string) =>
