@@ -50,6 +50,8 @@ pub struct ContributionEnvelope {
     pub permissions: Vec<String>,
     pub contribution_digest: String,
     pub assets: Vec<Asset>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dependencies: Vec<Dependency>,
     pub issued_at: String,
     pub key_id: String,
 }
@@ -116,6 +118,18 @@ impl ContributionEnvelope {
                 .any(|p| !identifier(p) || !p.starts_with(&format!("ext.{}.", self.extension_key)))
         {
             return Err(invalid("invalid platform or permission"));
+        }
+        let mut dependency_keys = BTreeSet::new();
+        if self.dependencies.len() > 64
+            || self.dependencies.iter().any(|d| {
+                !identifier(&d.key)
+                    || d.key == self.extension_key
+                    || d.range.len() > 128
+                    || VersionReq::parse(&d.range).is_err()
+                    || !dependency_keys.insert(&d.key)
+            })
+        {
+            return Err(invalid("invalid signed dependency"));
         }
         let mut ids = BTreeSet::new();
         let mut total = 0usize;
@@ -231,7 +245,7 @@ pub fn verify_bundle(
     }
     Ok(d)
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Dependency {
     pub key: String,
@@ -495,6 +509,7 @@ mod tests {
             permissions: vec![],
             contribution_digest: digest(payload),
             assets: vec![],
+            dependencies: vec![],
             issued_at: "2026-11-29T00:00:00Z".into(),
             key_id: "key1".into(),
         };

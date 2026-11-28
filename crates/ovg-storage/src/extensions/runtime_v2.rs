@@ -120,6 +120,8 @@ pub async fn receipt(
 pub struct GrantState {
     pub granted: bool,
     pub sequence: i64,
+    pub lock_digest: Option<String>,
+    pub catalog_epoch: Option<i64>,
 }
 pub async fn grant_status(
     read: &mut ProjectRead<'_>,
@@ -129,7 +131,7 @@ pub async fn grant_status(
     if read.is_gis_scoped() || read.actor_type() != "human" {
         return Err(AppError::forbidden("unrestricted human project required"));
     }
-    let row=sqlx::query("SELECT sequence,activation_revision,manifest_id,release_digest,enabled FROM extensions.plugin_v2_grant_events
+    let row=sqlx::query("SELECT sequence,activation_revision,manifest_id,release_digest,enabled,lock_digest,catalog_epoch FROM extensions.plugin_v2_grant_events
       WHERE organization_id=$1 AND project_id=$2 AND activation_id=$3 ORDER BY sequence DESC LIMIT 1")
       .bind(read.organization_id()).bind(read.project_id()).bind(pin.activation_id)
       .fetch_optional(&mut **read.transaction()).await.map_err(db_error)?;
@@ -137,9 +139,13 @@ pub async fn grant_status(
         None => Ok(GrantState {
             granted: false,
             sequence: 0,
+            lock_digest: None,
+            catalog_epoch: None,
         }),
         Some(row) => Ok(GrantState {
             sequence: row.try_get("sequence").map_err(db_error)?,
+            lock_digest: row.try_get("lock_digest").map_err(db_error)?,
+            catalog_epoch: row.try_get("catalog_epoch").map_err(db_error)?,
             granted: row.try_get::<bool, _>("enabled").map_err(db_error)?
                 && row
                     .try_get::<i64, _>("activation_revision")
@@ -161,6 +167,7 @@ pub async fn set_grant(
     digest: &str,
     enabled: bool,
     expected_sequence: i64,
+    approval: Option<DependencyApproval<'_>>,
 ) -> Result<GrantState, AppError> {
     if !read.is_project_manager() || read.is_gis_scoped() || read.actor_type() != "human" {
         return Err(AppError::forbidden("human project manager required"));
@@ -182,17 +189,86 @@ pub async fn set_grant(
             "approval changed; reload plugin",
         ));
     }
-    if enabled && current.granted {
-        return Ok(current);
+    if enabled != approval.is_some() {
+        return Err(AppError::validation(
+            "INVALID_PLUGIN_LOCK",
+            "approval requires a dependency lock",
+        ));
     }
+    if let Some(a) = &approval {
+        if a.epoch < minimum_approved_epoch(read).await? {
+            return Err(AppError::conflict(
+                "STALE_PLUGIN_CATALOG",
+                "catalog epoch rollback",
+            ));
+        }
+        if current.granted
+            && current.lock_digest.as_deref() == Some(a.digest)
+            && current.catalog_epoch == Some(a.epoch)
+        {
+            return Ok(current);
+        }
+    }
+    let lock = approval.as_ref().map(|a| a.pins);
+    let lock_digest = approval.as_ref().map(|a| a.digest);
+    let epoch = approval.as_ref().map(|a| a.epoch);
     let sequence:i64=sqlx::query_scalar("INSERT INTO extensions.plugin_v2_grant_events
-      (organization_id,project_id,activation_id,activation_revision,manifest_id,actor_id,release_digest,enabled)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING sequence")
+      (organization_id,project_id,activation_id,activation_revision,manifest_id,actor_id,release_digest,enabled,dependency_lock,lock_digest,catalog_epoch)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING sequence")
       .bind(read.organization_id()).bind(read.project_id()).bind(pin.activation_id).bind(pin.revision)
-      .bind(pin.manifest_id).bind(read.actor_id()).bind(digest).bind(enabled)
+      .bind(pin.manifest_id).bind(read.actor_id()).bind(digest).bind(enabled).bind(lock).bind(lock_digest).bind(epoch)
       .fetch_one(&mut **read.transaction()).await.map_err(db_error)?;
     Ok(GrantState {
         granted: enabled,
         sequence,
+        lock_digest: lock_digest.map(str::to_owned),
+        catalog_epoch: epoch,
     })
+}
+
+/// Only currently active manifest identities for the requested signed catalog keys.
+/// The canonical project lock remains held by the caller.
+pub async fn dependency_candidates(
+    read: &mut ProjectRead<'_>,
+    keys: &[String],
+) -> Result<Vec<(Uuid, String, String)>, AppError> {
+    if read.is_gis_scoped() || read.actor_type() != "human" || keys.len() > 100 {
+        return Err(AppError::forbidden("invalid dependency scope"));
+    }
+    sqlx::query_as(
+        "SELECT m.id,m.extension_key,m.version
+        FROM extensions.project_activations a JOIN extensions.manifests m
+          ON m.organization_id=a.organization_id AND m.id=a.manifest_id
+        WHERE a.organization_id=$1 AND a.project_id=$2 AND a.status='active' AND m.enabled
+          AND m.extension_key=ANY($3) ORDER BY m.extension_key FOR SHARE OF a,m",
+    )
+    .bind(read.organization_id())
+    .bind(read.project_id())
+    .bind(keys)
+    .fetch_all(&mut **read.transaction())
+    .await
+    .map_err(db_error)
+}
+
+pub struct DependencyApproval<'a> {
+    pub pins: &'a Value,
+    pub digest: &'a str,
+    pub epoch: i64,
+}
+/// Read the maximum previously approved epoch for this project, including
+/// revoked events. A stale operator catalog cannot re-enable an older approval.
+pub async fn minimum_approved_epoch(read: &mut ProjectRead<'_>) -> Result<i64, AppError> {
+    if read.is_gis_scoped() || read.actor_type() != "human" {
+        return Err(AppError::forbidden("unrestricted human project required"));
+    }
+    let v: Option<i64> = sqlx::query_scalar(
+        "SELECT max(catalog_epoch) FROM extensions.plugin_v2_grant_events
+        WHERE organization_id=$1 AND project_id=$2",
+    )
+    .bind(read.organization_id())
+    .bind(read.project_id())
+    .fetch_one(&mut **read.transaction())
+    .await
+    .map_err(db_error)?;
+    Ok(v.unwrap_or(0))
 }

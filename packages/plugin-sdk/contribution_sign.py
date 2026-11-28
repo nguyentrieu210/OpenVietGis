@@ -31,6 +31,8 @@ def load_json(path, limit):
 
 def publisher(args):
     envelope = load_json(args.envelope, 256 * 1024)
+    if envelope.get("dependencies") == []:
+        envelope.pop("dependencies")
     manifest = load_json(args.manifest, 128 * 1024)
     data = read_bounded(args.contribution, 256 * 1024)
     key = private_key(args.private)
@@ -67,6 +69,16 @@ def publisher(args):
     write(args.output, {"envelope":envelope, "publisher_signature":signed(key,envelope),
                         "contribution":base64.b64encode(data).decode("ascii"),"assets":assets})
 
+def signed_catalog(operator, epoch, releases):
+    if not 0 < epoch <= 9007199254740991 or len(releases) > 100:
+        raise ValueError("invalid catalog limits")
+    members = [{"envelope_digest": sha(canonical(r["envelope"])),
+                "publisher_signature":r["publisher_signature"],
+                "operator_signature":r["operator_signature"]} for r in releases]
+    membership = {"schema":"openvietgis.marketplace.membership.v2","epoch":epoch,"members":members}
+    return {"schema":"openvietgis.marketplace.v2","epoch":epoch,"releases":releases,
+            "catalog_signature":signed(operator,membership)}
+
 def review(args):
     bundle = load_json(args.bundle, 16 * 1024 * 1024)
     if set(bundle) != {"envelope","publisher_signature","contribution","assets"}:
@@ -97,7 +109,39 @@ def review(args):
             raise ValueError("asset digest mismatch")
     payload = {"schema":"openvietgis.review.v2","envelope_digest":sha(canonical(bundle["envelope"])),"epoch":args.epoch}
     bundle["operator_signature"] = signed(operator,payload)
-    write(args.output,{"schema":"openvietgis.marketplace.v2","epoch":args.epoch,"releases":[bundle]})
+    write(args.output,signed_catalog(operator,args.epoch,[bundle]))
+
+def assemble(args):
+    operator = private_key(args.private)
+    releases = []
+    seen = set()
+    for path in args.catalogs:
+        catalog = load_json(path,16*1024*1024)
+        if catalog["schema"] != "openvietgis.marketplace.v2" or catalog["epoch"] != args.epoch:
+            raise ValueError("catalog epoch mismatch")
+        expected = signed_catalog(operator,args.epoch,catalog["releases"])
+        if expected["catalog_signature"] != catalog["catalog_signature"]:
+            raise ValueError("invalid input membership")
+        for release in catalog["releases"]:
+            e = release["envelope"]
+            identity = (e["extension_key"],e["version"])
+            if identity in seen:
+                raise ValueError("duplicate release")
+            seen.add(identity)
+            payload = {"schema":"openvietgis.review.v2","envelope_digest":sha(canonical(e)),"epoch":args.epoch}
+            operator.public_key().verify(base64.b64decode(release["operator_signature"],validate=True),canonical(payload))
+            if sha(base64.b64decode(release["contribution"],validate=True))!=e["contribution_digest"]:
+                raise ValueError("contribution digest mismatch")
+            descriptors = {a["id"]:a for a in e["assets"]}
+            if len(descriptors)!=len(e["assets"]) or set(descriptors)!=set(release["assets"]):
+                raise ValueError("asset list mismatch")
+            total=0
+            for name,encoded in release["assets"].items():
+                raw=base64.b64decode(encoded,validate=True);total+=len(raw)
+                if total>10*1024*1024 or len(raw)!=descriptors[name]["size"] or sha(raw)!=descriptors[name]["sha256"]:
+                    raise ValueError("asset digest mismatch")
+            releases.append(release)
+    write(args.output,signed_catalog(operator,args.epoch,releases))
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
@@ -108,8 +152,11 @@ def main():
     for name in ("bundle","publisher_public","private"): r.add_argument(name)
     r.add_argument("epoch",type=int)
     r.add_argument("output")
+    a=sub.add_parser("assemble")
+    a.add_argument("private");a.add_argument("epoch",type=int);a.add_argument("output")
+    a.add_argument("catalogs",nargs="*")
     args=parser.parse_args()
     # This command is a signing aid, not a substitute for operator moderation.
-    (publisher if args.mode=="publisher" else review)(args)
+    {"publisher":publisher,"review":review,"assemble":assemble}[args.mode](args)
 if __name__=="__main__":
     main()

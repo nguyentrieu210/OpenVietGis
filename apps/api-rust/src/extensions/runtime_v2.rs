@@ -22,7 +22,8 @@ use ovg_module_sdk::declarative::{
 use ovg_storage::{
     catalog::{ProjectRead, ProjectReadPolicy},
     extensions::runtime_v2::{
-        active_pin, grant_status, receipt, set_grant, ActivePin, ReceiptInput,
+        active_pin, dependency_candidates, grant_status, minimum_approved_epoch, receipt,
+        set_grant, ActivePin, DependencyApproval, ReceiptInput,
     },
 };
 use serde::Deserialize;
@@ -142,6 +143,113 @@ fn qualify(pin: &ActivePin, releases: &[VerifiedRelease]) -> Result<Ready, AppEr
             .to_owned(),
     })
 }
+struct ApprovedLock {
+    pins: Value,
+    digest: String,
+    epoch: i64,
+}
+/// Resolve only signed candidates already active in the same project. The lock
+/// includes activation revisions and exact manifest fingerprints, not merely semver.
+async fn dependency_lock(
+    read: &mut ProjectRead<'_>,
+    root: &ActivePin,
+    ready: &Ready,
+    releases: &[VerifiedRelease],
+) -> Result<ApprovedLock, AppError> {
+    use ovg_module_sdk::release_v2::{canonical, resolve_lock, Pin};
+    let mut catalog = Vec::new();
+    for r in releases {
+        let e = &r.metadata["envelope"];
+        let get = |k: &str| {
+            e[k].as_str()
+                .map(str::to_owned)
+                .ok_or_else(|| invalid("invalid signed dependency identity"))
+        };
+        catalog.push(Pin {
+            key: get("extension_key")?,
+            version: get("version")?,
+            digest: r.metadata["release_digest"]
+                .as_str()
+                .ok_or_else(|| invalid("missing digest"))?
+                .to_owned(),
+            dependencies: if e.get("dependencies").is_some() {
+                serde_json::from_value(e["dependencies"].clone())
+                    .map_err(|_| invalid("invalid signed dependency"))?
+            } else {
+                vec![]
+            },
+        });
+    }
+    let root_key = root.manifest["extension_key"]
+        .as_str()
+        .ok_or_else(|| invalid("missing root key"))?;
+    let root_version = root.manifest["version"]
+        .as_str()
+        .ok_or_else(|| invalid("missing root version"))?;
+    let keys: Vec<String> = catalog
+        .iter()
+        .map(|p| p.key.clone())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let candidates = dependency_candidates(read, &keys).await?;
+    let mut active = BTreeMap::new();
+    for (id, key, version) in candidates {
+        if active.insert((key, version), id).is_some() {
+            return Err(invalid("duplicate active dependency"));
+        }
+    }
+    catalog.retain(|p| active.contains_key(&(p.key.clone(), p.version.clone())));
+    let selected = resolve_lock(root_key, root_version, &catalog)?;
+    let mut pins = Vec::new();
+    let mut epoch = None;
+    for p in selected {
+        let r = releases
+            .iter()
+            .find(|r| r.metadata["release_digest"].as_str() == Some(p.digest.as_str()))
+            .ok_or_else(|| invalid("dependency missing"))?;
+        let e = r.metadata["catalog_epoch"]
+            .as_i64()
+            .filter(|v| *v > 0)
+            .ok_or_else(|| invalid("invalid epoch"))?;
+        if epoch.is_some_and(|v| v != e) {
+            return Err(invalid("inconsistent catalog epoch"));
+        }
+        epoch = Some(e);
+        let id = active[&(p.key.clone(), p.version.clone())];
+        let pin = active_pin(read, id).await?;
+        let qualified = qualify(&pin, releases)?;
+        if qualified.digest != p.digest
+            || (p.key == root_key && (id != root.manifest_id || p.digest != ready.digest))
+        {
+            return Err(invalid("active dependency does not match signed release"));
+        }
+        pins.push(json!({"key":p.key,"version":p.version,"release_digest":p.digest,"manifest_id":pin.manifest_id,
+            "activation_id":pin.activation_id,"activation_revision":pin.revision}));
+    }
+    let pins = json!(pins);
+    let digest = hash(&canonical(&pins)?);
+    let epoch = epoch.ok_or_else(|| invalid("missing root epoch"))?;
+    if epoch < minimum_approved_epoch(read).await? {
+        return Err(AppError::conflict(
+            "STALE_PLUGIN_CATALOG",
+            "catalog epoch rollback",
+        ));
+    }
+    Ok(ApprovedLock {
+        pins,
+        digest,
+        epoch,
+    })
+}
+fn lock_matches(
+    grant: &ovg_storage::extensions::runtime_v2::GrantState,
+    lock: &ApprovedLock,
+) -> bool {
+    grant.granted
+        && grant.lock_digest.as_deref() == Some(lock.digest.as_str())
+        && grant.catalog_epoch.is_some_and(|e| e <= lock.epoch)
+}
 fn check_enabled(state: &AppState) -> Result<(), ExtensionError> {
     if !state.config.marketplace_v2_runtime_enabled {
         return Err(ExtensionError::Domain(AppError::not_found(
@@ -191,11 +299,15 @@ async fn document(
     let pin = active_pin(&mut read, parse_uuid(&manifest)?)
         .await
         .map_err(ExtensionError::Domain)?;
-    let ready = qualify(&pin, &releases(&state).await?).map_err(ExtensionError::Domain)?;
+    let catalog = releases(&state).await?;
+    let ready = qualify(&pin, &catalog).map_err(ExtensionError::Domain)?;
+    let lock = dependency_lock(&mut read, &pin, &ready, &catalog)
+        .await
+        .map_err(ExtensionError::Domain)?;
     let grant = grant_status(&mut read, &pin, &ready.digest)
         .await
         .map_err(ExtensionError::Domain)?;
-    let result = json!({"granted":grant.granted,"grant_revision":grant.sequence.to_string(),"permissions":ready.permissions,"document":ready.doc,"release_digest":ready.digest,"activation_revision":pin.revision,
+    let result = json!({"granted":lock_matches(&grant,&lock),"dependency_lock":lock.pins,"lock_digest":lock.digest,"catalog_epoch":lock.epoch,"grant_revision":grant.sequence.to_string(),"permissions":ready.permissions,"document":ready.doc,"release_digest":ready.digest,"activation_revision":pin.revision,
         "manifest_id":pin.manifest_id,"profile":"web_read_only"});
     read.commit().await.map_err(ExtensionError::Domain)?;
     Ok(no_store(result))
@@ -207,6 +319,7 @@ struct GrantBody {
     activation_revision: i64,
     enabled: bool,
     grant_revision: String,
+    lock_digest: String,
 }
 async fn change_grant(
     State(state): State<AppState>,
@@ -244,16 +357,30 @@ async fn change_grant(
             "activation changed",
         )));
     }
-    // Approval always requires fresh signed catalog; revocation is allowed even if removed from catalog.
-    if body.enabled {
-        let ready = qualify(&pin, &releases(&state).await?).map_err(ExtensionError::Domain)?;
+    // Approval requires the exact lock previewed by the manager. Revocation
+    // still works when a dependency or the root has been removed from the catalog.
+    let lock = if body.enabled {
+        let catalog = releases(&state).await?;
+        let ready = qualify(&pin, &catalog).map_err(ExtensionError::Domain)?;
         if ready.digest != body.release_digest {
             return Err(ExtensionError::Domain(AppError::conflict(
                 "STALE_PLUGIN_RELEASE",
                 "release changed",
             )));
         }
-    }
+        let lock = dependency_lock(&mut read, &pin, &ready, &catalog)
+            .await
+            .map_err(ExtensionError::Domain)?;
+        if lock.digest != body.lock_digest {
+            return Err(ExtensionError::Domain(AppError::conflict(
+                "STALE_PLUGIN_LOCK",
+                "dependency lock changed; reload",
+            )));
+        }
+        Some(lock)
+    } else {
+        None
+    };
     let expected = body
         .grant_revision
         .parse::<i64>()
@@ -266,6 +393,11 @@ async fn change_grant(
         &body.release_digest,
         body.enabled,
         expected,
+        lock.as_ref().map(|l| DependencyApproval {
+            pins: &l.pins,
+            digest: &l.digest,
+            epoch: l.epoch,
+        }),
     )
     .await
     .map_err(ExtensionError::Domain)?;
@@ -400,14 +532,17 @@ async fn invoke(
             "activation changed",
         )));
     }
-    let ready = qualify(&pin, &releases(&state).await?).map_err(ExtensionError::Domain)?;
-    if !grant_status(&mut read, &pin, &ready.digest)
+    let catalog = releases(&state).await?;
+    let ready = qualify(&pin, &catalog).map_err(ExtensionError::Domain)?;
+    let lock = dependency_lock(&mut read, &pin, &ready, &catalog)
         .await
-        .map_err(ExtensionError::Domain)?
-        .granted
-    {
+        .map_err(ExtensionError::Domain)?;
+    let grant = grant_status(&mut read, &pin, &ready.digest)
+        .await
+        .map_err(ExtensionError::Domain)?;
+    if !lock_matches(&grant, &lock) {
         return Err(ExtensionError::Domain(AppError::forbidden(
-            "project manager approval required",
+            "current dependency lock approval required",
         )));
     }
     let (command, output) = run(&mut read, &ready, &body)
@@ -455,6 +590,30 @@ mod tests {
                 document: serde_json::to_vec(&doc).unwrap(),
             }],
         )
+    }
+    #[test]
+    fn lock_approval_rejects_changed_dependency_and_epoch_rollback() {
+        use ovg_storage::extensions::runtime_v2::GrantState;
+        let lock = ApprovedLock {
+            pins: json!([]),
+            digest: "a".repeat(64),
+            epoch: 4,
+        };
+        let mut grant = GrantState {
+            granted: true,
+            sequence: 1,
+            lock_digest: Some(lock.digest.clone()),
+            catalog_epoch: Some(4),
+        };
+        assert!(lock_matches(&grant, &lock));
+        grant.catalog_epoch = Some(5);
+        assert!(!lock_matches(&grant, &lock));
+        grant.catalog_epoch = Some(3);
+        assert!(lock_matches(&grant, &lock));
+        grant.lock_digest = Some("b".repeat(64));
+        assert!(!lock_matches(&grant, &lock));
+        grant.lock_digest = None;
+        assert!(!lock_matches(&grant, &lock));
     }
     #[test]
     fn layer_summary_excludes_sensitive_source_fields() {

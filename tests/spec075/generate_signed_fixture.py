@@ -14,7 +14,7 @@ from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption,
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "packages/plugin-sdk"))
 from marketplace_sign import canonical, public_key, signed
-from contribution_sign import publisher, review
+from contribution_sign import publisher, review, signed_catalog
 
 def sha(data):
     return hashlib.sha256(data).hexdigest()
@@ -43,6 +43,8 @@ def generate():
                       "manifest_digest":sha(canonical(manifest)),"host_api_range":"^1","platforms":["web"],
                       "permissions":["ext."+key+"."+cap],"contribution_digest":sha(doc.read_bytes()),"assets":[],
                       "issued_at":"2026-11-29T00:00:00Z","key_id":sha(pk.public_key().public_bytes(Encoding.Raw,PublicFormat.Raw))}
+            if name=="layers":
+                envelope["dependencies"]=[{"key":"partner_fixture_context","range":"^1.0.0"}]
             (d/"manifest.json").write_text(json.dumps(manifest))
             (d/"envelope.json").write_text(json.dumps(envelope))
             bundle=d/(name+".bundle.json"); output=d/(name+".catalog.json")
@@ -50,7 +52,7 @@ def generate():
             review(SimpleNamespace(bundle=bundle,publisher_public=d/"pub.key",private=d/"op.pem",epoch=2,output=output))
             v2.extend(json.loads(output.read_text())["releases"])
     catalog={"schema":"openvietgis.marketplace.v1","publishers":[{"id":"fixture","name":"Fixture publisher","public_key":public_key(pk)}],"releases":v1}
-    return {"operator_public_key":public_key(op),"v1":{"payload":catalog,"signature":signed(op,catalog)},"v2":{"schema":"openvietgis.marketplace.v2","epoch":2,"releases":v2}}
+    return {"operator_public_key":public_key(op),"v1":{"payload":catalog,"signature":signed(op,catalog)},"v2":signed_catalog(op,2,v2)}
 
 if __name__=="__main__":
     data=json.dumps(generate(),ensure_ascii=False,sort_keys=True,indent=2)+"\n"

@@ -100,6 +100,7 @@
     "signature": "wHhnt2nsAf8qmRk9t3ZaucTPjR6GY6eAytTIFifNtrKeoUCOuFJZ9//7/fnbfg551G0ma6wdOI/aryUoLqESCA=="
   },
   "v2": {
+    "catalog_signature": "AKMv75SQlwtAkKjZ1KzGhUK5ipA0VuRZUepIVROTLrwBKOlPLiJadC6raIj05lgXTMKY/C0X/blIPdpDfPDSDQ==",
     "epoch": 2,
     "releases": [
       {
@@ -156,6 +157,12 @@
         "envelope": {
           "assets": [],
           "contribution_digest": "e1b2dbfe8899d3d16c48ecfa8afc8c07c36646e73b82349a1f40b986ee705297",
+          "dependencies": [
+            {
+              "key": "partner_fixture_context",
+              "range": "^1.0.0"
+            }
+          ],
           "extension_key": "partner_fixture_layers",
           "host_api_range": "^1",
           "issued_at": "2026-11-29T00:00:00Z",
@@ -171,8 +178,8 @@
           "schema_version": 2,
           "version": "1.0.0"
         },
-        "operator_signature": "0oh2f6JHXlzxGEfZaHhXn8QSOn8ji3JWA7rmefnHuWNbP0pZMo30NDjYzfymd0iXY4xVvhshXxvao+m7cXKrCQ==",
-        "publisher_signature": "hYuLa/OAlMSsFpJ2SQw4sIJWCo5XdA33ZRuucIClO7fYEks6m4UgZbMQE4dVJo9V7Rk7tqsbH6ytsb6CnIc0AA=="
+        "operator_signature": "HBoRMZcnCB5Hf7qwp3Gr5Ahhkc8NHZlhvzkiuJSHKFNJMaWpxs6if73TM2VwFez8IrJ2vEeiuDBobHlDC5pvDQ==",
+        "publisher_signature": "5MK6jelyNvn4+yBrsvRcFwyPWvxbOKnAmtduiowLzb+xrZ+uErvv44Pv2MIBxu/x6mSLu7gdDTbzehNaIuPNCg=="
       }
     ],
     "schema": "openvietgis.marketplace.v2"

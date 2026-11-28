@@ -17,7 +17,7 @@ use ed25519_dalek::Signature;
 use ovg_core::AppError;
 use ovg_module_sdk::release_v2::{verify_bundle, Bundle, ContributionEnvelope, ReleaseTrust};
 use semver::{Version, VersionReq};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -38,8 +38,9 @@ struct Catalog {
     schema: String,
     epoch: u64,
     releases: Vec<Release>,
+    catalog_signature: String,
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Release {
     envelope: ContributionEnvelope,
@@ -75,6 +76,17 @@ fn bytes(s: &str, max: usize) -> Result<Vec<u8>, AppError> {
 fn signature(s: &str) -> Result<Signature, AppError> {
     Signature::from_slice(&bytes(s, 64)?).map_err(|_| invalid())
 }
+fn catalog_membership(c: &Catalog) -> Result<Vec<u8>, AppError> {
+    use ovg_module_sdk::release_v2::canonical;
+    let mut members = Vec::new();
+    for r in &c.releases {
+        members.push(json!({"envelope_digest":hash(&canonical(&r.envelope)?),
+            "publisher_signature":r.publisher_signature,"operator_signature":r.operator_signature}));
+    }
+    canonical(
+        &json!({"schema":"openvietgis.marketplace.membership.v2","epoch":c.epoch,"members":members}),
+    )
+}
 fn verified_items(
     c: Catalog,
     existing: &[CatalogRelease],
@@ -99,6 +111,9 @@ fn verified_items(
     }
     let api = Version::parse(&profile.api).map_err(|_| invalid())?;
     let operator = decode_ed25519_public_key(operator).map_err(|_| invalid())?;
+    operator
+        .verify_strict(&catalog_membership(&c)?, &signature(&c.catalog_signature)?)
+        .map_err(|_| invalid())?;
     let mut seen = BTreeSet::new();
     let mut items = Vec::new();
     for r in c.releases {
@@ -276,6 +291,7 @@ mod tests {
             permissions: vec![],
             contribution_digest: hash(contribution),
             assets: vec![],
+            dependencies: vec![],
             issued_at: "2026-11-29T00:00:00Z".into(),
             key_id: hash(pk.verifying_key().as_bytes()),
         };
@@ -286,18 +302,22 @@ mod tests {
         )
         .unwrap();
         let os = STANDARD.encode(op.sign(&review).to_bytes());
+        let mut catalog = Catalog {
+            catalog_signature: String::new(),
+            schema: "openvietgis.marketplace.v2".into(),
+            epoch: 2,
+            releases: vec![Release {
+                envelope: e,
+                publisher_signature: ps,
+                operator_signature: os,
+                contribution: STANDARD.encode(contribution),
+                assets: BTreeMap::new(),
+            }],
+        };
+        catalog.catalog_signature =
+            STANDARD.encode(op.sign(&catalog_membership(&catalog).unwrap()).to_bytes());
         (
-            Catalog {
-                schema: "openvietgis.marketplace.v2".into(),
-                epoch: 2,
-                releases: vec![Release {
-                    envelope: e,
-                    publisher_signature: ps,
-                    operator_signature: os,
-                    contribution: STANDARD.encode(contribution),
-                    assets: BTreeMap::new(),
-                }],
-            },
+            catalog,
             vec![CatalogRelease {
                 publisher_id: "pub".into(),
                 publisher_name: "Pub".into(),
@@ -352,6 +372,9 @@ mod tests {
         let rows = verified_items(c, &existing, &key, 2, &p).unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].metadata["runtime_available"], false);
+        let (mut c, existing, key, p) = fixture();
+        c.releases.clear();
+        assert!(verified_items(c, &existing, &key, 2, &p).is_err());
         let (c, _, key, p) = fixture();
         assert!(verified_items(c, &[], &key, 2, &p).is_err());
         let (c, existing, key, p) = fixture();
