@@ -22,6 +22,7 @@ mod numbering;
 mod parcels;
 mod proposals;
 mod records;
+mod certificate_locations;
 mod score_review;
 mod route_import;
 
@@ -36,6 +37,7 @@ pub use numbering::*;
 pub use parcels::*;
 pub use proposals::*;
 pub use records::*;
+pub use certificate_locations::*;
 pub use score_review::*;
 pub use route_import::*;
 

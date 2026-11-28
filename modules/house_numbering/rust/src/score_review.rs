@@ -7,6 +7,7 @@ use unicode_normalization::{UnicodeNormalization,char::is_combining_mark};
 pub struct PointRow{
     pub id:String,pub number:Option<String>,pub road:Option<String>,
     pub x:Option<f64>,pub y:Option<f64>,
+    pub source_id:Option<String>,pub feature_id:Option<String>,pub origin:Option<String>,
 }
 impl PointRow{
     fn xy(&self)->Option<(f64,f64)>{Some((self.x.filter(|v|v.is_finite())?,self.y.filter(|v|v.is_finite())?))}
@@ -39,7 +40,7 @@ impl Status{fn rank(self)->u8{match self{Self::Khop=>0,Self::LechViTri=>1,Self::
 #[derive(Debug,Serialize)]
 pub struct ResultRow{
     pub id:String,pub number:Option<String>,pub road:Option<String>,pub status:Status,
-    pub grid_id:Option<String>,pub grid_number:Option<String>,pub distance_m:Option<f64>,pub duplicate_peers:usize,
+    pub grid_id:Option<String>,pub grid_number:Option<String>,pub grid_source_id:Option<String>,pub grid_feature_id:Option<String>,pub grid_origin:Option<String>,pub distance_m:Option<f64>,pub duplicate_peers:usize,
 }
 struct Grid<'a>{row:&'a PointRow,number:String,road:String,xy:(f64,f64)}
 fn cell(x:f64,y:f64)->(i64,i64){((x/50.).floor() as i64,(y/50.).floor() as i64)}
@@ -83,14 +84,14 @@ pub fn evaluate(points:&[PointRow],grid:&[PointRow])->(Vec<ResultRow>,BTreeMap<&
             }
         }else{(Status::ChuaViTri,None)};
         *counts.get_mut(status.key()).unwrap()+=1;
-        result.push(ResultRow{id:p.id.clone(),number:p.number.clone(),road:p.road.clone(),status,grid_id:hit.map(|(i,_)|grid[i].row.id.clone()),grid_number:hit.and_then(|(i,_)|grid[i].row.number.clone()),distance_m:hit.map(|(_,d)|(d*10.).round()/10.),duplicate_peers:peers});
+        result.push(ResultRow{id:p.id.clone(),number:p.number.clone(),road:p.road.clone(),status,grid_id:hit.map(|(i,_)|grid[i].row.id.clone()),grid_number:hit.and_then(|(i,_)|grid[i].row.number.clone()),grid_source_id:hit.and_then(|(i,_)|grid[i].row.source_id.clone()),grid_feature_id:hit.and_then(|(i,_)|grid[i].row.feature_id.clone()),grid_origin:hit.and_then(|(i,_)|grid[i].row.origin.clone()),distance_m:hit.map(|(_,d)|(d*10.).round()/10.),duplicate_peers:peers});
     }
     (result,counts,duplicate_count)
 }
 #[cfg(test)]
 mod tests{
     use super::*;
-    fn row(id:&str,n:&str,x:Option<f64>,y:f64)->PointRow{PointRow{id:id.into(),number:Some(n.into()),road:Some("QL50".into()),x,y:Some(y)}}
+    fn row(id:&str,n:&str,x:Option<f64>,y:f64)->PointRow{PointRow{id:id.into(),number:Some(n.into()),road:Some("QL50".into()),x,y:Some(y),source_id:None,feature_id:None,origin:None}}
     #[test]
     fn reference_nine_points(){
         let grid=[row("g1","100",Some(100.),8.),row("g2","102",Some(120.),8.),row("g3","104",Some(140.),8.),row("g4","106",Some(160.),8.),row("g5","77/3",Some(200.),8.)];

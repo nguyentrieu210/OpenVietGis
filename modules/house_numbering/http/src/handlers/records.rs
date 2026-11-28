@@ -33,6 +33,7 @@ use ovg_module_http::ModuleHttpState as AppState;
 pub(super) fn router() -> Router<AppState> {
     Router::new()
         .route(&format!("{BASE}/imports"), get(list_imports))
+        .route(&format!("{BASE}/reconciliation/summary"),get(reconciliation_summary))
         .route(
             &format!("{BASE}/buildings/{{building_id}}/documents"),
             get(document_history),
@@ -264,6 +265,13 @@ async fn rebuild_reconciliation(
     .await?;
     edit.commit().await?;
     Ok(Json(result))
+}
+
+async fn reconciliation_summary(State(state):State<AppState>,auth:HumanSession,Path(params):Path<HashMap<String,String>>)->HnResult<Json<Value>>{
+    let (org,project)=scope_ids(&params)?;
+    let mut read=module_read(&state,&auth,org,project).await?;
+    let result=store::reconciliation_summary(&mut read,|c,d,s,surveyed,exists|classify_reconciliation(c,d,s,surveyed,exists).map_err(|e|e.0)).await?;
+    read.commit().await?;Ok(Json(result))
 }
 
 async fn list_cases(

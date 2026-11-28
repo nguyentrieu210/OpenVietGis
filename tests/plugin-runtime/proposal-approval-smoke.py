@@ -260,6 +260,76 @@ def main():
                         orphan={'id':str(uuid4()),'building_id':None,'evidence_ids':[str(uuid4())],'case_class':'certificate_unmatched','estimated':False,'position':1}
                         assert persist([{**case,'id':str(uuid4())},orphan])[1]['id']==orphan['id']
                 print('PASS reconciliation batch SQL: exact evidence set reuse, resolved state retained, changed evidence and estimate create new cases, unmatched certificate')
+                # Exact scoring snapshot: registry precedence, ambiguity and
+                # retirement, with the ordinary explicit GIS source path retained.
+                score_source=seed_source(owner,fx,'Point',{'score':'POINT(10 10)'},{'score':{'so_nha':'100','ten_duong':'Fixture road'}})
+                grid_source=seed_source(owner,fx,'Point',{'grid':'POINT(10 10)'},{'grid':{'so':'100','ten_duong':'Fixture road'}})
+                score_src=(ROOT/'modules/house_numbering/storage/src/persistence/score_review.rs').read_text()
+                score_sql=re.search(r'"(WITH requested AS .*?q ORDER BY role)"',score_src,re.S).group(1)
+                with psycopg.connect(runtime) as db:
+                    scoped(db)
+                    def score(grid=None):
+                        return [r[0] for r in execute(db,score_sql,[org,project,score_source,grid,'so_nha','ten_duong','so','ten_duong',32648]).fetchall()]
+                    assert score(grid_source)[0]['items'][0]['number']=='100'
+                    assert score()[0]['items']==[] # proposed number is not current
+                    with db.transaction(force_rollback=True):
+                        def evidence(origin,value):
+                            eid=str(uuid4())
+                            db.execute("""INSERT INTO house_numbering.evidence(id,organization_id,project_id,building_id,route_id,origin,raw_number,source_reference,confidence,created_by_actor_id,created_at)
+                              VALUES(%s,%s,%s,%s,%s,%s,%s,'fixture','observed',%s,now())""",(eid,org,project,building['id'],route['id'],origin,value,actor))
+                        evidence('cad','99')
+                        assert score()[0]['items'][0]['number']=='99'
+                        evidence('certificate','100')
+                        current=score()[0]['items'][0]
+                        assert current['number']=='100' and current['origin']=='certificate' and current['feature_id']=='p1'
+                        evidence('certificate','102')
+                        ambiguous=score()[0]
+                        assert ambiguous['items']==[] and ambiguous['ambiguous_buildings']==1
+                        db.execute("UPDATE house_numbering.address_numbers SET kind='approved' WHERE id=%s",(number,))
+                        assert score()[0]['items'][0]['number']=='1'
+                        db.execute("UPDATE house_numbering.address_numbers SET retired_at=now() WHERE id=%s",(number,))
+                        assert score()[0]['items']==[]
+                        db.execute("SELECT set_config('openvietgis.project_id',%s,true)",(fx['project_b_id'],))
+                        assert score()[0]['items']==[]
+                print('PASS registry scoring SQL: explicit source, proposed excluded, certificate precedence, ambiguity, approved override, retirement and RLS')
+                # Synthetic Vietnamese-region line and same-side certificates.
+                # This fixture is isolated in the disposable parity database.
+                loc_lines=seed_source(owner,fx,'LineString',{'loc':'LINESTRING(11800000 1200000,11800100 1200000,11800200 1200050)'})
+                loc_points=seed_source(owner,fx,'Point',{'lo':'POINT(11800020 1200010)','hi':'POINT(11800080 1200010)','opposite':'POINT(11800100 1199990)'})
+                loc_route=expect(api.post(root+'/routes',json={'name':'Location fixture','source_id':loc_lines,'feature_id':'loc','status':'confirmed'},headers=h),201)
+                loc_buildings={fid:expect(api.post(root+'/buildings',json={'source_id':loc_points,'feature_id':fid,'route_id':loc_route['id'],'eligibility':'eligible'},headers=h),201)['id'] for fid in ('lo','hi','opposite')}
+                location_src=(ROOT/'modules/house_numbering/storage/src/persistence/certificate_locations.rs').read_text()
+                location_sql=re.search(r'"(WITH line AS MATERIALIZED .*?FROM locations ORDER BY id)"',location_src,re.S).group(1)
+                with psycopg.connect(runtime) as db:
+                    scoped(db)
+                    with db.transaction(force_rollback=True):
+                        def add_cert(value,bid):
+                            eid=str(uuid4())
+                            db.execute("""INSERT INTO house_numbering.evidence(id,organization_id,project_id,building_id,route_id,origin,raw_number,source_reference,confidence,created_by_actor_id,created_at)
+                            VALUES(%s,%s,%s,%s,%s,'certificate',%s,'location fixture','observed',%s,now())""",(eid,org,project,bid,loc_route['id'],value,actor))
+                            return eid
+                        add_cert('100',loc_buildings['lo']);add_cert('106',loc_buildings['hi']);add_cert('108',loc_buildings['opposite'])
+                        cases={value:add_cert(value,None) for value in ('102','104','107','109','106','100A','110')}
+                        def locations():
+                            return {r[0]['evidence_id']:r[0] for r in execute(db,location_sql,[org,project,loc_route['id'],32648,0]).fetchall()}
+                        result=locations()
+                        for value in ('102','104'):
+                            row=result[cases[value]]
+                            assert row['status']=='estimated' and row['confidence']=='estimated',row
+                            assert row['lower_number']==100 and row['upper_number']==106
+                            assert row['latitude'] is not None and row['longitude'] is not None
+                        assert result[cases['102']]['longitude']<result[cases['104']]['longitude']
+                        assert result[cases['107']]['status']=='missing_bracket'
+                        assert result[cases['106']]['status']=='number_already_linked'
+                        assert result[cases['100A']]['status']=='unsupported_number'
+                        assert result[cases['110']]['status']=='missing_bracket'
+                        # Replace the upper same-side anchor with a later number on the opposite side.
+                        add_cert('110',loc_buildings['hi'])
+                        result=locations()
+                        assert result[cases['102']]['status']=='different_or_uncertain_side',result[cases['102']]
+                        db.execute("SELECT set_config('openvietgis.project_id',%s,true)",(fx['project_b_id'],))
+                        assert locations()=={}
+                print('PASS certificate location SQL: interpolation, missing bracket, duplicate number, suffix refusal, opposite side refusal, RLS')
                 # Old candidate supplies a real approved fixture via its ordinary
                 # transition API. New issuance SQL is checked separately.
                 with psycopg.connect(owner) as db:

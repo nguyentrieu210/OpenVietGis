@@ -116,13 +116,12 @@ where F:Fn(Option<&str>,Option<&str>,Option<&str>,bool,bool)->Result<&'static st
 }
 
 /// Port of `HouseNumberingReconciliation.rebuild_cases`; `classify` is the module rule.
-pub async fn rebuild_reconciliation<F>(
+async fn reconciliation_candidates<F>(
     edit: &mut ProjectRead<'_>,
-    actor: AuditActor<'_>,
     removed: &[Uuid],
     estimated: &[Uuid],
     classify: F,
-) -> Result<Value, AppError>
+) -> Result<Vec<Value>, AppError>
 where
     F: Fn(Option<&str>, Option<&str>, Option<&str>, bool, bool) -> Result<&'static str, String>,
 {
@@ -180,8 +179,32 @@ where
         cases.push(json!({"id":Uuid::new_v4(),"building_id":null,"evidence_ids":[evidence_id],"case_class":"certificate_unmatched",
           "estimated":false,"position":cases.len()}));
     }
+    Ok(cases)
+}
+
+pub async fn rebuild_reconciliation<F>(
+    edit:&mut ProjectRead<'_>,actor:AuditActor<'_>,removed:&[Uuid],estimated:&[Uuid],classify:F
+)->Result<Value,AppError>
+where F:Fn(Option<&str>,Option<&str>,Option<&str>,bool,bool)->Result<&'static str,String>{
+    let cases=reconciliation_candidates(edit,removed,estimated,classify).await?;
     let results=persist_cases(edit,actor,&cases).await?;
-    Ok(json!({ "items": results }))
+    Ok(json!({"items":results}))
+}
+
+/// Preview counts from current evidence, not historical case rows. The orphan
+/// certificate cohort has a different denominator from active buildings.
+pub async fn reconciliation_summary<F>(read:&mut ProjectRead<'_>,classify:F)->Result<Value,AppError>
+where F:Fn(Option<&str>,Option<&str>,Option<&str>,bool,bool)->Result<&'static str,String>{
+    let cases=reconciliation_candidates(read,&[],&[],classify).await?;
+    let mut counts=std::collections::BTreeMap::from([
+        ("matched",0usize),("number_mismatch",0),("cad_certificate_mismatch",0),
+        ("new_building",0),("no_longer_exists",0),("not_surveyed",0),("certificate_unmatched",0)]);
+    for case in &cases{
+        let class=case["case_class"].as_str().ok_or_else(||AppError::internal("missing case class"))?;
+        *counts.get_mut(class).ok_or_else(||AppError::internal("unknown case class"))?+=1;
+    }
+    let unmatched=counts["certificate_unmatched"];
+    Ok(json!({"active_buildings":cases.len()-unmatched,"unmatched_certificates":unmatched,"total_cases":cases.len(),"counts":counts}))
 }
 
 pub async fn list_cases(

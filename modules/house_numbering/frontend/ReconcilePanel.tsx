@@ -1,4 +1,5 @@
 import {
+  getReconcileSummary,
   importHouseNumberingEvidence,
   listHouseNumberingReconciliation,
   rebuildHouseNumberingReconciliation,
@@ -14,6 +15,7 @@ const statusLabels:Record<HouseNumberingReconcileCase["status"],string>={open:"C
 type Props = { organizationId: string; projectId: string };
 
 export function ReconcilePanel({ organizationId, projectId }: Props) {
+  const summary=useReloadable(()=>getReconcileSummary(hnClient,organizationId,projectId),[organizationId,projectId]);
   const cases = useReloadable(() => listHouseNumberingReconciliation(hnClient, organizationId, projectId), [organizationId, projectId]);
   const [file, setFile] = useState<File | null>(null);
   const [origin, setOrigin] = useState("certificate");
@@ -53,13 +55,15 @@ export function ReconcilePanel({ organizationId, projectId }: Props) {
           const format = ext === "xlsx" ? "xlsx" : ext === "geojson" || ext === "json" ? "geojson" : ext === "dxf" ? "dxf" : ext === "zip" ? "shapefile_zip" : "csv";
           const mapping = JSON.parse(mappingText) as Record<string, string>;
           const result = await importHouseNumberingEvidence(hnClient, organizationId, projectId, { file, source_format: format, origin, mapping, default_source_reference: sourceRef });
+          await summary.reload();
           const batch = result.batch as { read_count?: number; accepted_count?: number; rejected_count?: number };
           setNotice(`Đã đọc ${batch.read_count ?? 0}, nhận ${batch.accepted_count ?? 0}, loại ${batch.rejected_count ?? 0}${result.replayed ? " · replay không nhân đôi" : ""}.`);
         })}>Nhập & chuẩn hóa</button>
       </div>
     </section>
     <section className="hn-card">
-      <div className="hn-actions"><h2 style={{marginRight:"auto"}}>Hàng đợi đối chiếu</h2><button className="hn-btn" type="button" disabled={busy} onClick={() => void mutation(async () => { await rebuildHouseNumberingReconciliation(hnClient, organizationId, projectId, {}); await cases.reload(); setNotice("Đã cập nhật hàng đợi; kết quả cũ được giữ."); })}>Cập nhật đối soát</button></div>
+      <div className="hn-actions"><h2 style={{marginRight:"auto"}}>Hàng đợi đối chiếu</h2><button className="hn-btn" type="button" disabled={busy} onClick={() => void mutation(async () => { await rebuildHouseNumberingReconciliation(hnClient, organizationId, projectId, {}); await Promise.all([cases.reload(),summary.reload()]); setNotice("Đã cập nhật hàng đợi; kết quả cũ được giữ."); })}>Cập nhật đối soát</button></div>
+      {summary.data&&<><p>Công trình đang hoạt động: {summary.data.active_buildings} · Dòng chứng nhận chưa ghép: {summary.data.unmatched_certificates} · Tổng đối tượng đối soát: {summary.data.total_cases}</p><table className="hn-table"><tbody>{(Object.keys(caseLabels) as HouseNumberingReconcileCase["case_class"][]).map(k=><tr key={k}><td>{caseLabels[k]}</td><td>{summary.data!.counts[k]}</td></tr>)}</tbody></table><p className="hn-muted">Thống kê lại từ bằng chứng hiện có, không cộng các hồ sơ lịch sử. Nhóm không còn tồn tại cần cờ khảo sát xác nhận trong lần tạo hồ sơ; xem trước này chưa áp dụng cờ đó.</p></>}{summary.error&&<p role="alert">{summary.error}</p>}
       <label>Trạng thái <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value as typeof statusFilter)}><option value="open">Chờ xử lý</option><option value="resolved">Đã xử lý</option><option value="ignored">Bỏ qua</option><option value="all">Tất cả lịch sử</option></select></label>
       <label>Ghi rõ kết quả đối chiếu / căn cứ xử lý<input value={reason} disabled={busy} maxLength={1000} onChange={e=>setReason(e.target.value)}/></label>
       <p className="hn-muted">Không tự chọn số mới nhất nếu các nguồn có mâu thuẫn. Các nhóm bên dưới là hồ sơ đối soát, có thể gồm nhiều phiên lịch sử trên một công trình.</p>
