@@ -129,3 +129,7 @@ See [W5 checkpoint](evidence/w5-implementation-checkpoint.md). Candidate signed 
 
 ### W6 implementation evidence
 See [W6 checkpoint](evidence/w6-implementation-checkpoint.md). Local algorithm/Job/Flutter candidate and connected SDK source implemented; host format screening recorded; no formal task closure.
+
+
+### W7 implementation evidence
+See [W7 checkpoint](evidence/w7-implementation-checkpoint.md). Candidate release tools and gate audit implemented; no A4/I1 approval or task closure.
