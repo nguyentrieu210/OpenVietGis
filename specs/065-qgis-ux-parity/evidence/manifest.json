@@ -222,13 +222,13 @@
     {
       "id": "STYLE-01",
       "task": "T031",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/LayerProperties.tsx",
         "apps/web-next/src/QgisWorkspace.tsx",
         "apps/web-next/qgis-parity-keyboard-smoke.mjs"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Existing seven-tab properties dialog shows source/stored CRS, source revision, field metadata and local style apply. Full display CRS metadata, consistent Apply/OK/Cancel and paired authenticated browser/QGIS evidence remain."
     },
     {
       "id": "STYLE-02",
@@ -404,13 +404,18 @@
     {
       "id": "TABLE-06",
       "task": "T047",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/ProfessionalTools.tsx",
         "apps/web-next/src/AdvancedEditor.tsx",
-        "apps/web-next/src/attribute-value.test.ts"
+        "apps/web-next/src/attribute-value.test.ts",
+        "apps/web-next/src/precise-calculation.ts",
+        "apps/web-next/src/precise-calculation.test.ts",
+        "apps/web-next/src/attribute-population.ts",
+        "apps/web-next/src/table-query.ts",
+        "apps/web-next/src/table-query.test.ts"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Existing exact rational calculator and revision-pinned selected/all attribute population support preview; shared query verifier now rejects malformed FID, attributes and fingerprint. New tests not executed. Virtual fields, full atomic transaction and paired browser/QGIS acceptance remain."
     },
     {
       "id": "TABLE-07",
@@ -428,13 +433,16 @@
     {
       "id": "TABLE-08",
       "task": "T049",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/FeatureInfo.tsx",
         "apps/web-next/src/ProfessionalTools.tsx",
-        "apps/api-rust/src/queries.rs"
+        "apps/api-rust/src/queries.rs",
+        "apps/web-next/src/precise-calculation.ts",
+        "apps/web-next/src/attribute-population.ts",
+        "apps/web-next/src/table-query.ts"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Existing grouped statistics use exact numeric aggregation and distinguish loaded/selected/all source (bounded). Multi-layer identify parity and paired QGIS/browser evidence remain."
     },
     {
       "id": "EDIT-01",
@@ -659,12 +667,17 @@
     {
       "id": "PROC-09",
       "task": "T071",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/CadGeorefPanel.tsx",
-        "packages/spatial-workspace/tests/cad-georeference.test.mjs"
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "apps/web-next/src/GeoreferenceWorkbench.tsx",
+        "apps/web-next/src/georeference-contract.ts",
+        "apps/web-next/src/georeference-contract.test.ts",
+        "apps/api/openvietgis_api/adapters/formats/georeference_worker.py",
+        "tests/spec065/georeference_fixture.py"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "TIFF GCP affine georeferencer exists with preview, GeoTIFF checksum and GDAL fixture. Added client cross-check of affine determinant, CRS footprint and computed GCP residuals; new tests not executed. Vector georeferencing, warp/resampling and authenticated browser/QGIS acceptance remain."
     },
     {
       "id": "PROC-10",
@@ -813,13 +826,13 @@
     {
       "id": "COLLAB-02",
       "task": "T086",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/CadEditorPanel.tsx",
         "apps/web-next/spatial-mode-smoke.mjs",
         "packages/spatial-workspace/tests/cad-editor-dirty.test.mjs"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Existing CAD panel tracks verified document revisions, dirty/saving state and permission-gated save/navigation. Model/Layout and authenticated round-trip acceptance remain."
     },
     {
       "id": "COLLAB-03",
@@ -836,13 +849,16 @@
     {
       "id": "COLLAB-04",
       "task": "T088",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/AiCopilotPanel.tsx",
         "apps/web-next/src/ai-copilot",
-        "apps/mcp-rust"
+        "apps/mcp-rust",
+        "apps/web-next/src/ai-copilot/first-party.js",
+        "apps/web-next/src/ai-copilot/session-guard.js",
+        "apps/web-next/src/ai-copilot/session-guard.test.ts"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Existing AI consent, mode/epoch/document pins, expiry guard and bounded ephemeral command history inspected. Full project/revision cross-workspace browser and relay acceptance remain."
     },
     {
       "id": "COLLAB-05",
@@ -865,14 +881,16 @@
     {
       "id": "COLLAB-06",
       "task": "T090",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/AppMarket.tsx",
         "apps/web-next/src/ExternalPluginHub.tsx",
         "apps/web-next/src/workbench-registry.ts",
-        "apps/web-next/spatial-mode-smoke.mjs"
+        "apps/web-next/spatial-mode-smoke.mjs",
+        "apps/web-next/src/plugin-lifecycle.ts",
+        "apps/web-next/src/plugin-lifecycle.test.ts"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Existing partner activation pin, namespaced commands and server reauthorization on bridge calls; activation/deactivation UI. Safe uninstall of all contributions and complete first-party lifecycle/browser acceptance remain."
     },
     {
       "id": "COLLAB-07",
@@ -907,14 +925,17 @@
     {
       "id": "COLLAB-09",
       "task": "T093",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/SpatialCache.ts",
         "apps/web-next/src/SpatialWorkspace.tsx",
         "apps/web-next/src/workbenches/features/offline",
-        "apps/web-next/spatial-mode-smoke.mjs"
+        "apps/web-next/spatial-mode-smoke.mjs",
+        "apps/web-next/src/workbenches/features/offline/OfflineFieldPage.tsx",
+        "apps/web-next/src/workbenches/features/offline/offline-store.ts",
+        "apps/web-next/src/workbenches/features/offline/offline-store.test.ts"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Existing official offline package verifies SHA-256, expiry, identity/scope and supports persistent scope locks and revision-checked drafts. Cross-tab permission loss, offline startup and no GuestStudio regression require authenticated browser evidence."
     }
   ]
 }
