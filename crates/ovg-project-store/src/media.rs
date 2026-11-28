@@ -47,7 +47,7 @@ impl Store{
   if source_scope.is_nil()||destination_scope.is_nil()||source_scope==destination_scope||refs.is_empty()||refs.len()>16{return Err(Error::Invalid)}
   if !std::fs::symlink_metadata(source_root).map_err(|_|Error::Storage)?.file_type().is_dir(){return Err(Error::Invalid)}
   let source_key=key(keys,source_scope)?;let dest_key=key(keys,destination_scope)?;
-  if source_key.as_ref()==dest_key.as_ref(){return Err(Error::Invalid)}
+  if source_key[..]==dest_key[..]{return Err(Error::Invalid)}
   let vault=Vault::open(source_root,source_scope,source_key).map_err(|_|Error::Invalid)?;
   let cipher=XChaCha20Poly1305::new_from_slice(dest_key.as_ref()).map_err(|_|Error::Invalid)?;
   let mut db=self.db.lock().map_err(lock_err)?;let tx=db.transaction_with_behavior(TransactionBehavior::Immediate)?;
