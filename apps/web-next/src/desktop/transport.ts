@@ -24,7 +24,12 @@ function host():Host {
 export type PhotoInventory={count:number;bytes:number;pixels:number;gps_count:number;metadata_errors:number;non_default_orientation:number;min_width:number;max_width:number;min_height:number;max_height:number};
 export type PhotoDataset={count:number;bytes:number;manifest_sha256:string};
 export type PhotoProgress={completed:number;copied:number;total_files:number;total_bytes:number};
+export type PhotoRenderProgress={completed_tiles:number;total_tiles:number;cancelling:boolean};
+export type PhotoRenderReceipt={job_id:string;result:{revision:number;tiles:number;pixels:number;covered:number;written_bytes:number;epsg:number}};
 export const desktop={
+  photoRenderPrepared:(handle:string,id:string)=>host().core.invoke<PhotoRenderReceipt|null>("desktop_photo_render_prepared",{handle,id}),
+  photoRenderStatus:(handle:string,id:string)=>host().core.invoke<PhotoRenderProgress|null>("desktop_photo_render_status",{handle,id}),
+  photoPreviews:(handle:string)=>host().core.invoke<PhotoRenderReceipt[]>("desktop_photo_previews",{handle}),
   photoDataset:(handle:string)=>host().core.invoke<PhotoDataset|null>("desktop_photo_dataset",{handle}),
   photoStage:(handle:string,id:string)=>host().core.invoke<PhotoDataset|null>("desktop_photo_stage",{handle,id}),
   photoStatus:(handle:string,id:string)=>host().core.invoke<PhotoProgress|null>("desktop_photo_status",{handle,id}),

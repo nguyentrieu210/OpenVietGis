@@ -68,15 +68,16 @@ const MAX_DATASET:u64=8*1024*1024*1024;
 #[serde(deny_unknown_fields)]
 pub struct Dataset{pub count:u32,pub bytes:u64,pub manifest_sha256:String}
 #[derive(Serialize)]pub struct Progress{pub completed:u64,pub copied:u64,pub total_files:u64,pub total_bytes:u64}
-struct Active{handle:Uuid,id:Uuid,cancel:AtomicBool,completed:AtomicU64,copied:AtomicU64,total_files:AtomicU64,total_bytes:AtomicU64}
+struct Active{handle:Uuid,id:Uuid,kind:JobKind,cancel:AtomicBool,completed:AtomicU64,copied:AtomicU64,total_files:AtomicU64,total_bytes:AtomicU64}
 static ACTIVE:OnceLock<Mutex<Option<Arc<Active>>>>=OnceLock::new();
 fn active()->&'static Mutex<Option<Arc<Active>>>{ACTIVE.get_or_init(||Mutex::new(None))}
+#[derive(Clone,Copy,PartialEq,Eq)]enum JobKind{Import,Render}
 struct Guard(Arc<Active>);
 impl Drop for Guard{fn drop(&mut self){if let Ok(mut s)=active().lock(){if s.as_ref().is_some_and(|v|Arc::ptr_eq(v,&self.0)){*s=None;}}}}
-fn acquire(handle:Uuid,id:Uuid)->Result<Guard,&'static str>{
+fn acquire(handle:Uuid,id:Uuid,kind:JobKind)->Result<Guard,&'static str>{
  let mut s=active().lock().map_err(|_|"SESSION_FAILED")?;
  if s.is_some(){return Err("PHOTO_JOB_BUSY");}
- let job=Arc::new(Active{handle,id,cancel:AtomicBool::new(false),completed:AtomicU64::new(0),copied:AtomicU64::new(0),total_files:AtomicU64::new(0),total_bytes:AtomicU64::new(0)});
+ let job=Arc::new(Active{handle,id,kind,cancel:AtomicBool::new(false),completed:AtomicU64::new(0),copied:AtomicU64::new(0),total_files:AtomicU64::new(0),total_bytes:AtomicU64::new(0)});
  *s=Some(job.clone());Ok(Guard(job))
 }
 fn read_dataset(project:&std::path::Path)->Result<Option<Dataset>,&'static str>{
@@ -99,7 +100,7 @@ pub async fn desktop_photo_dataset(window:WebviewWindow,host:State<'_,Host>,hand
 pub fn desktop_photo_status(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,id:Uuid)->Reply<Option<Progress>>{
  crate::trusted(&window)?;host.generation(handle).map_err(str::to_owned)?;
  let s=active().lock().map_err(|_|"SESSION_FAILED".to_owned())?;
- Ok(s.as_ref().filter(|v|v.handle==handle&&v.id==id).map(|v|Progress{completed:v.completed.load(Ordering::Acquire),copied:v.copied.load(Ordering::Acquire),total_files:v.total_files.load(Ordering::Acquire),total_bytes:v.total_bytes.load(Ordering::Acquire)}))
+ Ok(s.as_ref().filter(|v|v.handle==handle&&v.id==id&&v.kind==JobKind::Import).map(|v|Progress{completed:v.completed.load(Ordering::Acquire),copied:v.copied.load(Ordering::Acquire),total_files:v.total_files.load(Ordering::Acquire),total_bytes:v.total_bytes.load(Ordering::Acquire)}))
 }
 #[tauri::command]
 pub fn desktop_photo_cancel(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,id:Uuid)->Reply<()>{
@@ -113,7 +114,7 @@ pub async fn desktop_photo_stage(window:WebviewWindow,host:State<'_,Host>,handle
  let app=window.app_handle().clone();
  crate::run(window,host.inner().clone(),move|h|{
  let project=h.photo_project_dir(handle)?;
- let guard=acquire(handle,id)?;let job=&guard.0;
+ let guard=acquire(handle,id,JobKind::Import)?;let job=&guard.0;
  if read_dataset(&project)?.is_some(){return Err("PHOTO_DATASET_EXISTS");}
  let Some(files)=app.dialog().file().add_filter("JPEG flight images",&["jpg","jpeg","JPG","JPEG"]).blocking_pick_files() else{return Ok(None);};
  if files.len()>4096{return Err("PHOTO_COUNT_LIMIT");}
@@ -140,5 +141,73 @@ pub async fn desktop_photo_stage(window:WebviewWindow,host:State<'_,Host>,handle
  let dest=project.join("photogrammetry-input");if fs::symlink_metadata(&dest).is_ok(){return Err("PHOTO_DATASET_EXISTS");}
  fs::rename(&stage,&dest).map_err(|_|"STORAGE_UNAVAILABLE")?;
  Ok(Some(d))
+ }).await
+}
+
+use ovg_processing::photogrammetry::prepared_render;
+#[derive(Serialize)]pub struct RenderProgress{pub completed_tiles:u64,pub total_tiles:u64,pub cancelling:bool}
+#[derive(Serialize)]pub struct RenderReceipt{pub job_id:Uuid,pub result:prepared_render::Receipt}
+#[tauri::command]
+pub fn desktop_photo_render_status(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,id:Uuid)->Reply<Option<RenderProgress>>{
+ crate::trusted(&window)?;host.generation(handle).map_err(str::to_owned)?;
+ let s=active().lock().map_err(|_|"SESSION_FAILED".to_owned())?;
+ Ok(s.as_ref().filter(|v|v.handle==handle&&v.id==id&&v.kind==JobKind::Render).map(|v|RenderProgress{
+ completed_tiles:v.completed.load(Ordering::Acquire),total_tiles:v.total_files.load(Ordering::Acquire),cancelling:v.cancel.load(Ordering::Acquire)}))
+}
+/// Only explicit native-picker input; no arbitrary path passed through IPC.
+#[tauri::command]
+pub async fn desktop_photo_render_prepared(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,id:Uuid)->Reply<Option<RenderReceipt>>{
+ let app=window.app_handle().clone();
+ crate::run(window,host.inner().clone(),move|h|{
+ let project=h.photo_project_dir(handle)?;
+ let guard=acquire(handle,id,JobKind::Render)?;let job=&guard.0;
+ let Some(selected)=app.dialog().file().blocking_pick_folder()else{return Ok(None);};
+ let selected=selected.into_path().map_err(|_|"INVALID_PREPARED_PACKAGE")?;
+ let runs=project.join("photogrammetry-preview");
+ fs::create_dir_all(&runs).map_err(|_|"STORAGE_UNAVAILABLE")?;
+ if !fs::symlink_metadata(&runs).map_err(|_|"STORAGE_UNAVAILABLE")?.file_type().is_dir(){return Err("INVALID_PREVIEW_ROOT");}
+ // Bound retained previews; no automatic deletion of previous user work.
+ let mut count=0usize;
+ for entry in fs::read_dir(&runs).map_err(|_|"STORAGE_UNAVAILABLE")?{
+ let _=entry.map_err(|_|"STORAGE_UNAVAILABLE")?;count+=1;if count>=4{return Err("PREVIEW_LIMIT");}
+ }
+ let final_dir=runs.join(id.to_string());
+ if final_dir.exists(){return Err("PHOTO_JOB_EXISTS");}
+ let temp=tempfile::Builder::new().prefix(".preview-").tempdir_in(&runs).map_err(|_|"STORAGE_UNAVAILABLE")?;
+ let cancelled=||job.cancel.load(Ordering::Acquire)||h.generation(handle).is_err();
+ let q=prepared_render::render(&selected,&temp.path().join("snapshot"),&temp.path().join("result"),cancelled,
+ |n,total|{job.total_files.store(total as u64,Ordering::Release);job.completed.store(n as u64,Ordering::Release);})
+ .map_err(|e|if matches!(e,prepared_render::Error::Cancelled){"CANCELLED"}else{"PREPARED_RENDER_FAILED"})?;
+ if cancelled(){return Err("CANCELLED");}
+ let receipt=RenderReceipt{job_id:id,result:q};
+ let result=temp.path().join("result");
+ use std::io::Write;
+ let mut f=File::options().write(true).create_new(true).open(result.join("preview.json")).map_err(|_|"STORAGE_UNAVAILABLE")?;
+ f.write_all(&serde_json::to_vec(&receipt).map_err(|_|"STORAGE_UNAVAILABLE")?).map_err(|_|"STORAGE_UNAVAILABLE")?;
+ f.sync_all().map_err(|_|"STORAGE_UNAVAILABLE")?;drop(f);
+ if cancelled(){return Err("CANCELLED");}
+ if final_dir.exists(){return Err("PHOTO_JOB_EXISTS");}
+ fs::rename(result,final_dir).map_err(|_|"STORAGE_UNAVAILABLE")?;
+ Ok(Some(receipt))
+ }).await
+}
+#[tauri::command]
+pub async fn desktop_photo_previews(window:WebviewWindow,host:State<'_,Host>,handle:Uuid)->Reply<Vec<serde_json::Value>>{
+ crate::run(window,host.inner().clone(),move|h|{
+ let runs=h.photo_project_dir(handle)?.join("photogrammetry-preview");
+ match fs::symlink_metadata(&runs){Err(e)if e.kind()==std::io::ErrorKind::NotFound=>return Ok(vec![]),Ok(m)if m.file_type().is_dir()=>{},_=>return Err("INVALID_PREVIEW_ROOT")}
+ let mut out=Vec::new();let mut count=0usize;
+ for e in fs::read_dir(runs).map_err(|_|"STORAGE_UNAVAILABLE")?{
+ let e=e.map_err(|_|"STORAGE_UNAVAILABLE")?;count+=1;if count>32{return Err("PREVIEW_LIMIT");}
+ let name=e.file_name();let Some(id)=name.to_str().and_then(|n|Uuid::parse_str(n).ok())else{continue;};
+ if !e.file_type().map_err(|_|"STORAGE_UNAVAILABLE")?.is_dir(){return Err("INVALID_PREVIEW_ROOT");}
+ let path=e.path().join("preview.json");let m=fs::symlink_metadata(&path).map_err(|_|"INVALID_PREVIEW")?;
+ if !m.file_type().is_file()||m.len()>4096{return Err("INVALID_PREVIEW");}
+ let mut b=Vec::new();File::open(path).map_err(|_|"INVALID_PREVIEW")?.take(4097).read_to_end(&mut b).map_err(|_|"INVALID_PREVIEW")?;
+ let v:serde_json::Value=serde_json::from_slice(&b).map_err(|_|"INVALID_PREVIEW")?;
+ if v.get("job_id").and_then(|x|x.as_str()).and_then(|s|Uuid::parse_str(s).ok())!=Some(id){return Err("INVALID_PREVIEW");}
+ out.push(v);
+ }
+ Ok(out)
  }).await
 }
