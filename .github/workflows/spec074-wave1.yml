@@ -73,8 +73,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: sudo apt-get update && sudo apt-get install -y libgdal-dev libproj-dev
-      - run: cargo test --manifest-path crates/ovg-native-providers/Cargo.toml --features ogr,analytics-bundled
-      - run: cargo metadata --manifest-path crates/ovg-native-providers/Cargo.toml --features ogr,analytics-bundled --format-version 1 > native-providers-metadata.json
+      - run: cargo test --manifest-path crates/ovg-native-providers/Cargo.toml --features ogr,analytics-bundled,remote-range
+      - run: cargo metadata --manifest-path crates/ovg-native-providers/Cargo.toml --features ogr,analytics-bundled,remote-range --format-version 1 > native-providers-metadata.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
