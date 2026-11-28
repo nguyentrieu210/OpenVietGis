@@ -1,0 +1,19 @@
+[package]
+name = "openvietgis-desktop"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "AGPL-3.0-or-later"
+
+[workspace]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+# Temporary exact source pin until PR 103 is merged; switch to local path deps at convergence.
+ovg-mobile-engine = { git = "https://github.com/nguyentrieu210/OpenVietGis", rev = "2acf58d897bb093966f18639d087ef904a72a720" }
+ovg-local-storage = { git = "https://github.com/nguyentrieu210/OpenVietGis", rev = "2acf58d897bb093966f18639d087ef904a72a720" }
