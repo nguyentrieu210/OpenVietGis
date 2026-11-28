@@ -7,7 +7,8 @@
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build && node scripts/build-offline-shell.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run src && node --test ./*.test.mjs"
+    "test": "vitest run src && node --test ./*.test.mjs",
+    "test:visual": "node run-ui-visual-smoke.mjs"
   },
   "dependencies": {
     "@openvietgis/client-sdk": "workspace:*",
