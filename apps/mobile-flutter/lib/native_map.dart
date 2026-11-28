@@ -51,12 +51,11 @@ class _NativeLocalMapState extends State<NativeLocalMap> with WidgetsBindingObse
       while(mounted&&_pending&&_loaded&&_foreground){
         _pending=false;final epoch=_epoch;final map=_map;if(map==null)break;
         try{
-          // Serialize source mutations; do not show a previous workspace while switching.
-          await map.setGeoJsonSource(_source,_empty);
-          if(!mounted||epoch!=_epoch)continue;
-          if(!_visible||!widget.controller.ready||widget.controller.busy)continue;
+          // A new workspace gets a new platform view. Hide explicitly, otherwise retain the previous same-scope frame.
+          if(!_visible||!widget.controller.ready){await map.setGeoJsonSource(_source,_empty);continue;}
+          if(widget.controller.busy)continue;
           final bounds=await map.getVisibleRegion();
-          if(bounds.southwest.longitude>bounds.northeast.longitude){if(mounted)setState(()=>_truncated=true);continue;}
+          if(bounds.southwest.longitude>bounds.northeast.longitude){await map.setGeoJsonSource(_source,_empty);if(mounted)setState(()=>_truncated=true);continue;}
           final raw=await widget.controller.viewport(bounds.southwest.longitude,bounds.southwest.latitude,bounds.northeast.longitude,bounds.northeast.latitude);
           if(!mounted||epoch!=_epoch)continue;
           final v=jsonDecode(raw) as Map<String,dynamic>;

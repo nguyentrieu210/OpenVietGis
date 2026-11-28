@@ -14,7 +14,8 @@ impl Archive{
         if !matches!(format.as_str(),"png"|"jpg"|"jpeg"|"webp"|"pbf"){return Err(Error::Unsupported);}
         let attribution=get("attribution")?;
         if attribution.trim().is_empty(){return Err(Error::Invalid);}
-        let scheme=get("scheme").unwrap_or_else(|_|"tms".to_owned());
+        let scheme_count:i64=db.query_row("SELECT count(*) FROM metadata WHERE name='scheme'",[],|r|r.get(0))?;
+        let scheme=if scheme_count==0{"tms".to_owned()}else{get("scheme")?};
         if scheme!="tms"{return Err(Error::Unsupported);}
         db.prepare("SELECT zoom_level,tile_column,tile_row,tile_data FROM tiles LIMIT 0")?;
         Ok(Self{db,format,attribution})

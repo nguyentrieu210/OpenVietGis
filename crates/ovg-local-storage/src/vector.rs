@@ -16,11 +16,11 @@ fn strict_coords(v:&Value,depth:usize)->Result<(),Error>{
     Ok(())
 }
 fn feature(v:&Value)->Result<Mutation,Error>{
-    if v["type"]!="Feature"||v.get("crs").is_some(){return Err(Error::Invalid);}
+    if v["type"]!="Feature"||v.as_object().ok_or(Error::Invalid)?.keys().any(|k|!matches!(k.as_str(),"type"|"geometry"|"properties"|"id"|"bbox")){return Err(Error::Invalid);}
     let geom=&v["geometry"];
     // No mixed collections, foreign geometry members or Z/M silently flattened.
     let kind=geom["type"].as_str().ok_or(Error::Invalid)?;
-    if !matches!(kind,"Point"|"MultiPoint"|"LineString"|"MultiLineString"|"Polygon"|"MultiPolygon")||geom.get("crs").is_some(){return Err(Error::Invalid);}
+    if !matches!(kind,"Point"|"MultiPoint"|"LineString"|"MultiLineString"|"Polygon"|"MultiPolygon")||geom.as_object().ok_or(Error::Invalid)?.keys().any(|k|!matches!(k.as_str(),"type"|"coordinates"|"bbox")){return Err(Error::Invalid);}
     strict_coords(&geom["coordinates"],0)?;
     let geometry=parse_geojson(geom,&ValidationLimits::default()).map_err(|_|Error::Invalid)?;
     let wkb=encode_wkb(&geometry,None).map_err(|_|Error::Invalid)?;
@@ -36,7 +36,7 @@ impl LocalStore{
     pub fn import_geojson(&self,bytes:&[u8])->Result<u32,Error>{
         if bytes.len()>MAX_INPUT{return Err(Error::Limit);}
         let v:Value=serde_json::from_slice(bytes).map_err(|_|Error::Invalid)?;
-        if v["type"]!="FeatureCollection"||v.get("crs").is_some(){return Err(Error::Invalid);}
+        if v["type"]!="FeatureCollection"||v.as_object().ok_or(Error::Invalid)?.keys().any(|k|!matches!(k.as_str(),"type"|"features"|"bbox")){return Err(Error::Invalid);}
         let rows=v["features"].as_array().ok_or(Error::Invalid)?;
         if rows.len()>MAX_ROWS||rows.is_empty(){return Err(Error::Limit);}
         let mutations=rows.iter().map(feature).collect::<Result<Vec<_>,_>>()?;

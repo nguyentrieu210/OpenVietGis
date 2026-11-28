@@ -49,7 +49,7 @@ class MapPage extends ConsumerWidget{
         IconButton(tooltip:tr(vi,'Đổi ngôn ngữ','Change language'),onPressed:c.toggleLanguage,icon:const Icon(Icons.language)),
       ]),
       body:Stack(children:[
-        Positioned.fill(child:NativeLocalMap(controller:c)),
+        Positioned.fill(child:NativeLocalMap(key:ValueKey(c.selected),controller:c)),
         SafeArea(child:Align(alignment:Alignment.topLeft,child:Padding(padding:const EdgeInsets.all(12),child:Card(child:Padding(
           padding:const EdgeInsets.all(12), child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
             Text(tr(vi,'Chế độ độc lập','Standalone'),style:Theme.of(context).textTheme.titleSmall),
@@ -93,7 +93,7 @@ class WorkspacePage extends ConsumerWidget{
 }
 
 Future<void> importFile(BuildContext context,WorkspaceController c)async{
-  final vi=c.vi;
+  final vi=c.vi;final workspace=c.selected;
   try{
     final selected=await FilePicker.platform.pickFiles(type:FileType.custom,allowedExtensions:['geojson','json'],withData:false);
     if(selected==null)return;
@@ -111,18 +111,20 @@ Future<void> importFile(BuildContext context,WorkspaceController c)async{
       if(all.length+chunk.length>16*1024*1024)throw StateError('INPUT_LIMIT');
       return all..addAll(chunk);
     });
+    if(c.selected!=workspace)throw StateError('WORKSPACE_CHANGED');
     final n=await c.importGeojson(Uint8List.fromList(bytes));
     if(context.mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(tr(vi,'Đã nhập $n đối tượng','Imported $n features'))));
   }catch(_){if(context.mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(tr(vi,'Không thể nhập. Không ghi một phần dữ liệu.','Import failed. No partial writes.'))));}
 }
 Future<void> exportFile(BuildContext context,WorkspaceController c)async{
-  final vi=c.vi;
+  final vi=c.vi;final workspace=c.selected;
   try{
     final confirm=await showDialog<bool>(context:context,builder:(d)=>AlertDialog(
       title:Text(tr(vi,'Chia sẻ dữ liệu local','Share local data')),
       content:Text(tr(vi,'Xuất bản sao GeoJSON WGS84 XY. Không mang theo lịch sử sửa đổi hoặc quy tắc hệ thống.','Export WGS84 XY GeoJSON copy. Edit history and system rules are not exported.')),
       actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:Text(tr(vi,'Hủy','Cancel'))),TextButton(onPressed:()=>Navigator.pop(d,true),child:Text(tr(vi,'Xuất','Export')))]));
     if(confirm!=true)return;
+    if(c.selected!=workspace)throw StateError('WORKSPACE_CHANGED');
     final json=await c.exportGeojson();
     final dir=await (await getTemporaryDirectory()).createTemp('ovg-export-');
     final f=await File('${dir.path}/workspace.geojson').writeAsString(json,flush:true);
