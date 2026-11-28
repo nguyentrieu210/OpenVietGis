@@ -31,7 +31,17 @@ A desktop GIS application with standalone, connected and hybrid modes. Reuse the
 - D19: Evaluate external native engines (including RustGIS) behind provider contracts for compute, file formats and optional rendering; no upstream code import before SPDX/license, dependency, ABI, geometry and CRS parity review. Study Sphere-style transport and GeoLibre-style shared UI as architecture patterns, not code dependencies.
 - D20: Qualify end-to-end latency, resource bounds and frame pacing on real Windows/macOS/Linux targets with published fixtures and thresholds; compare against existing Web baseline. See [performance contract](contracts/performance.md).
 
+## Revision 3 — Universal Local Data Engine
+- D21: Persist project view, layer order, visibility, active layer, style and source references. Metadata changes use revision checks, atomic persistence, versioned migration and backup coverage.
+- D22: Design one authoritative local ACID transaction domain for new multilayer projects, in coordination with SPEC 073. Atomic multi-layer edits, revision conflicts, durable idempotent receipts, journal, undo/redo and crash recovery; never claim independent GeoPackages are one transaction domain. Legacy project migration must be staged, verified and reversible; no automatic destructive conversion.
+- D23: Use shared geometry and schema validation, incremental spatial indexes, typed fields and explicit relation constraints; page/stream bounded data without materializing the whole dataset.
+- D24: Universal provider capability registry: read-only direct open, explicit copy/import, edit only when qualified, source revision/change detection, no arbitrary paths or SQL from UI. Virtual layers expose bounded typed join/filter plans and never mutate source.
+- D25: Maintenance integrity checks, explicit compact/rebuild, snapshot and recovery; bounded caches and streaming across providers. Optional GDAL/OGR/PROJ, DuckDB and additional format drivers require packaging, security and license review; unsupported capabilities remain disabled.
+- D26: Large dataset stretch targets 100M vector features, 100 GB raster, 1B points are qualification workloads, not default promises. Report memory, throughput, density, format, viewport, hardware and cold/warm evidence. No full dataset transfer.
+See [universal local data contract](contracts/universal-local-data.md).
+
 ## Acceptance
+A8: Project state roundtrip, single-domain atomic multi-layer writes, relations and schema validation, journal recovery, provider format qualification, bounded virtual queries and independently verified migration/backup. Candidate kernels do not close this gate.
 A7: Local data-plane security and performance contracts pass on each advertised desktop OS; Web HTTP behavior unchanged.
 A1: Clean Windows install, no network/account/server; open, edit, save, restart and export real fixture.
 A2: Same workspace opened on qualified Mobile/Desktop has equivalent canonical geometry, CRS and revisions; recovery tests prove no loss of acknowledged edit.
