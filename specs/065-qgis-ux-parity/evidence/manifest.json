@@ -321,7 +321,7 @@
         "apps/api/tests/integration/spatial/test_relation_constraints.py",
         "specs/065-qgis-ux-parity/evidence/style-07-relation-write-guards.md"
       ],
-      "blocker": "Migration 0049 installs deferred database guards for local and target keys, including direct SQL writes. A targeted restricted-runtime integration test now covers orphan creation, target deletion, duplicate target keys under cardinality one, rollback, and retained relation definition; test execution is pending CI. Personal relation configuration, shared form layout, broader QGIS pairing and end-to-end acceptance remain."
+      "blocker": "Migration 0049 installs deferred database guards for local and target keys, including direct SQL writes. A targeted restricted-runtime integration test covers orphan creation, target deletion, duplicate target keys under cardinality one, rollback, and retained relation definition; it passed in E06/PostGIS CI run 46148890322 on commit 77af5af45e94619545d5f783704a7756fa46c858. Personal relation configuration, shared form layout, broader QGIS pairing and end-to-end acceptance remain."
     },
     {
       "id": "STYLE-08",
