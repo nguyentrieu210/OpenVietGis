@@ -22,3 +22,4 @@ ovg-local-storage = { git = "https://github.com/nguyentrieu210/OpenVietGis", rev
 ovg-spatial = { git = "https://github.com/nguyentrieu210/OpenVietGis", rev = "2acf58d897bb093966f18639d087ef904a72a720" }
 geo = { version = "=0.31.0", default-features = false }
 rusqlite = { version = "=0.32.1", features = ["bundled"] }
+tempfile = "3"
