@@ -163,7 +163,7 @@ class _NativeLocalMapState extends State<NativeLocalMap> with WidgetsBindingObse
         IconButton(tooltip:'Remove vertex',icon:const Icon(Icons.undo),onPressed:_editingBusy||_vertices.isEmpty?null:(){setState(()=>_vertices.removeLast());unawaited(_preview());}),
         IconButton(tooltip:vi?'Lưu':'Commit',icon:const Icon(Icons.check),onPressed:_editingBusy?null:()=>_endDraft(true)),
         IconButton(tooltip:vi?'Hủy':'Cancel',icon:const Icon(Icons.close),onPressed:_editingBusy?null:()=>_endDraft(false)),
-      ]))))),
+      ])))),
       Positioned(bottom:12,left:12,right:80,child:SafeArea(child:Card(child:Padding(
         padding:const EdgeInsets.all(8),
         child:Text(_failed?(vi?'Lỗi tải lớp local':'Local layer unavailable'):_truncated?(vi?'Giới hạn hiển thị · phóng to để xem thêm':'Display limit · zoom in for more'):_selected!=null?'ID: ${_selected!}':(vi?'Nguồn: kho GeoPackage local':'Source: local GeoPackage')),
