@@ -136,9 +136,9 @@
 .qgis-canvas[data-table=right]{flex-direction:row}
 .qgis-canvas[data-table=right]>.qgis-table{height:auto;min-height:0;width:var(--ovg-table-w,420px);border-top:0;border-left:4px solid #a6b9aa}
 .dock-menu{position:relative;display:inline-block}
-.dock-menu-pop{position:fixed;z-index:1000;min-width:230px;display:grid;gap:6px;padding:10px 12px;background:#fff;border:1px solid #b3c4b6;border-radius:6px;box-shadow:0 8px 24px #0002;font-size:12px;color:#223731}
+.dock-menu-pop{position:fixed;z-index:1000;min-width:0;width:280px;display:grid;gap:var(--ovg-ui-field-gap);padding:10px 12px;background:var(--ovg-ui-surface);border:1px solid var(--ovg-ui-line);border-radius:var(--ovg-ui-radius);box-shadow:0 8px 24px #0002;font-size:12px;color:var(--ovg-ui-ink)}
 .dock-menu-pop label{display:flex;align-items:center;gap:6px}
-.dock-menu-row{display:flex;gap:10px;align-items:center;border:0;padding:0;margin:0}.dock-menu-row legend{float:left;min-width:100px;padding:0;color:#4b5e57}
+.dock-menu-row{display:flex;flex-wrap:wrap;gap:var(--ovg-ui-gap);align-items:center;border:0;padding:0;margin:0;min-width:0}.dock-menu-row legend{float:left;min-width:100px;max-width:100%;padding:0;color:var(--ovg-ui-muted)}
 .lp-style-io{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.lp-style-import{display:inline-flex;align-items:center;padding:4px 10px;border:1px solid #b5c2bc;border-radius:4px;cursor:pointer;font-size:12px}.lp-style-import input{display:none}
 
 /* Spec 057: floating panels and tabbed layer dock */
@@ -169,7 +169,7 @@ html[data-ovg-icons=large] .qgis-toolrow .qgis-icon-button svg{width:24px;height
 
 .attribute-column-picker{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:6px 8px;max-height:100px;overflow:auto;border-bottom:1px solid #d0dcd2}.attribute-column-picker label{display:inline-flex;align-items:center;gap:3px}
 
-.attribute-form-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px}.qgis-table th>button{font:inherit;color:inherit;background:transparent;border:0;padding:2px;cursor:pointer}.attribute-form .feature-info{padding:8px}
+.attribute-form-nav{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--ovg-ui-gap);padding:var(--ovg-ui-field-gap);min-width:0}.qgis-table th>button{font:inherit;color:inherit;background:transparent;border:0;padding:2px;cursor:pointer}.attribute-form .feature-info{padding:8px}
 
 /* Keyboard navigation and small field devices: keep focused controls identifiable. */
 .qgis-studio :is(button,input,select,textarea,a,[tabindex]):focus-visible,
@@ -189,7 +189,7 @@ html[data-ovg-icons=large] .qgis-toolrow .qgis-icon-button svg{width:24px;height
 }
 
 .attribute-column-picker{max-height:180px;overflow:auto;align-items:flex-start}
-.attribute-column-setting{display:flex;align-items:center;gap:4px;flex-wrap:nowrap;border:1px solid #bdcbbf;padding:2px 4px;border-radius:3px}
+.attribute-column-setting{display:flex;align-items:center;gap:var(--ovg-ui-toolbar-gap);flex-wrap:wrap;min-width:0;max-width:100%;border:1px solid var(--ovg-ui-line);padding:2px 4px;border-radius:var(--ovg-ui-radius)}
 .attribute-column-setting input[type=number]{width:64px}
 
 .qgis-source-controls,.qgis-source-detail{display:flex;flex-direction:column;gap:4px;padding:5px;border:1px solid #bdcbbf;border-radius:3px}.qgis-source-detail small{overflow-wrap:anywhere}.qgis-source-items p[role=alert]{font-size:11px;overflow-wrap:anywhere}
@@ -240,3 +240,5 @@ html[data-ovg-icons=large] .qgis-toolrow .qgis-icon-button svg{width:24px;height
 .qgis-studio .core-command-list button>span>small{position:static;color:#526b79;line-height:1.35;white-space:normal}
 .qgis-studio .core-command-list button:disabled{opacity:1;color:#768893;background:#f7f9fa}
 .qgis-studio .core-command-list button:disabled>span,.qgis-studio .core-command-list button:disabled>span>small{color:#687b86}
+
+.dock-menu-pop label,.attribute-column-setting label{min-width:0;overflow-wrap:anywhere}.dock-menu-pop select{max-width:100%;min-width:0}.qgis-table-scroll[tabindex]:focus-visible{outline:2px solid var(--ovg-ui-primary);outline-offset:-2px}
