@@ -96,3 +96,42 @@ mod tests{
   u.close(a.handle).unwrap();assert!(u.with_asset(a.handle,info.id,|_|Ok(())).is_err());u.shutdown().unwrap();
  }
 }
+
+pub fn filename(kind:&str)->R<&'static str>{Ok(match kind{
+ "cad"=>"source.dxf","las"=>"source.las","laz"|"copc"=>"source.laz","glb"=>"source.glb","mbtiles"=>"source.mbtiles","tiff"=>"source.tif",_=>return Err("UNSUPPORTED_FORMAT")
+})}
+#[tauri::command]
+pub async fn unified_asset_attach(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid,kind:String,epsg:Option<u32>,expected:String)->Reply<Option<ovg_project_store::asset_store::AssetMeta>>{
+ let app=window.app_handle().clone();
+ work(window,u.inner().clone(),move|s|{
+  s.with(handle,|_|Ok(()))?;
+  let ext=filename(&kind)?.split('.').last().ok_or("UNSUPPORTED_FORMAT")?;
+  let filters=if kind=="tiff"{vec!["tif","tiff"]}else{vec![ext]};
+  let Some(file)=app.dialog().file().add_filter("Project asset (copy)",&filters).blocking_pick_file() else{return Ok(None)};
+  let path=file.into_path().map_err(|_|"INVALID_STORAGE")?;
+  s.attach_asset(handle,&path,&kind,epsg,unified::number(&expected)?).map(Some)
+ }).await
+}
+#[tauri::command]
+pub async fn unified_asset_list(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid)->Reply<Vec<ovg_project_store::asset_store::AssetMeta>>{
+ work(window,u.inner().clone(),move|s|s.with(handle,|store|store.assets().map_err(|_|"STORE_QUERY_FAILED"))).await
+}
+#[tauri::command]
+pub async fn unified_asset_reopen(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid,id:Uuid)->Reply<Info>{
+ work(window,u.inner().clone(),move|s|s.reopen_asset(handle,id)).await
+}
+#[tauri::command]
+pub async fn unified_asset_detach(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid,id:Uuid,expected:String)->Reply<String>{
+ work(window,u.inner().clone(),move|s|Ok(s.detach_asset(handle,id,unified::number(&expected)?)?.to_string())).await
+}
+#[tauri::command]
+pub async fn unified_import_ndjson(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid,name:String,expected:String)->Reply<Option<Value>>{
+ let app=window.app_handle().clone();
+ work(window,u.inner().clone(),move|s|{
+  s.with(handle,|_|Ok(()))?;
+  let Some(file)=app.dialog().file().add_filter("NDJSON WGS84 features",&["ndjson","geojsonl","jsonl"]).blocking_pick_file() else{return Ok(None)};
+  let path=file.into_path().map_err(|_|"INVALID_STORAGE")?;
+  let r=s.import_ndjson(handle,&path,&name,unified::number(&expected)?)?;
+  Ok(Some(serde_json::json!({"layer":r.layer,"revision":r.revision.to_string(),"count":r.count,"digest":r.digest})))
+ }).await
+}
