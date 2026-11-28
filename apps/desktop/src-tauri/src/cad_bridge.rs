@@ -131,6 +131,10 @@ impl Editor{
  }
 }
 impl CadEditors{
+ pub fn ensure_closed(&self,owner:Uuid)->R<()>{
+  let map=self.sessions.lock().map_err(|_|"SESSION_FAILED")?;
+  if map.values().any(|e|e.owner==owner){return Err("SAVE_OR_DISCARD_CAD_SESSION_FIRST")}Ok(())
+ }
  fn start(&self,owner:Uuid,resource:&Path,private:&Path,src:&Path,parent:Option<Uuid>)->R<EditorStatus>{
   let mut map=self.sessions.lock().map_err(|_|"SESSION_FAILED")?;
   if map.len()>=2||map.values().any(|e|e.owner==owner){return Err("CAD_EDITOR_LIMIT")}
