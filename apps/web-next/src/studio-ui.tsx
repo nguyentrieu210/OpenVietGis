@@ -20,8 +20,9 @@ export function useDesktopDialog(ref:React.RefObject<HTMLElement|null>,close:()=
    if(e.key==="Escape"&&document.querySelector(".ovg-split-ghost"))return;
    if(e.key==="Escape"){e.preventDefault();e.stopImmediatePropagation();latest.current();return}
    if(e.key!=="Tab")return;const all=items(),first=all[0],last=all.at(-1),current=document.activeElement;
-   if(!first||!last){e.preventDefault();el.focus();return}
-   if(!el.contains(current)||current===el||e.shiftKey&&current===first||!e.shiftKey&&current===last){e.preventDefault();(e.shiftKey?last:first).focus()}
+   // When a boundary is handled here, no workspace shortcut may act on the same key.
+   if(!first||!last){e.preventDefault();e.stopImmediatePropagation();el.focus({preventScroll:true});return}
+   if(!el.contains(current)||current===el||e.shiftKey&&current===first||!e.shiftKey&&current===last){e.preventDefault();e.stopImmediatePropagation();(e.shiftKey?last:first).focus({preventScroll:true})}
   };
   const contain=(e:FocusEvent)=>{if(top()&&e.target instanceof Node&&!el.contains(e.target)){(items()[0]??el).focus({preventScroll:true})}};
   window.addEventListener("keydown",key,true);document.addEventListener("focusin",contain);

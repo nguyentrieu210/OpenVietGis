@@ -19,7 +19,7 @@ try{
  const layer={id:"layer1",source_id:"source1",name:"Buildings",lifecycle:"active",capabilities:[{name:"export",available:true,actor_authorized:true},{name:"feature_read",available:true,technical_supported:true,actor_authorized:true},{name:"query",available:true,technical_supported:true,actor_authorized:true},{name:"edit",available:true,technical_supported:true,actor_authorized:true}],source:{lifecycle:"active",validation_state:"ready",feature_count:1,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),stored_crs:{code:4326},schema:{geometry_family:"Polygon",fields:[{field_id:"height_m",name:"Height",type:"integer",nullable:true}]}}};
  const raster={id:"12345678-1234-1234-1234-123456789abc",name:"QA DEM",method:"band",width:3,height:3,bands:1,output_bands:1,epsg:3857,bounds:[106.66,10.76,106.662,10.762],maxzoom:12,tile_count:1,byte_size:123,legend:[0,20],stats:{valid:8,nodata:1,min:0,max:20,mean:10,std:8}};
  let rasterPosts=0;const binaryRequests=[];const binaryBytes=Buffer.from("synthetic artifact, not GIS file");const binaryHash=createHash("sha256").update(binaryBytes).digest("hex");let binaryOp="";
- const saved=[],edits=[],processingRequests=[];let domainCalls=0;let restricted=false,pluginActive=process.env.OVG_PLUGIN071_ONLY==="1",pluginCompatible=true,holdSave=false,releaseSave;
+ const saved=[],edits=[],processingRequests=[],aclRequests=[];let aclRules=[];let domainCalls=0;let restricted=false,pluginActive=process.env.OVG_PLUGIN071_ONLY==="1",pluginCompatible=true,holdSave=false,releaseSave;
  const ver=()=>({id,filename:"building.dxf",format:"dxf",version:saved.length+1,byte_size:40,sha256:"a".repeat(64),created_at:"2026-01-01T00:00:00Z"});
  await page.route("**/*",route=>new URL(route.request().url()).hostname==="127.0.0.1"?route.continue():route.abort());
  await page.route("**/api/v1/**",async route=>{
@@ -27,9 +27,13 @@ try{
   if(p.endsWith("/me"))body={id:"fixture",display_name:"Spatial Test",status:"active"};
   else if(p.endsWith("/auth/providers"))body=[];
   else if(p.endsWith("/auth/csrf"))body={token:"fixture-csrf"};
-  else if(p.endsWith("/me/organizations"))body=[{id:org,name:"Fixture",status:"active"}];
+  else if(p.endsWith("/me/organizations"))body=[{id:org,name:"Fixture",status:"active",role:process.env.OVG_ACL072_ONLY==="1"?"owner":"member"}];
   else if(p.endsWith("/projects"))body=[{id:pid,organization_id:org,name:"Spatial project",status:"active"}];
   else if(p.endsWith("/access/mine"))body={restricted};
+  else if(p.endsWith("/members"))body=[{id:"m-owner",user_id:"fixture",role:"owner",status:"active"},{id:"m-member",user_id:"member1",display_name:"Người khảo sát",role:"member",status:"active"}];
+  else if(p.endsWith("/grants"))body=[];
+  else if(p.endsWith("/access")&&m==="GET")body={members:[{user_id:"member1",display_name:"Người khảo sát",role:"member",status:"active",restricted:aclRules.length>0}],groups:[],layers:[{id:"layer1",name:"Buildings",fields:[{id:"height_m",name:"Height",type:"integer"}]},{id:"layer2",name:"Second layer",fields:[]}],rules:aclRules,audit:[]};
+  else if(p.endsWith("/access/rules/batch")&&m==="POST"){const q=route.request().postDataJSON();aclRequests.push(q);if(q.rules){aclRules=q.rules.map((r,i)=>({...r,id:"rule-"+i,created_at:"2026-01-01T00:00:00Z"}));body={created:aclRules.length,unchanged:0}}else{aclRules=aclRules.filter(r=>!q.revoke_ids.includes(r.id));body={revoked:q.revoke_ids.length}}}
   else if(p.endsWith("/map"))body={configuration_revision:1,configuration:{layers:[],basemap:"grid",default_viewpoint:process.env.OVG_SHELL_ONLY==="1"?{longitude:105,latitude:20,zoom:7,bearing:0,pitch:0,crs:4326}:null}};
   else if(p.endsWith("/extensions/activations"))body={items:pluginActive?[{id:"activation",manifest_id:"manifest",extension_key:"house_numbering",manifest_version:pluginCompatible?"2.0.0":"1.0.0",runtime_compatible:pluginCompatible,status:"active"}]:[]};
   else if(p.includes("/modules/house-numbering/")){domainCalls++;body={items:[],next_after_id:null}}
@@ -44,7 +48,7 @@ try{
   else if(p.endsWith("/artifacts/artifact-test/download"))return route.fulfill({contentType:"application/zip",headers:{"x-content-sha256":binaryHash},body:binaryBytes});
   else if(p.endsWith("/processing/algorithms"))body={items:[{id:"buffer",name:"Buffer",description:"Buffer",required_inputs:["input_layer_id"],parameters_schema:{}},{id:"clip",name:"Clip",description:"Clip",required_inputs:["input_layer_id","overlay_layer_id"],parameters_schema:{}}]};
   else if(p.endsWith("/processing/jobs")&&m==="GET")body={items:[]};
-  else if(p.endsWith("/processing/jobs")&&m==="POST"){const payload=route.request().postDataJSON();processingRequests.push(payload);if(processingRequests.length===1||processingRequests.length===4)return route.fulfill({status:503,json:{}});body={id:processingRequests.length<=2?"job-test":"job-batch-"+processingRequests.length,operation_id:payload.operation_id,algorithm_id:payload.algorithm_id,output_name:payload.output_name,status:"queued",feature_count:null};}
+  else if(p.endsWith("/processing/jobs")&&m==="POST"){const payload=route.request().postDataJSON();processingRequests.push(payload);if(processingRequests.length===1||processingRequests.length===4)return route.fulfill({status:503,json:{}});body={id:processingRequests.length<=2?"job-test":"job-batch-"+processingRequests.length,operation_id:payload.operation_id,algorithm_id:payload.algorithm_id,output_name:payload.output_name,status:"queued",feature_count:null,input_refs:{input_source_id:payload.input_layer_id==="layer2"?"source2":"source1",input_content_revision:layer.source.content_revision,input_schema_revision:layer.source.schema_revision,...(payload.overlay_layer_id?{overlay_source_id:payload.overlay_layer_id==="layer2"?"source2":"source1",overlay_content_revision:layer.source.content_revision,overlay_schema_revision:layer.source.schema_revision}:{})}};}
   else if(p.endsWith("/changesets")&&m==="POST"){const payload=route.request().postDataJSON();edits.push(payload);if(edits.length===1||edits.length===3)return route.fulfill({status:503,json:{}});body={id:"receipt-"+edits.length,operation_id:payload.operation_id,source_id:p.includes("/sources/source2/")?"source2":"source1",base_content_revision:payload.base_content_revision,resulting_content_revision:"c".repeat(64),status:"committed",operation_count:1};}
   else if(p.endsWith("/query")&&m==="POST"){const q=route.request().postDataJSON();assert.equal(q.attribute_only,true);body={attribute_only:true,layer_id:"layer1",source_id:"source1",content_revision:layer.source.content_revision,schema_revision:layer.source.schema_revision,stored_crs:4326,limit:q.limit,offset:q.offset,query_fingerprint:"d".repeat(64),total_count:2,has_more:false,selection_feature_ids:["building","missing"],items:[{feature_id:"building",geometry_state:"present",geometry:null,attributes:{height_m:25}},{feature_id:"missing",geometry_state:"absent",geometry:null,attributes:{height_m:null}}]};}
   else if(p.includes("/integration-hub/adapters/qgis/layers/")&&p.endsWith("/export")){const raw=JSON.stringify({type:"FeatureCollection",features:[{type:"Feature",id:"building",geometry:feature.geometry,properties:feature.attributes}]});return route.fulfill({status:200,contentType:"application/geo+json",headers:{"x-content-sha256":createHash("sha256").update(raw).digest("hex"),"x-openvietgis-crs":"EPSG:4326","x-openvietgis-content-revision":layer.source.content_revision,"x-openvietgis-schema-revision":layer.source.schema_revision,"x-openvietgis-feature-count":"1"},body:raw})}
@@ -62,7 +66,35 @@ try{
 
  const first=page.locator('[data-layer-id="layer1"] .qgis-layer-name'), second=page.locator('[data-layer-id="layer2"] .qgis-layer-name');
  await first.waitFor();await second.waitFor();
- if(process.env.OVG_PLUGIN071_ONLY==="1"){
+ if(process.env.OVG_ACL072_ONLY==="1"){
+  await first.click({button:"right"});
+  await page.getByRole("menuitem",{name:"Phân quyền layer"}).click();
+  const acl=page.getByRole("dialog",{name:"Phân quyền tổ chức & dự án",exact:true});await acl.waitFor();
+  await acl.getByLabel("Chọn Người khảo sát",{exact:true}).check();
+  await acl.getByLabel("Buildings · Sửa hình học",{exact:true}).check();
+  assert.ok(await acl.getByLabel("Buildings · Xem dữ liệu",{exact:true}).isChecked());
+  await acl.getByRole("button",{name:"Mã đối tượng",exact:true}).click();
+  await acl.getByLabel("Mã đối tượng",{exact:true}).fill("building, building");
+  const initial=page.viewportSize();
+  for(const theme of ["light","dark"]){
+   await page.evaluate(t=>document.documentElement.dataset.ovgTheme=t,theme);
+   for(const width of [390,1280]){
+    await page.setViewportSize({width,height:850});
+    const layout=await acl.evaluate(el=>{const r=el.getBoundingClientRect(),body=el.querySelector(".live-modal-body"),table=el.querySelector(".acl-matrix-scroll");return {left:r.left,right:r.right,outer:body.scrollWidth,client:body.clientWidth,table:table.scrollWidth,tableClient:table.clientWidth}});
+    assert.ok(layout.left>=-1&&layout.right<=width+1&&layout.outer<=layout.client+1&&layout.table>=layout.tableClient,JSON.stringify(layout));
+    if(process.env.OVG_UI_SCREENSHOTS)await acl.screenshot({path:process.env.OVG_UI_SCREENSHOTS+"/acl-"+theme+"-"+width+".png",animations:"disabled"});
+   }
+  }
+  await page.evaluate(()=>document.documentElement.dataset.ovgTheme="light");await page.setViewportSize(initial);
+  await acl.getByRole("button",{name:"Cấp quyền hàng loạt (1)",exact:true}).click();
+  const confirm=page.getByRole("dialog",{name:"Xác nhận",exact:true});await confirm.getByRole("button",{name:"Hủy",exact:true}).click();assert.equal(aclRequests.length,0);
+  await acl.getByRole("button",{name:"Cấp quyền hàng loạt (1)",exact:true}).click();await confirm.getByRole("button",{name:"Đồng ý",exact:true}).click();
+  await acl.getByText("Đã cấp 1 quy tắc; 0 quy tắc đã có.",{exact:true}).waitFor();
+  assert.deepEqual(aclRequests[0],{rules:[{user_id:"member1",layer_id:"layer1",actions:["read","geometry"],feature_ids:["building"]}]});
+  await acl.getByLabel("Chọn quy tắc rule-0",{exact:true}).check();await acl.getByRole("button",{name:"Thu hồi đã chọn (1)",exact:true}).click();await confirm.getByRole("button",{name:"Đồng ý",exact:true}).click();
+  await acl.getByText("Đã thu hồi 1 quy tắc.",{exact:true}).waitFor();assert.deepEqual(aclRequests[1],{revoke_ids:["rule-0"]});assert.equal(aclRules.length,0);
+  console.log("PASS SPEC072 ACL scoped batch grant, cancel, revoke and four responsive/theme combinations");
+ }else if(process.env.OVG_PLUGIN071_ONLY==="1"){
   assert.equal(await page.locator(".qgis-plugin-toolbar").getByText("Quản lý số nhà",{exact:false}).count(),0);
   assert.equal(domainCalls,0,"no business API before opening plugin");
   const command=async(label)=>{await page.locator(".core-ribbon").getByRole("button",{name:"Plugin",exact:true}).click();const root=page.getByRole("region",{name:"Menu Plugin",exact:true});const trigger=root.locator(".ovg-plugin-sub-trigger").first();await trigger.focus();await trigger.press("ArrowRight");const submenu=page.locator(".ovg-plugin-submenu");await submenu.waitFor();assert.equal(await submenu.locator("code").count(),0);const contained=await submenu.evaluate(el=>{const b=el.getBoundingClientRect();return b.left>=0&&b.right<=innerWidth&&b.top>=0&&b.bottom<=innerHeight});assert.ok(contained,"submenu remains inside viewport");await submenu.getByText(label,{exact:true}).click()};
@@ -117,6 +149,7 @@ try{
     await menu.getByRole("button",{name:"Quản lý plugin",exact:false}).click();await manager.waitFor();
     const themeLayout=await manager.evaluate(el=>({bg:getComputedStyle(el).backgroundColor,body:getComputedStyle(el.querySelector(".live-modal-body")).backgroundColor,ink:getComputedStyle(el).color}));
     console.log("DARK072",JSON.stringify(themeLayout));assert.equal(themeLayout.bg,"rgb(32, 43, 52)");
+    if(process.env.OVG_UI_SCREENSHOTS)await manager.screenshot({path:process.env.OVG_UI_SCREENSHOTS+"/plugin-manager-dark.png",animations:"disabled"});
     await manager.getByRole("button",{name:"Đóng",exact:true}).click();
     await account.click();await page.getByLabel("Giao diện sáng tối").selectOption("light");await page.waitForFunction(()=>document.documentElement.dataset.ovgTheme==="light");await account.click();
   }
@@ -207,6 +240,19 @@ try{
  }else if(process.env.OVG_EXPORT_ONLY==="1"){
   await first.click();await page.keyboard.press("Control+k");const command=page.getByRole("textbox",{name:"Dòng lệnh GIS"});await command.fill("EXPORT");await command.press("Enter");
   const xp=page.getByRole("dialog",{name:"Xuất dữ liệu"});await xp.waitFor();
+  const originalViewport=page.viewportSize();
+  for(const theme of ["light","dark"]){
+   await page.evaluate(value=>{document.documentElement.dataset.ovgTheme=value},theme);
+   for(const width of [360,390,640,768,1280,1920]){
+    await page.setViewportSize({width,height:width<640?720:900});
+    const layout=await xp.evaluate(el=>{const r=el.getBoundingClientRect(),footer=el.querySelector("footer"),opts=el.querySelector(".xp-opts");return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,viewportHeight:innerHeight,scroll:opts.scrollWidth,client:opts.clientWidth,bg:getComputedStyle(el).backgroundColor,buttons:[...footer.querySelectorAll("button")].every(b=>{const v=b.getBoundingClientRect();return v.left>=r.left-1&&v.right<=r.right+1&&v.bottom<=r.bottom+1})}});
+    assert.ok(layout.left>=-1&&layout.right<=width+1&&layout.top>=-1&&layout.bottom<=layout.viewportHeight+1&&layout.scroll<=layout.client+1&&layout.buttons,JSON.stringify({theme,width,layout}));
+    assert.equal(layout.bg,theme==="dark"?"rgb(32, 43, 52)":"rgb(255, 255, 255)");
+    if(process.env.OVG_UI_SCREENSHOTS)await xp.screenshot({path:process.env.OVG_UI_SCREENSHOTS+"/export-"+theme+"-"+width+".png",animations:"disabled"});
+   }
+  }
+  await page.evaluate(()=>{document.documentElement.dataset.ovgTheme="light"});await page.setViewportSize(originalViewport);
+  console.log("PASS SPEC072 export portal 12 responsive/theme combinations");
   await xp.getByRole("radio",{name:"Toàn bộ lớp",exact:true}).click();
   await xp.getByRole("radio",{name:/Shapefile/}).click();
   await xp.getByRole("button",{name:"Kiểm tra trước khi xuất"}).click();
@@ -256,8 +302,11 @@ try{
   await page.waitForFunction(()=>document.activeElement?.closest('[aria-label="Hiệu năng GIS · phiên hiện tại"]')!==null);
   await menuTrigger.evaluate(e=>e.focus());
   assert.ok(await perf.evaluate(e=>e.contains(document.activeElement)));
-  const firstControl=perf.getByRole("button",{name:"Đóng",exact:true}).first(),lastControl=perf.getByRole("button",{name:"Đóng",exact:true}).last();
+  // Resizable dialogs also expose keyboard-operable separators.
+  const firstControl=perf.getByRole("button",{name:"Phóng to cửa sổ",exact:true});
+  const lastControl=perf.getByRole("separator",{name:"Chiều cao cửa sổ thuộc tính",exact:true});
   await firstControl.focus();await page.keyboard.press("Shift+Tab");assert.ok(await lastControl.evaluate(e=>document.activeElement===e));
+  await page.keyboard.press("Tab");assert.ok(await firstControl.evaluate(e=>document.activeElement===e));
   await page.keyboard.press("Escape");await perf.waitFor({state:"detached"});
   await page.waitForFunction(()=>document.activeElement?.getAttribute("aria-label")==="Xem hiệu năng GIS");
   const sizes=[];
@@ -372,7 +421,7 @@ try{
  await properties.getByRole("button",{name:"Hủy",exact:true}).click();await properties.waitFor({state:"detached"});
  console.log("PASS synthetic Chromium: expression validation and cancel");
  await page.keyboard.press("Control+k");await command.fill("ATTR");await command.press("Enter");
- const table=page.getByRole("region",{name:"Bảng thuộc tính"}).or(page.locator("section.qgis-table"));await table.waitFor();
+ const table=page.getByRole("region",{name:"Bảng thuộc tính",exact:true}).or(page.locator("section.qgis-table"));await table.waitFor();
  await table.getByLabel("Layer bảng thuộc tính").selectOption("layer1");
  const dataRow=table.locator("tbody tr").first();await dataRow.click();
  assert.ok(await dataRow.getByRole("checkbox").isChecked());
@@ -508,11 +557,18 @@ try{
  await xp.getByText(/Lớp chưa nạp đầy đủ/).waitFor();
  assert.equal(await xp.getByRole("button",{name:/⬇ Xuất/}).isEnabled(),false);
  await xp.getByRole("radio",{name:/GeoJSON/}).click();
+ const exportFirst=xp.locator("header").getByRole("button",{name:"Đóng",exact:true});
+ const exportLast=xp.getByRole("button",{name:/⬇ Xuất/});
+ await exportFirst.focus();
+ for(let cycle=0;cycle<5;cycle++){
+  await page.keyboard.press("Shift+Tab");await exportLast.evaluate(e=>{if(document.activeElement!==e)throw Error("Reverse export focus escaped: "+document.activeElement?.outerHTML.slice(0,300))});
+  await page.keyboard.press("Tab");await exportFirst.evaluate(e=>{if(document.activeElement!==e)throw Error("Forward export focus escaped: "+document.activeElement?.outerHTML.slice(0,300))});
+ }
  const [download]=await Promise.all([page.waitForEvent("download"),xp.getByRole("button",{name:/⬇ Xuất/}).click()]);
  assert.ok(download.suggestedFilename().endsWith(".geojson"));
  await xp.getByText(/Đã tải 1 tệp/).waitFor();
- await xp.getByRole("button",{name:"Đóng",exact:true}).last().click();
- console.log("PASS synthetic Chromium: incomplete whole-layer CSV blocked, server GeoJSON checksum verified");
+ await page.keyboard.press("Escape");await xp.waitFor({state:"detached"});
+ console.log("PASS synthetic Chromium: incomplete whole-layer CSV blocked, server GeoJSON checksum verified, export dialog keyboard focus trapped and Escape closes");
 
  await page.keyboard.press("Control+k");await command.fill("MODELER");await command.press("Enter");
  const modeler=page.getByRole("dialog",{name:"Processing Modeler"});await modeler.waitFor();
@@ -522,6 +578,19 @@ try{
  await modeler.getByText(/Chọn đầu vào A của Buffer/).waitFor();
  assert.equal(await modeler.getByRole("button",{name:/Chạy mô hình/}).isEnabled(),false);
  console.log("PASS synthetic Chromium: modeler registry and explicit input validation");
+ const modelerViewport=page.viewportSize();
+ for(const theme of ["light","dark"]){
+  await page.evaluate(value=>{document.documentElement.dataset.ovgTheme=value},theme);
+  for(const width of [390,1280]){
+   await page.setViewportSize({width,height:850});
+   const layout=await modeler.evaluate(el=>{const r=el.getBoundingClientRect(),body=el.querySelector(".modeler-body"),header=el.querySelector(".modeler-header");return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,bg:getComputedStyle(el).backgroundColor,headerScroll:header.scrollWidth,headerClient:header.clientWidth,bodyHeight:body.clientHeight}});
+   assert.ok(layout.left>=-1&&layout.right<=width+1&&layout.bottom<=850&&layout.headerScroll<=layout.headerClient+1&&layout.bodyHeight>0,JSON.stringify(layout));
+   assert.equal(layout.bg,theme==="dark"?"rgb(32, 43, 52)":"rgb(255, 255, 255)");
+   if(process.env.OVG_UI_SCREENSHOTS)await modeler.screenshot({path:process.env.OVG_UI_SCREENSHOTS+"/modeler-"+theme+"-"+width+".png",animations:"disabled"});
+  }
+ }
+ await page.evaluate(()=>{document.documentElement.dataset.ovgTheme="light"});await page.setViewportSize(modelerViewport);
+ console.log("PASS SPEC072 modeler four responsive/theme combinations");
 
 
 

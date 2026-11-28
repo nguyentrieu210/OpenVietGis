@@ -1,13 +1,13 @@
 /* Shared ribbon and plugin popup layout. The shell is a portal, not a map panel. */
 .core-ribbon-menu.core-ribbon-menu-fixed,.ovg-plugin-submenu{
  position:fixed;z-index:10000;box-sizing:border-box;background:var(--ovg-ui-surface);color:var(--ovg-ui-ink);
- border:1px solid var(--ovg-ui-line);border-radius:4px;box-shadow:0 5px 16px #142e3630;
+ border:1px solid var(--ovg-ui-line);border-radius:var(--ovg-ui-radius);box-shadow:0 5px 16px #142e3630;
  font:12.5px/1.4 system-ui,sans-serif;padding:5px;min-width:0;max-width:calc(100vw - 16px)
 }
 .core-ribbon-menu.core-ribbon-menu-fixed{display:flex;flex-direction:column;width:min(420px,calc(100vw - 16px));overflow:hidden}
 .core-ribbon-menu.core-ribbon-menu-fixed.is-dropdown{width:min(340px,calc(100vw - 16px))}
 .core-ribbon-menu-fixed>header,.core-ribbon-menu.is-dropdown>.core-menu-search{display:none}
-.core-ribbon-menu-fixed .core-menu-search{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--ovg-ui-line)}
+.core-ribbon-menu-fixed .core-menu-search{display:flex;flex-wrap:wrap;align-items:center;gap:var(--ovg-ui-gap);padding:6px 8px;border-bottom:1px solid var(--ovg-ui-line)}
 .core-ribbon-menu-fixed .core-menu-search input{min-width:0;flex:1 1 180px;box-sizing:border-box;padding:6px 8px;min-height:30px;border:1px solid var(--ovg-ui-line);border-radius:4px;background:var(--ovg-ui-panel);color:var(--ovg-ui-ink)}
 .core-ribbon-menu-fixed .core-menu-search small{font-size:11px;color:var(--ovg-ui-muted)}
 .core-ribbon-menu-fixed .core-menu-items{min-width:0;min-height:0;overflow:auto;display:grid;gap:2px;padding:0}

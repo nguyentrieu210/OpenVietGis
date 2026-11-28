@@ -23,3 +23,9 @@ export function searchRibbonCommands<T extends SearchableCommand>(commands:reado
  if(exact)return [exact];
  return searchCommands(commands,query,aliases,commands.length);
 }
+
+/** Keep the same first-registration precedence as resolveCommand for all UI surfaces. */
+export function uniqueCommands<T extends SearchableCommand>(commands:readonly T[]):T[]{
+ const seen=new Set<string>();
+ return commands.filter(command=>{const key=normalizeCommand(command.alias);if(seen.has(key))return false;seen.add(key);return true});
+}

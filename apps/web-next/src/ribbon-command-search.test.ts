@@ -1,5 +1,5 @@
 import {describe,it,expect} from "vitest";
-import {searchRibbonCommands} from "./command-search";
+import {searchRibbonCommands,uniqueCommands} from "./command-search";
 const commands=[
  {alias:"BUFFER",label:"Vùng đệm",group:"Vector",disabled:true},
  {alias:"RASTERCLIP",label:"Cắt raster",group:"Raster",hint:"Buffer bounds"},
@@ -16,4 +16,11 @@ describe("ribbon command search",()=>{
   expect(searchRibbonCommands(commands,"vung dem",{})).toEqual([commands[0]]);
   expect(searchRibbonCommands(commands,"",{})).toEqual(commands);
  });
+});
+
+it("deduplicates normalized aliases without changing first-handler permission precedence",()=>{
+ const first={alias:"UNION",label:"First",group:"Vector",disabled:true};
+ const second={alias:"union",label:"Duplicate",group:"Vector",disabled:false};
+ expect(uniqueCommands([first,second,...commands])).toEqual([first,...commands]);
+ expect(searchRibbonCommands(uniqueCommands([first,second,...commands]),"UNION",{})).toEqual([first]);
 });

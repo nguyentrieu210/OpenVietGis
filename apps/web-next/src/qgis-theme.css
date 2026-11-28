@@ -218,12 +218,13 @@
 .ovg-dialog{width:min(420px,100%);background:var(--ovg-panel,#f3f5f7);border:1px solid var(--ovg-line,#cdd5db);border-radius:4px;box-shadow:0 12px 32px #0f1b2440;font-size:12.5px;color:var(--ovg-ink,#1f2a30)}
 .ovg-dialog>header{padding:7px 12px;background:var(--ovg-header,#e9edf0);border-bottom:1px solid var(--ovg-line,#cdd5db);font-weight:600;font-size:13px}
 .ovg-dialog p,.ovg-dialog form>label{display:grid;gap:6px;margin:12px;line-height:1.45}
-.ovg-dialog input{min-height:28px;padding:3px 8px;border:1px solid var(--ovg-line,#cdd5db);border-radius:3px;font-size:13px;background:#fff}
-.ovg-dialog input:focus{outline:2px solid #8fb3d4;border-color:#1565a9}
-.ovg-dialog-buttons{display:flex;justify-content:flex-end;gap:6px;padding:8px 12px;border-top:1px solid var(--ovg-line,#cdd5db);background:#fff}
-.ovg-dialog-buttons button{min-height:28px;min-width:72px;padding:3px 12px;border:1px solid var(--ovg-line,#cdd5db);border-radius:3px;background:#fff;font-size:12.5px;cursor:pointer}
-.ovg-dialog-buttons .primary{background:#1565a9;border-color:#1565a9;color:#fff}
-.ovg-dialog-buttons .danger-solid{background:#b42318;border-color:#b42318;color:#fff}
+.ovg-dialog input{min-height:28px;padding:3px 8px;border:1px solid var(--ovg-line,#cdd5db);border-radius:3px;font-size:13px;background:var(--ovg-ui-surface);color:var(--ovg-ui-ink)}
+.ovg-dialog input:focus{outline:2px solid var(--ovg-ui-primary);border-color:var(--ovg-ui-primary)}
+.ovg-dialog-buttons{display:flex;justify-content:flex-end;gap:6px;padding:8px 12px;border-top:1px solid var(--ovg-line,#cdd5db);background:var(--ovg-ui-surface);color:var(--ovg-ui-ink)}
+.ovg-dialog-buttons button{min-height:28px;min-width:72px;padding:3px 12px;border:1px solid var(--ovg-line,#cdd5db);border-radius:3px;background:var(--ovg-ui-surface);color:var(--ovg-ui-ink);font-size:12.5px;cursor:pointer}
+.ovg-dialog-buttons .primary{background:var(--ovg-ui-primary-action);border-color:var(--ovg-ui-primary-action);color:var(--ovg-ui-on-primary)}
+.ovg-dialog-buttons .danger-solid{background:var(--ovg-ui-danger-action);border-color:var(--ovg-ui-danger-action);color:var(--ovg-ui-on-primary)}
+.ovg-dialog{box-sizing:border-box;min-width:0;max-height:calc(100dvh - 32px);overflow:auto;overscroll-behavior:contain}.ovg-dialog form>label{min-width:0;overflow-wrap:anywhere}.ovg-dialog input{max-width:100%;min-width:0;box-sizing:border-box}.ovg-dialog-buttons{flex-wrap:wrap}.ovg-dialog-buttons button{max-width:100%}.ovg-dialog p{overflow-wrap:anywhere}
 
 /* First-load screen */
 .ovg-boot{display:grid;place-items:center;align-content:center;gap:14px;min-height:100vh}
@@ -770,35 +771,36 @@
 .integration-batch-download:disabled{background:#c5d0d8!important}
 
 /* New export dialog */
-.xp{width:min(920px,100%);height:min(620px,calc(100vh - 32px));display:flex;flex-direction:column;background:#fff;border-radius:12px;box-shadow:0 24px 60px #0f1b2466;overflow:hidden;color:#1f2a30;font-size:13px}
-.xp>header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #e3e8ec}
-.xp>header b{display:block;font-size:15px}.xp>header small{color:#7a8a93}
-.xp>header button{width:30px;height:30px;border:0;border-radius:6px;background:none;font-size:20px;color:#5b6b75;cursor:pointer}
-.xp-body{flex:1;display:grid;grid-template-columns:300px 1fr;min-height:0}
-.xp-layers{display:flex;flex-direction:column;gap:8px;padding:12px;background:#f5f7f9;border-right:1px solid #e3e8ec;min-height:0}
-.xp-col-head{display:flex;justify-content:space-between;align-items:center}.xp-col-head button{border:0;background:none;color:#1565a9;font-size:12px;cursor:pointer}
-.xp-search{height:32px;padding:0 10px;border:1px solid #d3dbe1;border-radius:7px}
+.xp{width:min(920px,100%);height:min(620px,calc(100dvh - 32px));display:flex;flex-direction:column;background:var(--ovg-ui-surface);border-radius:12px;box-shadow:0 24px 60px #0f1b2466;overflow:hidden;color:var(--ovg-ui-ink);font-size:13px}
+.xp>header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--ovg-ui-line)}
+.xp>header b{display:block;font-size:15px}.xp>header small{color:var(--ovg-ui-muted)}
+.xp>header button{width:30px;height:30px;border:0;border-radius:6px;background:none;font-size:20px;color:var(--ovg-ui-muted);cursor:pointer}
+.xp-body{flex:1;display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);min-height:0}
+.xp-layers{display:flex;flex-direction:column;gap:8px;padding:12px;background:var(--ovg-ui-panel);border-right:1px solid var(--ovg-ui-line);min-height:0}
+.xp-col-head{display:flex;justify-content:space-between;align-items:center}.xp-col-head button{border:0;background:none;color:var(--ovg-ui-primary);font-size:12px;cursor:pointer}
+.xp-search{height:32px;padding:0 10px;border:1px solid var(--ovg-ui-line);border-radius:7px}
 .xp-layer-list{flex:1;overflow:auto;display:grid;align-content:start;gap:4px}
-.xp-layer-list label{display:flex;align-items:center;gap:8px;padding:7px 8px;border:1px solid transparent;border-radius:8px;cursor:pointer;background:#fff}
-.xp-layer-list label.on{border-color:#1565a9;background:#eef5fc}
-.xp-gi{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;background:#e3eef8;color:#1565a9;font-size:12px;flex:none}
-.xp-ln{display:grid;min-width:0}.xp-ln b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.xp-ln small{color:#7a8a93;font-size:11.5px}
+.xp-layer-list label{display:flex;align-items:center;gap:8px;padding:7px 8px;border:1px solid transparent;border-radius:8px;cursor:pointer;background:var(--ovg-ui-surface)}
+.xp-layer-list label.on{border-color:var(--ovg-ui-primary);background:var(--ovg-ui-selected)}
+.xp-gi{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;background:var(--ovg-ui-selected);color:var(--ovg-ui-primary);font-size:12px;flex:none}
+.xp-ln{display:grid;min-width:0}.xp-ln b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.xp-ln small{color:var(--ovg-ui-muted);font-size:11.5px}
 .xp-opts{padding:14px 16px;overflow:auto;display:grid;align-content:start;gap:8px}
-.xp-opts h4{margin:6px 0 0;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:#6b7a83}
-.xp-fmt-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.xp-fmt{display:grid;gap:3px;justify-items:start;padding:10px;border:1px solid #d3dbe1;border-radius:10px;background:#fff;text-align:left;cursor:pointer}
-.xp-fmt b{font-size:13px}.xp-fmt small{color:#7a8a93;font-size:11.5px}
-.xp-fmt.on{border-color:#1565a9;box-shadow:0 0 0 2px #1565a933;background:#f3f8fd}
+.xp-opts h4{margin:6px 0 0;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ovg-ui-muted)}
+.xp-fmt-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.xp-fmt{display:grid;gap:3px;justify-items:start;padding:10px;border:1px solid var(--ovg-ui-line);border-radius:10px;background:var(--ovg-ui-surface);text-align:left;cursor:pointer}
+.xp-fmt b{font-size:13px}.xp-fmt small{color:var(--ovg-ui-muted);font-size:11.5px}
+.xp-fmt.on{border-color:var(--ovg-ui-primary);box-shadow:0 0 0 2px var(--ovg-ui-primary)33;background:var(--ovg-ui-selected)}
 .xp-scope{display:flex;flex-wrap:wrap;gap:6px}
-.xp-scope button{padding:6px 12px;border:1px solid #d3dbe1;border-radius:16px;background:#fff;cursor:pointer;font-size:12.5px}
-.xp-scope button.on{background:#0f4c81;border-color:#0f4c81;color:#fff}.xp-scope button:disabled{opacity:.45;cursor:default}
-.xp-name{display:flex;align-items:center;border:1px solid #d3dbe1;border-radius:7px;overflow:hidden}.xp-name input{flex:1;height:32px;border:0;padding:0 10px;outline:0}.xp-name span{padding:0 10px;color:#7a8a93;background:#f5f7f9;height:32px;display:grid;place-items:center}
-.xp-note{margin:0;color:#6b7a83;font-size:12px}
-.xp>footer{display:flex;align-items:center;gap:8px;padding:10px 16px;border-top:1px solid #e3e8ec;background:#fafbfc}
-.xp>footer span{flex:1;color:#4b5b66;font-size:12.5px}
-.xp>footer button{padding:7px 14px;border:1px solid #cdd5db;border-radius:7px;background:#fff;cursor:pointer}
-.xp>footer button.primary{background:#1565a9;border-color:#1565a9;color:#fff;font-weight:700}.xp>footer button:disabled{opacity:.5;cursor:default}
-@media (max-width:720px){.xp-body{grid-template-columns:1fr}.xp-layers{max-height:40%}.xp-fmt-grid{grid-template-columns:repeat(2,1fr)}}
+.xp-scope button{padding:6px 12px;border:1px solid var(--ovg-ui-line);border-radius:16px;background:var(--ovg-ui-surface);cursor:pointer;font-size:12.5px}
+.xp-scope button.on{background:var(--ovg-ui-primary-action);border-color:var(--ovg-ui-primary-action);color:var(--ovg-ui-on-primary)}.xp-scope button:disabled{opacity:.45;cursor:default}
+.xp-name{display:flex;align-items:center;border:1px solid var(--ovg-ui-line);border-radius:7px;overflow:hidden}.xp-name input{flex:1;height:32px;border:0;padding:0 10px;outline:0}.xp-name span{padding:0 10px;color:var(--ovg-ui-muted);background:var(--ovg-ui-panel);height:32px;display:grid;place-items:center}
+.xp-note{margin:0;color:var(--ovg-ui-muted);font-size:12px}
+.xp>footer{display:flex;align-items:center;gap:8px;padding:10px 16px;border-top:1px solid var(--ovg-ui-line);background:var(--ovg-ui-panel)}
+.xp>footer span{flex:1;color:var(--ovg-ui-muted);font-size:12.5px}
+.xp>footer button{padding:7px 14px;border:1px solid var(--ovg-ui-line);border-radius:7px;background:var(--ovg-ui-surface);cursor:pointer}
+.xp>footer button.primary{background:var(--ovg-ui-primary-action);border-color:var(--ovg-ui-primary-action);color:var(--ovg-ui-on-primary);font-weight:700}.xp>footer button:disabled{opacity:.5;cursor:default}
+@media (max-width:720px){.xp-body{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(100px,1fr) minmax(0,2fr)}.xp-layers{border-right:0;border-bottom:1px solid var(--ovg-ui-line);padding:8px}.xp-opts{padding:8px}.xp-fmt-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.xp>footer{padding:8px}.xp>footer span{flex-basis:100%}}
+.xp{box-sizing:border-box;min-width:0;max-width:100%;color-scheme:inherit}.xp-body,.xp-layers,.xp-opts,.xp-col-head,.xp-name{min-width:0}.xp-body{overflow:hidden}.xp-col-head{flex-wrap:wrap;gap:var(--ovg-ui-field-gap)}.xp-search,.xp-name input{background:var(--ovg-ui-surface);color:var(--ovg-ui-ink)}.xp-fmt,.xp-scope button,.xp>footer button{color:var(--ovg-ui-ink);max-width:100%;overflow-wrap:anywhere}.xp-fmt.on{color:var(--ovg-ui-selected-ink)}.xp>footer{flex:none;flex-wrap:wrap}.xp>footer span{min-width:0;overflow-wrap:anywhere}.xp>header{flex:none;gap:var(--ovg-ui-gap)}.xp>header>div{min-width:0;overflow-wrap:anywhere}.xp-name input{min-width:0}.xp-name span{flex:none}.xp :is(button,input):focus-visible{outline:2px solid var(--ovg-ui-primary);outline-offset:-2px}
 
 /* Project-level controls remain visible even while CAD hides GIS-specific tools. */
 .qgis-studio header.top .ovg-shared-tools{order:4;display:flex;align-items:center;gap:5px;flex:0 0 auto;min-width:0}
@@ -829,3 +831,8 @@
 [data-ovg-theme=dark] .qgis-studio .core-command-list button>span,[data-ovg-theme=dark] .qgis-studio .core-command-list button>span>small{color:var(--ovg-ui-muted)}
 [data-ovg-theme=dark] .qgis-studio .core-command-list button[data-highlight=true]{background:#304e65}
 [data-ovg-theme=dark] .qgis-studio .core-command-list code,[data-ovg-theme=dark] .core-ribbon-menu code{color:#8ad8e2}
+
+/* Portal chrome uses the same semantic palette as the main workspace. */
+[data-ovg-theme=dark] :is(.dock-menu-pop,.ovg-dialog,.xp){color-scheme:dark;background:var(--ovg-ui-surface);color:var(--ovg-ui-ink);border-color:var(--ovg-ui-line)}
+[data-ovg-theme=dark] .dock-menu-pop :is(button,select){background:var(--ovg-ui-panel);color:var(--ovg-ui-ink);border-color:var(--ovg-ui-line)}
+[data-ovg-theme=dark] .xp :is(.xp-scope button.on,.xp>footer button.primary){background:var(--ovg-ui-primary-action);color:var(--ovg-ui-on-primary);border-color:var(--ovg-ui-primary-action)}

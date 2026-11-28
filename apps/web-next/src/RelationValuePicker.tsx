@@ -3,6 +3,7 @@ import {executeLayerQuery,getSpatialLayer,loadCsrfToken,type ApiClient,type Spat
 import {relationRules,relationLayerPin,relationOptions,type ProjectRelation} from "./relation-values";
 import {queryableRelationLayer} from "./relation-inspector";
 import {tableQueryBody,verifyTableQuery} from "./table-query";
+import {Button,Input,Select} from "./ui/primitives";
 
 export function useRelationRules(client:ApiClient,org:string,pid:string,source:string|undefined,enabled:boolean){
  const key=JSON.stringify([org,pid,source,enabled]);
@@ -52,14 +53,14 @@ function RulePicker({client,org,pid,source,layers,rule,disabled,choose}:Props&{r
   {!compatible?<p role="status">Không có lớp đích có quyền truy vấn hoặc schema đã đổi. Kiểm tra lại quan hệ.</p>:<>
   <small>Ràng buộc ghi: {rule.local_field} → {target!.name}.{rule.target_field}. Chọn khóa không tự lưu changeset.</small>
   <label><input type="checkbox" checked={exact} disabled={disabled||busy} onChange={e=>setExact(e.target.checked)}/> Tìm chính xác khóa</label>
-  {exact&&<label>Giá trị khóa<input value={search} disabled={disabled||busy} onChange={e=>setSearch(e.target.value)}/></label>}
-  <button type="button" disabled={disabled||busy} onClick={()=>void load()}>{busy?"Đang đọc…":"Tải khóa liên kết"}</button>
+  {exact&&<label>Giá trị khóa<Input value={search} disabled={disabled||busy} onChange={e=>setSearch(e.target.value)}/></label>}
+  <Button type="button" disabled={disabled||busy} onClick={()=>void load()}>{busy?"Đang đọc…":"Tải khóa liên kết"}</Button>
   {error&&<p role="alert">{error}</p>}
   {visible&&<><p>{visible.loaded}/{visible.total} bản ghi; {visible.options.length} khóa khác NULL trong kết quả.</p>
    {visible.total>visible.loaded&&<small>Chỉ hiển thị trang đầu. Dùng tìm chính xác để tra khóa ngoài trang này.</small>}
-   <label>Khóa đích<select aria-label={"Khóa đích "+rule.local_field+" "+target!.name} disabled={disabled||busy||!visible.options.length} value="" onChange={e=>{const i=Number(e.target.value);if(e.target.value!==""&&latest.current===pin&&!disabled&&Number.isInteger(i)&&visible.options[i])choose(visible.options[i]!.value)}}>
+   <label>Khóa đích<Select aria-label={"Khóa đích "+rule.local_field+" "+target!.name} disabled={disabled||busy||!visible.options.length} value="" onChange={e=>{const i=Number(e.target.value);if(e.target.value!==""&&latest.current===pin&&!disabled&&Number.isInteger(i)&&visible.options[i])choose(visible.options[i]!.value)}}>
     <option value="">Chọn khóa…</option>{visible.options.map((o,i)=><option key={o.value} value={i}>{o.value===""?"(chuỗi rỗng)":o.value} · {o.first}{o.count>1?" · "+o.count+" bản ghi":""}</option>)}
-   </select></label></>}
+   </Select></label></>}
   </>}
  </details>
 }

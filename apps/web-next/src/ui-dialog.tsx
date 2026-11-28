@@ -1,6 +1,7 @@
 import React,{useEffect,useRef,useState} from "react";
 import {useDesktopDialog} from "./studio-ui";
 import {createRoot} from "react-dom/client";
+import {Actions,Button,Input} from "./ui/primitives";
 
 // Spec 058: in-app replacements for window.prompt / confirm / alert (styled like the rest of the app,
 // keyboard friendly: Enter = OK, Esc = Cancel). Each call mounts one small dialog and resolves on close.
@@ -15,11 +16,11 @@ function Shell({title,children,onCancel}:{title:string;children:React.ReactNode;
 }
 function Ask({message,initial,opts,done}:{message:string;initial:string;opts:Opts;done:(v:string|null)=>void}){
  const [v,setV]=useState(initial),ref=useRef<HTMLInputElement>(null);useEffect(()=>{ref.current?.focus();ref.current?.select()},[]);
- return <Shell title={opts.title??"Nhập"} onCancel={()=>done(null)}><form onSubmit={e=>{e.preventDefault();done(v)}}><label>{message}<input ref={ref} value={v} onChange={e=>setV(e.target.value)}/></label><div className="ovg-dialog-buttons"><button type="button" onClick={()=>done(null)}>{opts.cancelLabel??"Hủy"}</button><button type="submit" className="primary">{opts.okLabel??"OK"}</button></div></form></Shell>;
+ return <Shell title={opts.title??"Nhập"} onCancel={()=>done(null)}><form onSubmit={e=>{e.preventDefault();done(v)}}><label>{message}<Input ref={ref} value={v} onChange={e=>setV(e.target.value)}/></label><Actions className="ovg-dialog-buttons"><Button type="button" onClick={()=>done(null)}>{opts.cancelLabel??"Hủy"}</Button><Button type="submit" className="primary">{opts.okLabel??"OK"}</Button></Actions></form></Shell>;
 }
 function Confirm({message,opts,done}:{message:string;opts:Opts;done:(v:boolean)=>void}){
  const ok=useRef<HTMLButtonElement>(null),cancel=useRef<HTMLButtonElement>(null);useEffect(()=>{(opts.danger?cancel:ok).current?.focus()},[opts.danger]);
- return <Shell title={opts.title??"Xác nhận"} onCancel={()=>done(false)}><p>{message}</p><div className="ovg-dialog-buttons"><button ref={cancel} type="button" onClick={()=>done(false)}>{opts.cancelLabel??"Hủy"}</button><button ref={ok} type="button" className={opts.danger?"danger-solid":"primary"} onClick={()=>done(true)}>{opts.okLabel??"Đồng ý"}</button></div></Shell>;
+ return <Shell title={opts.title??"Xác nhận"} onCancel={()=>done(false)}><p>{message}</p><Actions className="ovg-dialog-buttons"><Button ref={cancel} type="button" onClick={()=>done(false)}>{opts.cancelLabel??"Hủy"}</Button><Button ref={ok} type="button" className={opts.danger?"danger-solid":"primary"} onClick={()=>done(true)}>{opts.okLabel??"Đồng ý"}</Button></Actions></Shell>;
 }
 export const uiPrompt=(message:string,initial="",opts:Opts={})=>mount<string|null>(done=><Ask message={message} initial={initial} opts={opts} done={done}/>);
 export const uiConfirm=(message:string,opts:Opts={})=>mount<boolean>(done=><Confirm message={message} opts={opts} done={done}/>);

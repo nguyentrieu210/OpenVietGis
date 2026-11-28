@@ -3,7 +3,8 @@ import { fileURLToPath } from "node:url";
 
 const smokePath = fileURLToPath(new URL("./qgis-parity-keyboard-smoke.mjs", import.meta.url));
 const env = { ...process.env, OVG_SHELL_ONLY: "1" };
-delete env.OVG_TEST_URL;
+// Reuse the canonical runner\x27s loopback preview when supplied; standalone runs still start their own.
+// The child validates the loopback hostname before navigating.
 
 const result = spawnSync(
   process.execPath,
