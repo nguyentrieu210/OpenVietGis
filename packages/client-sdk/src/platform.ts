@@ -31,12 +31,14 @@ export interface Changeset {
 }
 
 export interface QueryResultItem {
+  geometry_state?: "present" | "absent" | "empty" | "invalid" | "unsupported";
   feature_id: string;
   attributes: Record<string, unknown>;
   geometry: Record<string, unknown> | null;
 }
 
 export interface LayerQueryResponse {
+  attribute_only?: true;
   layer_id: string;
   source_id: string;
   content_revision: string;

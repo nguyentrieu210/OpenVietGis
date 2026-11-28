@@ -320,9 +320,14 @@
         "apps/web-next/src/table-columns.test.ts",
         "apps/web-next/src/LiveApp.tsx",
         "apps/web-next/src/ProfessionalTools.tsx",
-        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "apps/api-rust/src/queries.rs",
+        "crates/ovg-storage/src/queries/mod.rs",
+        "apps/web-next/src/table-query.ts",
+        "tests/spec065/attribute_query.py",
+        "tests/spec065/run-attribute-query.sh"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; server query geometry-present only with source/offset limits; local sort loaded/page only; remote tile row selection now requires matching hydrated row, stale page discarded, incomplete bulk selection blocked; synthetic browser only."
+      "blocker": "Authenticated Rust/PostGIS query including absent geometry, typed global sorting/filter and last page of 30k records passed. Ready unrestricted sources only, 50k cap, no QGIS pairing or larger-source cursor benchmark."
     },
     {
       "id": "TABLE-03",
@@ -346,9 +351,10 @@
         "apps/web-next/qgis-parity-keyboard-smoke.mjs",
         "apps/web-next/src/attribute-value.ts",
         "apps/web-next/src/AdvancedEditor.tsx",
-        "apps/web-next/src/attribute-value.test.ts"
+        "apps/web-next/src/attribute-value.test.ts",
+        "apps/web-next/src/CoreMapTools.tsx"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; single field typed dialog; relation widgets and full form edit remain"
+      "blocker": "Explicit nullable fields and typed create input; Chromium fixture pass. No complete QGIS widget parity."
     },
     {
       "id": "TABLE-05",
@@ -359,9 +365,11 @@
         "apps/web-next/qgis-parity-keyboard-smoke.mjs",
         "apps/web-next/src/QgisWorkspace.tsx",
         "apps/web-next/src/LiveApp.tsx",
-        "apps/web-next/src/ProfessionalTools.tsx"
+        "apps/web-next/src/ProfessionalTools.tsx",
+        "apps/web-next/src/edit-transaction.ts",
+        "apps/web-next/src/edit-transaction.test.ts"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; no inline multi-cell editor; real transactional rollback not tested; remote tile row selection now requires matching hydrated row, stale page discarded, incomplete bulk selection blocked; synthetic browser only."
+      "blocker": "Create/delete now require pinned edit authorization and verified receipts, retry holds exact request; actual authenticated edit conflict/receipt tests still missing."
     },
     {
       "id": "TABLE-06",
@@ -381,9 +389,11 @@
       "candidate_paths": [
         "apps/web-next/src/table-columns.ts",
         "apps/web-next/src/table-columns.test.ts",
-        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "apps/web-next/src/AttributeServerQuery.tsx",
+        "apps/web-next/src/table-query.ts"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; column width/order and selected export remain"
+      "blocker": "Copy current server query page TSV; no whole-source export or QGIS pairing."
     },
     {
       "id": "TABLE-08",
@@ -413,9 +423,10 @@
       "candidate_paths": [
         "apps/web-next/src/digitizing.ts",
         "apps/web-next/src/CoreMapTools.tsx",
-        "apps/web-next/src/digitizing.test.ts"
+        "apps/web-next/src/digitizing.test.ts",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed"
+      "blocker": "Explicit polygon closure no duplicate final point; typed create and identical retry synthetic Chromium PASS. No paired QGIS or actual backend edit acceptance."
     },
     {
       "id": "EDIT-03",
@@ -426,9 +437,11 @@
         "apps/web-next/src/LiveApp.tsx",
         "apps/web-next/src/QgisWorkspace.tsx",
         "apps/web-next/src/ProfessionalTools.tsx",
-        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "apps/web-next/src/edit-transaction.ts",
+        "apps/web-next/src/edit-transaction.test.ts"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; full project/navigation draft coverage remains; remote tile row selection now requires matching hydrated row, stale page discarded, incomplete bulk selection blocked; synthetic browser only."
+      "blocker": "Revision, local lock, edit capability, receipt pin and immutable create/delete retry. Unresolved ambiguous requests remain locked; no durable reconciliation after browser closes."
     },
     {
       "id": "EDIT-04",

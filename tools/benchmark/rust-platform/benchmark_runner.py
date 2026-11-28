@@ -71,13 +71,15 @@ def assert_safe_admin_url(db_url: str) -> None:
         raise RuntimeError("Benchmark admin must use dedicated loopback PostGIS port 54330")
 
 
-def assert_safe_bench_db(db_url: str) -> str:
+def assert_safe_bench_db(db_url: str, *, isolated_port: int = 54330) -> str:
     parsed = urlparse(db_url)
     db_name = parsed.path.lstrip("/")
     if (
         parsed.scheme != "postgresql"
         or parsed.hostname not in ("127.0.0.1", "localhost", "::1")
-        or parsed.port != 54330
+        or isolated_port not in (54330, 54332)
+        or parsed.port != isolated_port
+        or (isolated_port == 54332 and not db_name.startswith("openvietgis_bench_spec065_"))
         or parsed.query
         or parsed.fragment
         or not re.fullmatch(r"openvietgis_bench_[a-z0-9_]{1,44}", db_name)
@@ -552,8 +554,9 @@ def seed_benchmark_database(
     seed: int,
     scales: list[str],
     csrf_secret: str,
+    isolated_port: int = 54330,
 ) -> dict[str, Any]:
-    assert_safe_bench_db(admin_db_url)
+    assert_safe_bench_db(admin_db_url, isolated_port=isolated_port)
     t0 = time.perf_counter()
 
     org_a = det_uuid(seed, "org/alpha")

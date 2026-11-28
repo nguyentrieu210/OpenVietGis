@@ -33,7 +33,8 @@ try{
   else if(p.endsWith("/processing/algorithms"))body={items:[{id:"buffer",name:"Buffer",description:"Buffer",required_inputs:["input_layer_id"],parameters_schema:{}},{id:"clip",name:"Clip",description:"Clip",required_inputs:["input_layer_id","overlay_layer_id"],parameters_schema:{}}]};
   else if(p.endsWith("/processing/jobs")&&m==="GET")body={items:[]};
   else if(p.endsWith("/processing/jobs")&&m==="POST"){const payload=route.request().postDataJSON();processingRequests.push(payload);if(processingRequests.length===1||processingRequests.length===4)return route.fulfill({status:503,json:{}});body={id:processingRequests.length<=2?"job-test":"job-batch-"+processingRequests.length,operation_id:payload.operation_id,algorithm_id:payload.algorithm_id,output_name:payload.output_name,status:"queued",feature_count:null};}
-  else if(p.endsWith("/changesets")&&m==="POST"){const payload=route.request().postDataJSON();edits.push(payload);if(edits.length===1)return route.fulfill({status:503,json:{}});body={operation_id:payload.operation_id,source_id:"source1",base_content_revision:payload.base_content_revision,resulting_content_revision:"c".repeat(64),status:"committed",operation_count:1};}
+  else if(p.endsWith("/changesets")&&m==="POST"){const payload=route.request().postDataJSON();edits.push(payload);if(edits.length===1||edits.length===3)return route.fulfill({status:503,json:{}});body={id:"receipt-"+edits.length,operation_id:payload.operation_id,source_id:p.includes("/sources/source2/")?"source2":"source1",base_content_revision:payload.base_content_revision,resulting_content_revision:"c".repeat(64),status:"committed",operation_count:1};}
+  else if(p.endsWith("/query")&&m==="POST"){const q=route.request().postDataJSON();assert.equal(q.attribute_only,true);body={attribute_only:true,layer_id:"layer1",source_id:"source1",content_revision:layer.source.content_revision,schema_revision:layer.source.schema_revision,stored_crs:4326,limit:q.limit,offset:q.offset,query_fingerprint:"d".repeat(64),total_count:2,has_more:false,selection_feature_ids:["building","missing"],items:[{feature_id:"building",geometry_state:"present",geometry:null,attributes:{height_m:25}},{feature_id:"missing",geometry_state:"absent",geometry:null,attributes:{height_m:null}}]};}
   else if(p.endsWith("/features")){const second=p.includes("layer2");body={context:{organization_id:org,project_id:pid,layer_id:second?"layer2":"layer1",source_id:second?"source2":"source1",content_revision:layer.source.content_revision,schema_revision:layer.source.schema_revision,response_crs:{code:4326},geometry_included:true},items:[feature],next_after_feature_id:null};}
   else if(p.includes("/pro/tiles/"))return route.fulfill({status:200,contentType:"application/vnd.mapbox-vector-tile",body:Buffer.alloc(0)});
   else if(p.endsWith("/cad/documents")||p.endsWith("/cad/documents/"+id+"/versions")){
@@ -111,6 +112,14 @@ try{
  await table.getByRole("button",{name:"Bảng",exact:true}).click();
  await table.locator("tbody tr").first().waitFor();
  console.log("PASS synthetic Chromium: sortable typed headers and read-only feature form");
+ await table.getByRole("button",{name:"Truy vấn máy chủ",exact:true}).click();
+ await table.getByRole("button",{name:"Chạy truy vấn",exact:true}).click();
+ await table.getByText("Thiếu hình học",{exact:true}).waitFor();
+ assert.equal(await table.getByRole("button",{name:"missing",exact:true}).isEnabled(),false);
+ assert.equal(await table.getByRole("button",{name:"building",exact:true}).isEnabled(),true);
+ await table.getByRole("button",{name:"Truy vấn máy chủ",exact:true}).click();
+ console.log("PASS synthetic Chromium: attribute-only result includes absent geometry");
+
  await table.locator("tbody tr").first().click();
  await page.keyboard.press("Control+k");await command.fill("ATTR_EDIT");await command.press("Enter");
  const editor=page.getByRole("dialog",{name:"Sửa thuộc tính đối tượng"});await editor.waitFor();
@@ -122,6 +131,22 @@ try{
  await editor.getByRole("button",{name:"Thử lại lưu"}).click();await editor.waitFor({state:"detached"});
  assert.equal(edits.length,2);assert.deepEqual(edits[0],edits[1]);assert.equal(edits[0].operations[0].properties.height_m,30);
  console.log("PASS synthetic Chromium: typed attribute edit and identical idempotent retry");
+ await table.getByRole("button",{name:"Đóng bảng thuộc tính",exact:true}).click();
+ await page.keyboard.press("Control+k");await command.fill("POLYGON 106.66,10.76 106.662,10.76 106.662,10.762 106.66,10.76");await command.press("Enter");
+ await page.locator(".core-sketch").waitFor();await command.press("Enter");
+ const create=page.getByRole("dialog",{name:"Tạo đối tượng GIS"});await create.waitFor();
+ await create.getByLabel("NULL Height",{exact:true}).uncheck();
+ await create.getByLabel("Height",{exact:true}).fill("2147483648");
+ assert.equal(await create.getByRole("button",{name:"Lưu đối tượng",exact:true}).isEnabled(),false);
+ await create.getByLabel("Height",{exact:true}).fill("32");
+ await create.getByRole("button",{name:"Lưu đối tượng",exact:true}).click();
+ await create.getByRole("button",{name:"Thử lại lưu",exact:true}).waitFor();
+ assert.equal(await create.getByLabel("Height",{exact:true}).isEnabled(),false);
+ await create.getByRole("button",{name:"Thử lại lưu",exact:true}).click();try{await create.waitFor({state:"detached"})}catch(e){console.error("CREATE DEBUG",edits.slice(2),await create.innerText(),await page.locator("body").innerText().then(t=>t.slice(-2000)));throw e}
+ assert.equal(edits.length,4);assert.deepEqual(edits[2],edits[3]);assert.equal(edits[2].operations[0].properties.height_m,32);
+ assert.equal(edits[2].operations[0].geometry.coordinates[0].length,4);
+ console.log("PASS synthetic Chromium: explicit closed polygon, typed values and immutable create retry");
+
  await page.keyboard.press("Control+k");await command.fill("WORKSPACE");await command.press("Enter");
  const workspace=page.getByRole("dialog",{name:"Tùy chỉnh workspace"});await workspace.waitFor();
  await workspace.getByLabel("Phạm vi snapping").selectOption("selected");
