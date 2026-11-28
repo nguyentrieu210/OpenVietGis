@@ -71,3 +71,25 @@ fn standard_external_gpkg_import_roundtrip(){
  assert_eq!(crate::gpkg_import::import(&target,&src).unwrap(),1);
  let rows=target.query([105.,10.,107.,12.],0,2).unwrap();assert_eq!(rows.len(),1);assert_eq!(rows[0].1.attributes["name"],"sample");
 }
+
+#[test]
+fn restore_snapshot_preserves_revision_and_undo_history(){
+ let dir=tempfile::tempdir().unwrap();let h=Host::new(dir.path().join("projects")).unwrap();
+ let p=h.create().unwrap();let w=h.open(p.id).unwrap();let id=Uuid::new_v4();
+ h.edit(w.handle,Uuid::new_v4(),id,"0".into(),Some("point".into()),vec![106.,11.],json!({"name":"before"})).unwrap();
+ h.update_attributes(w.handle,id,"1".into(),json!({"name":"after"})).unwrap();
+ let snap=dir.path().join("backup.gpkg");h.snapshot(w.handle,&snap).unwrap();
+ let restored=h.restore_snapshot(&snap).unwrap();assert_ne!(restored.id,p.id);
+ let r=h.open(restored.id).unwrap();assert_eq!(h.feature(r.handle,id).unwrap()["revision"],"2");
+ assert!(h.history(r.handle,false).unwrap());assert_eq!(h.feature(r.handle,id).unwrap()["attributes"]["name"],"before");
+ assert_eq!(h.feature(w.handle,id).unwrap()["attributes"]["name"],"after");
+ h.close(r.handle).unwrap();h.close(w.handle).unwrap();
+}
+#[test]
+fn rejects_snapshot_with_untrusted_trigger(){
+ let dir=tempfile::tempdir().unwrap();let h=Host::new(dir.path().join("projects")).unwrap();
+ let p=h.create().unwrap();let w=h.open(p.id).unwrap();let snap=dir.path().join("backup.gpkg");h.snapshot(w.handle,&snap).unwrap();
+ let db=rusqlite::Connection::open(&snap).unwrap();
+ db.execute_batch("CREATE TRIGGER unexpected AFTER INSERT ON features BEGIN DELETE FROM features; END;").unwrap();drop(db);
+ assert!(h.restore_snapshot(&snap).is_err());assert_eq!(h.list().unwrap().len(),1);
+}
