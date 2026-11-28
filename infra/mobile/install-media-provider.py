@@ -12,17 +12,21 @@ manifest = rust / "Cargo.toml"
 text = manifest.read_text()
 if "ovg-project-store" not in text:
     raise SystemExit("shared store dependency missing")
-for dep in ('zeroize = "=1.8.1"', 'chacha20poly1305 = "=0.10.1"'):
+for dep in ('zeroize = "=1.8.1"', 'chacha20poly1305 = "=0.10.1"', 'x25519-dalek = { version = "=2.0.1", features = ["static_secrets"] }', 'hkdf = "=0.12.4"', 'sha2 = "0.10"'):
     if dep not in text:
         text = text.replace("[dependencies]", "[dependencies]\n" + dep, 1)
 if "[target.'cfg(target_os = \"android\")'.dependencies]" not in text:
     text += "\n[target.'cfg(target_os = \"android\")'.dependencies]\njni = \"=0.21.1\"\n"
 manifest.write_text(text)
 shutil.copyfile(repo / "crates/ovg-mobile-ffi/src/media_keys.rs", rust / "src/media_keys.rs")
+shutil.copyfile(repo / "crates/ovg-mobile-ffi/src/media_transfer.rs", rust / "src/media_transfer.rs")
 lib = rust / "src/lib.rs"
 s = lib.read_text()
-if "mod media_keys;" not in s:
-    lib.write_text("mod media_keys;\n" + s)
+for module in ("media_keys", "media_transfer"):
+    marker=f"mod {module};"
+    if marker not in s:
+        s=marker+"\n"+s
+lib.write_text(s)
 config = tomllib.loads(text)
 name = config.get("lib", {}).get("name", config["package"]["name"].replace("-", "_"))
 if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
