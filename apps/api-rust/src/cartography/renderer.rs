@@ -291,6 +291,31 @@ pub(crate) fn render_print_map(
     extent: &BTreeMap<String, f64>,
     layers_payload: &[PrintLayerSnapshot],
 ) -> Result<RenderedMap, AppError> {
+    let (canvas, frame) = render_print_canvas(
+        title, paper_size, orientation, dpi, crs_code, attribution,
+        show_north_arrow, show_scale_bar, show_legend, extent, layers_payload,
+    )?;
+    let bytes = match output_format {
+        PrintFormat::Png => encode_png(frame.width, frame.height, dpi, &canvas.rgb),
+        PrintFormat::Pdf => encode_pdf(frame.width, frame.height, dpi, title, &canvas.rgb),
+    };
+    Ok(RenderedMap { bytes })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_print_canvas(
+    title: &str,
+    paper_size: PaperSize,
+    orientation: Orientation,
+    dpi: u16,
+    crs_code: i32,
+    attribution: &str,
+    show_north_arrow: bool,
+    show_scale_bar: bool,
+    show_legend: bool,
+    extent: &BTreeMap<String, f64>,
+    layers_payload: &[PrintLayerSnapshot],
+) -> Result<(Canvas, PrintFrameMetrics), AppError> {
     let frame = describe_print_frame(paper_size, orientation, dpi, crs_code, show_legend, extent)?;
 
     let mut legend_entries: Vec<(String, String, String)> = Vec::new();
@@ -537,11 +562,85 @@ pub(crate) fn render_print_map(
         [100, 116, 139],
     );
 
-    let bytes = match output_format {
-        PrintFormat::Png => encode_png(frame.width, frame.height, dpi, &canvas.rgb),
-        PrintFormat::Pdf => encode_pdf(frame.width, frame.height, dpi, title, &canvas.rgb),
-    };
-    Ok(RenderedMap { bytes })
+    Ok((canvas, frame))
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn render_atlas_pdf(
+    title: &str,
+    paper_size: PaperSize,
+    orientation: Orientation,
+    dpi: u16,
+    crs_code: i32,
+    attribution: &str,
+    show_north_arrow: bool,
+    show_scale_bar: bool,
+    show_legend: bool,
+    pages: &[(String, BTreeMap<String, f64>)],
+    layers: &[PrintLayerSnapshot],
+) -> Result<RenderedMap, AppError> {
+    let (width, height) = paper_dimensions_px(paper_size, orientation, dpi)?;
+    if pages.is_empty() || pages.len() > 16
+        || u64::from(width) * u64::from(height) * pages.len() as u64 > 40_000_000
+    {
+        return Err(AppError::validation("ATLAS_LIMIT", "Atlas page or pixel budget exceeded"));
+    }
+    let mut compressed = Vec::with_capacity(pages.len());
+    let mut bytes = 0_usize;
+    for (index, (fid, extent)) in pages.iter().enumerate() {
+        let page_title = format!("{} | {}/{} | {}", title.chars().take(80).collect::<String>(),
+            index + 1, pages.len(), fid.chars().take(60).collect::<String>());
+        let (canvas, _) = render_print_canvas(
+            &page_title, paper_size, orientation, dpi, crs_code, attribution,
+            show_north_arrow, show_scale_bar, show_legend, extent, layers,
+        )?;
+        let page = zlib(&canvas.rgb);
+        bytes = bytes.saturating_add(page.len());
+        if bytes > 32 * 1024 * 1024 {
+            return Err(AppError::validation("ATLAS_LIMIT", "Atlas exceeds 32 MiB"));
+        }
+        compressed.push(page);
+    }
+    Ok(RenderedMap { bytes: encode_atlas_pdf(width, height, dpi, title, &compressed) })
+}
+
+fn encode_atlas_pdf(width: u32, height: u32, dpi: u16, title: &str, pages: &[Vec<u8>]) -> Vec<u8> {
+    let pt_w = f64::from(width) * 72.0 / f64::from(dpi);
+    let pt_h = f64::from(height) * 72.0 / f64::from(dpi);
+    let mut pdf = b"%PDF-1.4\n%\xE2\xE3\xCF\xD3\n".to_vec();
+    let mut offsets = Vec::new();
+    fn object(pdf: &mut Vec<u8>, offsets: &mut Vec<usize>, data: &str) {
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(data.as_bytes());
+    }
+    object(&mut pdf, &mut offsets, "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+    let kids = (0..pages.len()).map(|i| format!("{} 0 R", 3 + 3 * i)).collect::<Vec<_>>().join(" ");
+    object(&mut pdf, &mut offsets, &format!("2 0 obj\n<< /Type /Pages /Kids [{kids}] /Count {} >>\nendobj\n", pages.len()));
+    for (i, rgb) in pages.iter().enumerate() {
+        let page = 3 + i * 3;
+        let image = page + 1;
+        let stream = page + 2;
+        object(&mut pdf, &mut offsets, &format!(
+            "{page} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {pt_w:.4} {pt_h:.4}] /Resources << /XObject << /Im0 {image} 0 R >> >> /Contents {stream} 0 R >>\nendobj\n"
+        ));
+        object(&mut pdf, &mut offsets, &format!(
+            "{image} 0 obj\n<< /Type /XObject /Subtype /Image /Width {width} /Height {height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length {} >>\nstream\n", rgb.len()
+        ));
+        pdf.extend_from_slice(rgb);
+        pdf.extend_from_slice(b"\nendstream\nendobj\n");
+        let content = format!("q {pt_w:.4} 0 0 {pt_h:.4} 0 0 cm /Im0 Do Q");
+        object(&mut pdf, &mut offsets, &format!("{stream} 0 obj\n<< /Length {} >>\nstream\n{content}\nendstream\nendobj\n", content.len()));
+    }
+    let info = 3 + pages.len() * 3;
+    object(&mut pdf, &mut offsets, &format!("{info} 0 obj\n<< /Title {} /Producer (OpenVietGIS) >>\nendobj\n", pdf_text_string(title)));
+    let start = pdf.len();
+    let mut xref = format!("xref\n0 {}\n0000000000 65535 f \n", offsets.len() + 1);
+    for offset in &offsets {
+        let _ = writeln!(xref, "{offset:010} 00000 n ");
+    }
+    let _ = writeln!(xref, "trailer\n<< /Size {} /Root 1 0 R /Info {info} 0 R >>\nstartxref\n{start}\n%%EOF", offsets.len() + 1);
+    pdf.extend_from_slice(xref.as_bytes());
+    pdf
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1197,6 +1296,18 @@ mod tests {
             &layers,
         )?;
         Ok((rendered, frame))
+    }
+
+    #[test]
+    fn atlas_pdf_has_independent_page_objects_and_xref() {
+        let data = zlib(&[255, 255, 255]);
+        let pdf = encode_atlas_pdf(1, 1, 150, "Atlas", &[data.clone(), data]);
+        let text = String::from_utf8_lossy(&pdf);
+        assert!(text.contains("/Kids [3 0 R 6 0 R] /Count 2"));
+        assert!(text.contains("/Contents 5 0 R"));
+        assert!(text.contains("/Contents 8 0 R"));
+        assert!(text.contains("/Size 10"));
+        assert!(pdf.ends_with(b"%%EOF\n"));
     }
 
     #[test]

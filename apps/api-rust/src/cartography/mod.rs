@@ -378,6 +378,8 @@ async fn create_layout(
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct PreviewLayoutExportRequest {
+    #[serde(default)]
+    atlas: Option<AtlasRequest>,
     #[serde(default = "default_print_format")]
     output_format: PrintFormat,
     #[serde(default = "default_dpi")]
@@ -387,11 +389,72 @@ struct PreviewLayoutExportRequest {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ExportLayoutRequest {
+    #[serde(default)]
+    atlas: Option<AtlasRequest>,
     #[serde(default = "default_print_format")]
     output_format: PrintFormat,
     #[serde(default = "default_dpi")]
     dpi: i32,
     expected_revision_fingerprint: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AtlasRequest {
+    coverage_layer_id: Uuid,
+    #[serde(default)]
+    feature_ids: Option<Vec<String>>,
+}
+
+type AtlasPages = Vec<(String, BTreeMap<String, f64>)>;
+
+fn atlas_pages(snapshot: &cartography_store::PrintSnapshotData, request: &AtlasRequest) -> Result<AtlasPages, AppError> {
+    let coverage = snapshot.layers.iter().find(|l| l.id == request.coverage_layer_id)
+        .ok_or_else(|| AppError::validation("ATLAS_COVERAGE", "coverage must be a layer of the locked layout"))?;
+    let ids = request.feature_ids.as_ref();
+    if ids.is_some_and(|v| v.is_empty() || v.len() > 16 ||
+        v.iter().collect::<HashSet<_>>().len() != v.len() ||
+        v.iter().any(|id| id.is_empty() || id.len() > 128))
+    {
+        return Err(AppError::validation("ATLAS_LIMIT", "provide 1–16 unique feature identifiers"));
+    }
+    let mut features: Vec<_> = coverage.features.iter().filter(|f|
+        ids.is_none_or(|v| v.contains(&f.feature_id))).collect();
+    features.sort_by(|a, b| a.feature_id.cmp(&b.feature_id));
+    if features.is_empty() || features.len() > 16 || ids.is_some_and(|v| v.len() != features.len()) {
+        return Err(AppError::validation("ATLAS_LIMIT", "coverage requires 1–16 available features"));
+    }
+    fn walk(value: &Value, bounds: &mut [f64; 4], depth: usize) -> Result<(), AppError> {
+        let invalid = || AppError::validation("ATLAS_GEOMETRY", "invalid coverage coordinates");
+        if depth > 8 { return Err(invalid()); }
+        let array = value.as_array().ok_or_else(invalid)?;
+        if array.first().is_some_and(Value::is_number) {
+            if array.len() != 2 { return Err(invalid()); }
+            let x = array[0].as_f64().filter(|v| v.is_finite()).ok_or_else(invalid)?;
+            let y = array[1].as_f64().filter(|v| v.is_finite()).ok_or_else(invalid)?;
+            bounds[0] = bounds[0].min(x); bounds[1] = bounds[1].min(y);
+            bounds[2] = bounds[2].max(x); bounds[3] = bounds[3].max(y);
+        } else {
+            for child in array { walk(child, bounds, depth + 1)?; }
+        }
+        Ok(())
+    }
+    let mut pages = Vec::with_capacity(features.len());
+    for f in features {
+        let mut b = [f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY];
+        walk(&f.geometry["coordinates"], &mut b, 0)?;
+        if b.iter().any(|v| !v.is_finite()) || (matches!(snapshot.layout.crs_code, 4326 | 4756) && b[2]-b[0] > 180.0) {
+            return Err(AppError::validation("ATLAS_GEOMETRY", "coverage outside supported domain"));
+        }
+        let minimum = if matches!(snapshot.layout.crs_code, 4326 | 4756) { 0.0001 } else { 10.0 };
+        let dx = ((b[2]-b[0])*0.15).max(minimum/2.0);
+        let dy = ((b[3]-b[1])*0.15).max(minimum/2.0);
+        let extent = BTreeMap::from([("min_x".to_owned(), b[0]-dx), ("min_y".to_owned(), b[1]-dy),
+            ("max_x".to_owned(), b[2]+dx), ("max_y".to_owned(), b[3]+dy)]);
+        validate_print_extent(&extent, snapshot.layout.crs_code)?;
+        pages.push((f.feature_id.clone(), extent));
+    }
+    Ok(pages)
 }
 
 struct PreparedSnapshot {
@@ -403,6 +466,7 @@ struct PreparedSnapshot {
     frame: renderer::PrintFrameMetrics,
     manifest: Value,
     revision_fingerprint: String,
+    atlas_pages: Option<AtlasPages>,
 }
 
 async fn prepare_print_manifest(
@@ -410,6 +474,7 @@ async fn prepare_print_manifest(
     layout_id: Uuid,
     output_format: PrintFormat,
     dpi: i32,
+    atlas: Option<&AtlasRequest>,
 ) -> Result<PreparedSnapshot, AppError> {
     if !matches!(dpi, 150 | 300) {
         return Err(AppError::validation(
@@ -423,7 +488,20 @@ async fn prepare_print_manifest(
     let paper_size = PaperSize::parse(&snapshot.layout.paper_size)?;
     let orientation = Orientation::parse(&snapshot.layout.orientation)?;
 
-    let use_extent = if let Some(extent) = &snapshot.layout.extent {
+    let atlas_pages = if let Some(request) = atlas {
+        if output_format != PrintFormat::Pdf || dpi != 150 {
+            return Err(AppError::validation("ATLAS_FORMAT", "Atlas requires PDF at 150 DPI"));
+        }
+        let pages = atlas_pages(&snapshot, request)?;
+        let (w, h) = renderer::paper_dimensions_px(paper_size, orientation, dpi_u16)?;
+        if u64::from(w) * u64::from(h) * pages.len() as u64 > 40_000_000 {
+            return Err(AppError::validation("ATLAS_LIMIT", "Atlas exceeds total pixel budget"));
+        }
+        Some(pages)
+    } else { None };
+    let use_extent = if let Some(pages) = &atlas_pages {
+        pages[0].1.clone()
+    } else if let Some(extent) = &snapshot.layout.extent {
         validate_print_extent(extent, snapshot.layout.crs_code)?;
         extent.clone()
     } else if let Some([mut min_x, mut min_y, mut max_x, mut max_y]) = snapshot.data_bounds {
@@ -497,7 +575,7 @@ async fn prepare_print_manifest(
         })
         .collect();
 
-    let manifest = json!({
+    let mut manifest = json!({
         "organization_id": read.organization_id(),
         "project_id": read.project_id(),
         "layout_id": snapshot.layout.id,
@@ -521,6 +599,16 @@ async fn prepare_print_manifest(
         },
         "layers": manifest_layers,
     });
+    if let (Some(request), Some(pages)) = (atlas, &atlas_pages) {
+        let details: Result<Vec<_>, AppError> = pages.iter().map(|(fid, extent)| {
+            let metrics = renderer::describe_print_frame(paper_size, orientation, dpi_u16,
+                snapshot.layout.crs_code, snapshot.layout.show_legend, extent)?;
+            Ok(json!({"feature_id":fid,"extent":extent,"effective_extent":metrics.effective_extent,
+                "scale_denominator":metrics.scale_denominator}))
+        }).collect();
+        manifest["atlas"] = json!({"coverage_layer_id":request.coverage_layer_id,"page_count":pages.len(),
+            "pages":details?,"margin_percent":15,"profile":"rust-atlas-v1"});
+    }
     let revision_fingerprint = print_revision_fingerprint(&manifest);
     Ok(PreparedSnapshot {
         snapshot,
@@ -531,6 +619,7 @@ async fn prepare_print_manifest(
         frame,
         manifest,
         revision_fingerprint,
+        atlas_pages,
     })
 }
 
@@ -555,7 +644,7 @@ async fn preview_layout_export(
     .await
     .map_err(CartographyError::Access)?;
 
-    let prepared = prepare_print_manifest(&mut read, layout_id, body.output_format, body.dpi)
+    let prepared = prepare_print_manifest(&mut read, layout_id, body.output_format, body.dpi, body.atlas.as_ref())
         .await
         .map_err(CartographyError::Domain)?;
     read.commit().await.map_err(CartographyError::Domain)?;
@@ -589,7 +678,7 @@ async fn export_layout(
     .await
     .map_err(CartographyError::Access)?;
 
-    let prepared = prepare_print_manifest(&mut read, layout_id, body.output_format, body.dpi)
+    let prepared = prepare_print_manifest(&mut read, layout_id, body.output_format, body.dpi, body.atlas.as_ref())
         .await
         .map_err(CartographyError::Domain)?;
 
@@ -604,7 +693,13 @@ async fn export_layout(
     // open (as in Python) so the export row is inserted under the same revision locks.
     let output_format = body.output_format;
     let (prepared, rendered) = tokio::task::spawn_blocking(move || {
-        let rendered = renderer::render_print_map(
+        let rendered = if let Some(pages) = &prepared.atlas_pages {
+            renderer::render_atlas_pdf(&prepared.snapshot.layout.title, prepared.paper_size,
+                prepared.orientation, prepared.dpi, prepared.snapshot.layout.crs_code,
+                &prepared.snapshot.layout.attribution, prepared.snapshot.layout.show_north_arrow,
+                prepared.snapshot.layout.show_scale_bar, prepared.snapshot.layout.show_legend,
+                pages, &prepared.snapshot.layers)
+        } else { renderer::render_print_map(
             &prepared.snapshot.layout.title,
             prepared.paper_size,
             prepared.orientation,
@@ -617,7 +712,7 @@ async fn export_layout(
             prepared.snapshot.layout.show_legend,
             &prepared.use_extent,
             &prepared.snapshot.layers,
-        );
+        ) };
         (prepared, rendered)
     })
     .await
@@ -674,7 +769,7 @@ async fn export_layout(
             output_format: body.output_format.wire().to_owned(),
             dpi: body.dpi,
             scale_denominator: prepared.frame.scale_denominator,
-            scale_accuracy_note: prepared.frame.scale_accuracy_note,
+            scale_accuracy_note: if prepared.atlas_pages.is_some() { format!("Atlas: first page scale only. {}", prepared.frame.scale_accuracy_note) } else { prepared.frame.scale_accuracy_note },
             revision_manifest: manifest,
             storage_key: storage_key.clone(),
             sha256: sha256_hex,

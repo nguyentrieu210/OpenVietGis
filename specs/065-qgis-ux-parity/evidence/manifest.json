@@ -781,9 +781,13 @@
         "apps/web-next/src/LayoutRender.ts",
         "apps/web-next/src/layout-atlas.ts",
         "apps/web-next/src/layout-atlas.test.ts",
-        "apps/web-next/layout-smoke.mjs"
+        "apps/web-next/layout-smoke.mjs",
+        "apps/api-rust/src/cartography/mod.rs",
+        "apps/api-rust/src/cartography/renderer.rs",
+        "apps/web-next/src/workbenches/features/platform/CartographyWorkbenchPage.tsx",
+        "packages/client-sdk/src/platform.ts"
       ],
-      "blocker": "Bounded client Atlas (8 features, 2 map frames, 150 DPI) and synthetic browser two-page PDF/stale revision tests pass; no authenticated API, large-source streaming, server-side immutable render snapshot or paired QGIS acceptance."
+      "blocker": "Client Atlas plus new server-side PDF Atlas on existing authorized print preview/export: locked source/style/layout snapshot, coverage layer from layout, optional FID filter, deterministic per-feature extent and page scale, revision fingerprint, artifact storage/checksum, up to 16 pages and 40M total pixels at 150 DPI. Multi-page xref test written, not executed. Large-source streaming, multi-frame designer server parity, authenticated browser/QGIS acceptance remain."
     },
     {
       "id": "OUTPUT-05",

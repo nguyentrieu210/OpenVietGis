@@ -57,7 +57,7 @@ export function AttributeServerQuery({layer,layers=[],execute,openFeature,select
   if(spatialMode==="reference"){if(!reference){setError("Chọn lớp tham chiếu.");return}input={reference}}
   else{if(spatialBounds.some(x=>!x.trim())){setError("Nhập đủ bốn tọa độ.");return}input={bounds:spatialBounds.map(Number) as [number,number,number,number]}}
   const seq=++epoch.current;lock.current=true;setBusy(true);setSelecting(true);setSelectionProgress("");setError("");
-  const current=()=>epoch.current===seq&&selectionLayerCurrent(latest.current.layer,base)&&!!latest.current.selection&&sameKeys(latest.current.selection,before)&&(!("reference" in input)||selectionLayerCurrent(latest.current.layers.find(l=>l.id===input.reference.id),input.reference));
+  const current=()=>epoch.current===seq&&selectionLayerCurrent(latest.current.layer,base)&&!!latest.current.selection&&sameKeys(latest.current.selection,before)&&(spatialMode!=="reference"||!!reference&&selectionLayerCurrent(latest.current.layers.find(l=>l.id===reference.id),reference));
   try{
    const found=await collectSpatialSelection(base,input,predicate,body=>execute(base,body),current,(n,total)=>{if(current())setSelectionProgress("Đã kiểm tra "+n+"/"+total+" FID…")});
    if(!current()||!latest.current.applySelection)throw Error("Phạm vi đã thay đổi.");

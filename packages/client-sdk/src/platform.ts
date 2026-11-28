@@ -124,7 +124,9 @@ export interface PrintLayout {
   created_at: string;
 }
 
+export interface PrintAtlasRequest { coverage_layer_id: string; feature_ids?: string[] }
 export interface PrintRevisionManifest {
+  atlas?: { coverage_layer_id: string; page_count: number; pages: Array<{feature_id:string; scale_denominator:number; effective_extent:Record<string,number>}> };
   layout_id: string;
   layout_revision: string;
   crs_code: number;
@@ -578,7 +580,7 @@ export function previewPrintExport(
   orgId: string,
   projectId: string,
   layoutId: string,
-  body: { output_format: "png" | "pdf"; dpi: 150 | 300 },
+  body: { output_format: "png" | "pdf"; dpi: 150 | 300; atlas?: PrintAtlasRequest },
   csrf: string
 ): Promise<PrintExportPreview> {
   return client.request<PrintExportPreview>(
@@ -592,7 +594,7 @@ export function exportPrintLayout(
   orgId: string,
   projectId: string,
   layoutId: string,
-  body: { output_format: "png" | "pdf"; dpi: 150 | 300; expected_revision_fingerprint: string },
+  body: { output_format: "png" | "pdf"; dpi: 150 | 300; expected_revision_fingerprint: string; atlas?: PrintAtlasRequest },
   csrf: string
 ): Promise<PrintExport> {
   return client.request<PrintExport>(
