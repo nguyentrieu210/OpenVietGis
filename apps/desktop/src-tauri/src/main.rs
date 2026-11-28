@@ -345,6 +345,7 @@ fn desktop_providers(window:WebviewWindow)->Reply<Value>{
     trusted(&window)?;
     Ok(serde_json::json!([
       {"id":"gpkg-local","format":"GeoPackage","modes":["edit","import_copy","direct_read"],"profile":"canonical XY WGS84; direct requires RTree; copy supports qualified CRS","candidate":true},
+      {"id":"csv","format":"CSV/TSV","modes":["import_copy"],"profile":"UTF-8 explicit XY columns, delimiter and qualified CRS","candidate":true},
       {"id":"geojson","format":"GeoJSON","modes":["import_copy","export"],"profile":"bounded XY WGS84","candidate":true},
       {"id":"mbtiles","format":"MBTiles","modes":["snapshot_read"],"profile":"PNG raster","candidate":true},
       {"id":"dxf","format":"DXF","modes":["snapshot_read"],"profile":"ASCII POINT/LINE WGS84","candidate":true},
@@ -364,6 +365,31 @@ async fn desktop_export_unified_candidate(window:WebviewWindow,host:State<'_,Hos
         let path=file.into_path().map_err(|_|"INVALID_STORAGE")?;
         if path.extension().and_then(|v|v.to_str())!=Some("sqlite"){return Err("UNSUPPORTED_FORMAT")}
         h.export_unified_candidate(handle,&path).map(Some)
+    }).await
+}
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CsvOptions{x:String,y:String,epsg:u32,delimiter:String}
+#[tauri::command]
+async fn desktop_import_csv(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,options:CsvOptions)->Reply<Option<u32>>{
+    let app=window.app_handle().clone();
+    run(window,host.inner().clone(),move|h|{
+        h.generation(handle)?;
+        let delimiter=match options.delimiter.as_str(){","=>b',',";"=>b';',"tab"=>b'\t',_=>return Err("INVALID_CSV_OPTIONS")};
+        let Some(file)=app.dialog().file().add_filter("CSV coordinates",&["csv","tsv"]).blocking_pick_file() else{return Ok(None)};
+        let path=file.into_path().map_err(|_|"INVALID_STORAGE")?;
+        h.import_csv(handle,&path,&options.x,&options.y,options.epsg,delimiter).map(Some)
+    }).await
+}
+#[tauri::command]
+async fn desktop_compact_layer(window:WebviewWindow,host:State<'_,Host>,handle:Uuid)->Reply<bool>{
+    let app=window.app_handle().clone();
+    run(window,host.inner().clone(),move|h|{
+        h.generation(handle)?;
+        let Some(file)=app.dialog().file().add_filter("Compact GeoPackage copy",&["gpkg"]).set_file_name("compact.gpkg").blocking_save_file() else{return Ok(false)};
+        let path=file.into_path().map_err(|_|"INVALID_STORAGE")?;
+        if path.extension().and_then(|v|v.to_str())!=Some("gpkg"){return Err("UNSUPPORTED_FORMAT")}
+        h.compact_layer_copy(handle,&path)?;Ok(true)
     }).await
 }
 fn main(){
@@ -401,6 +427,6 @@ fn main(){
                 if let Some(host)=window.try_state::<Host>(){let _=host.shutdown();}
             }
         })
-        .invoke_handler(tauri::generate_handler![desktop_capabilities,desktop_list,desktop_create,desktop_open,desktop_close,desktop_start_transform,desktop_poll,desktop_cancel,desktop_viewport,desktop_attributes,desktop_feature,desktop_edit,desktop_update_attributes,desktop_history,desktop_checkpoint,desktop_import_geojson,desktop_export,desktop_open_raster,desktop_close_raster,desktop_resource,desktop_import_gpkg,desktop_generation,desktop_reshape,desktop_open_asset,desktop_close_asset,desktop_cad_viewport,desktop_cancel_resource,desktop_restore_snapshot,desktop_inspect_gpkg,desktop_import_layer,desktop_copc_query,desktop_list_layers,desktop_create_layer,desktop_open_layer,desktop_backup_project,desktop_restore_project,desktop_project_state,desktop_save_project_state,desktop_set_schema,desktop_direct_open,desktop_direct_page,desktop_direct_close,desktop_integrity,desktop_providers,desktop_export_unified_candidate])
+        .invoke_handler(tauri::generate_handler![desktop_capabilities,desktop_list,desktop_create,desktop_open,desktop_close,desktop_start_transform,desktop_poll,desktop_cancel,desktop_viewport,desktop_attributes,desktop_feature,desktop_edit,desktop_update_attributes,desktop_history,desktop_checkpoint,desktop_import_geojson,desktop_export,desktop_open_raster,desktop_close_raster,desktop_resource,desktop_import_gpkg,desktop_generation,desktop_reshape,desktop_open_asset,desktop_close_asset,desktop_cad_viewport,desktop_cancel_resource,desktop_restore_snapshot,desktop_inspect_gpkg,desktop_import_layer,desktop_copc_query,desktop_list_layers,desktop_create_layer,desktop_open_layer,desktop_backup_project,desktop_restore_project,desktop_project_state,desktop_save_project_state,desktop_set_schema,desktop_direct_open,desktop_direct_page,desktop_direct_close,desktop_integrity,desktop_providers,desktop_export_unified_candidate,desktop_import_csv,desktop_compact_layer])
         .run(tauri::generate_context!()).expect("Desktop host failed");
 }
