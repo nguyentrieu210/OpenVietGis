@@ -21,7 +21,9 @@ function host():Host {
   return h;
 }
 // Deliberately not a general invoke facade. All exposed calls are typed and bounded by Rust.
+export type PhotoInventory={count:number;bytes:number;pixels:number;gps_count:number;metadata_errors:number;non_default_orientation:number;min_width:number;max_width:number;min_height:number;max_height:number};
 export const desktop={
+  photoInspect:(handle:string)=>host().core.invoke<PhotoInventory|null>("desktop_photo_inspect",{handle}),
   capabilities:()=>host().core.invoke<Capabilities>("desktop_capabilities"),
   providers:()=>host().core.invoke<{id:string;format:string;modes:string[];profile:string;candidate:boolean}[]>("desktop_providers"),
   integrity:(handle:string)=>host().core.invoke<Record<string,unknown>>("desktop_integrity",{handle}),

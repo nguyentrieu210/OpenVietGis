@@ -1,5 +1,6 @@
 import {useCallback,useEffect,useRef,useState} from "react";
 import LocalWorkbench from "./LocalWorkbench";
+import PhotoWorkspacePanel from "./PhotoWorkspacePanel";
 import {desktop,type LayerInfo,type ProjectState,type ViewState,type LayerStyle} from "./transport";
 export default function DesktopProject({rootHandle}:{rootHandle:string}){
  const [layers,setLayers]=useState<LayerInfo[]>([]),[active,setActive]=useState("root"),[handles,setHandles]=useState<Record<string,string>>({root:rootHandle});
@@ -74,6 +75,7 @@ export default function DesktopProject({rootHandle}:{rootHandle:string}){
      <label>Màu lớp <input type="color" value={styleFor(active).color} disabled={!presentation} onChange={e=>changeStyle(active,{...styleFor(active),color:e.target.value})}/></label><label>Độ mờ <input type="range" min="0" max="1" step=".05" value={styleFor(active).opacity} disabled={!presentation} onChange={e=>changeStyle(active,{...styleFor(active),opacity:Number(e.target.value)})}/></label><button disabled={busy||!presentation} onClick={()=>void run(save)}>Lưu cấu hình dự án</button>
      {error&&<span role="alert">{error}</span>}
    </div>
+   {presentation&&<PhotoWorkspacePanel key={rootHandle} handle={rootHandle}/>}
    {presentation&&handles[active]&&<LocalWorkbench key={handles[active]} handle={handles[active]!} overlays={overlays} initialView={view.current} onView={v=>{view.current=v}} layerStyle={styleFor(active)}/>}
  </section>;
 }

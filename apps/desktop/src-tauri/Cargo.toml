@@ -42,3 +42,5 @@ ovg-project-store = { path = "../../../crates/ovg-project-store" }
 ovg-native-providers = { path = "../../../crates/ovg-native-providers" }
 
 sha2 = "0.10"
+
+ovg-processing = { path = "../../../crates/ovg-processing" }
