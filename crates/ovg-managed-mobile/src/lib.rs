@@ -24,11 +24,12 @@ pub enum Error{
 pub struct Scope{pub origin:String,pub issuer:String,pub subject:Uuid,pub organization:Uuid,pub project:Uuid,pub device:Uuid,pub session:Uuid}
 impl Scope{
  pub fn validate(&self)->Result<(),Error>{
-  if !self.origin.starts_with("https://")||self.origin.len()>512||self.issuer.is_empty()||self.issuer.len()>256||self.origin[8..].is_empty()||self.origin[8..].contains(['/', '@','?','#','\\'])||[self.subject,self.organization,self.project,self.device,self.session].iter().any(Uuid::is_nil){return Err(Error::Invalid);}Ok(())
+  let url=url::Url::parse(&self.origin).map_err(|_|Error::Invalid)?;
+  if url.scheme()!="https"||url.host_str().is_none()||url.origin().ascii_serialization()!=self.origin||!self.origin.starts_with("https://")||self.origin.len()>512||self.issuer.is_empty()||self.issuer.len()>256||self.origin[8..].is_empty()||self.origin[8..].contains(['/', '@','?','#','\\'])||[self.subject,self.organization,self.project,self.device,self.session].iter().any(Uuid::is_nil){return Err(Error::Invalid);}Ok(())
  }
  pub fn digest(&self)->Result<[u8;32],Error>{self.validate()?;Ok(Sha256::digest(serde_json::to_vec(self).map_err(|_|Error::Invalid)?).into())}
 }
 pub(crate) fn hash(data:&[u8])->[u8;32]{Sha256::digest(data).into()}
 pub(crate) fn rev(s:&str)->bool{s.len()==64&&s.bytes().all(|c|c.is_ascii_hexdigit())}
-pub(crate) fn feature_id(s:&str)->bool{!s.is_empty()&&s.len()<=128&&s.trim()==s&&!s.chars().any(char::is_control)}
+pub(crate) fn feature_id(s:&str)->bool{!s.is_empty()&&s.len()<=128&&s.bytes().all(|c|c.is_ascii_alphanumeric()||b"_-".contains(&c))}
 pub(crate) fn json_bytes(v:&Value)->Result<Vec<u8>,Error>{serde_json::to_vec(v).map_err(|_|Error::Invalid)}

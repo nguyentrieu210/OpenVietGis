@@ -48,6 +48,8 @@ impl Store{
   if pages.is_empty()||pages.len()>128{return Err(Error::Invalid);}
   let cursor=pages[0].cursor;let epoch=self.lease.claims().permission_epoch;
   let tx=self.db.transaction_with_behavior(TransactionBehavior::Immediate)?;
+  let (ready,old_cursor):(bool,i64)=tx.query_row("SELECT ready,cursor FROM meta WHERE id=1",[],|r|Ok((r.get(0)?,r.get(1)?)))?;
+  if ready&&old_cursor!=cursor{return Err(Error::Conflict);}
   let pending:i64=tx.query_row("SELECT count(*) FROM outbox WHERE state!='acknowledged'",[],|r|r.get(0))?;
   if pending!=0{return Err(Error::Conflict);}
   tx.execute_batch("DELETE FROM features; DELETE FROM layers; DELETE FROM delta_pages;")?;
@@ -74,7 +76,7 @@ impl Store{
   for c in d.changes{
    if c.cursor<previous||c.cursor<=start||c.cursor>d.next_cursor||!rev(&c.content_revision)||!seen.insert((c.cursor,c.layer_id)){return Err(Error::Invalid);}previous=c.cursor;
    let layer=c.layer_id.to_string();let source:Option<String>=tx.query_row("SELECT source FROM layers WHERE layer=?1",[&layer],|r|r.get(0)).optional()?;
-   if source.as_deref()!=Some(&c.source_id.to_string()){return Err(Error::Reset);}
+   if source.as_deref()!=Some(c.source_id.to_string().as_str()){return Err(Error::Reset);}
    count+=c.upserts.len()+c.removals.len();if count>5000{return Err(Error::Limit);}
    let mut ids=std::collections::HashSet::new();
    for f in c.upserts{if !f.valid()||!ids.insert(f.feature_id.clone()){return Err(Error::Invalid);}
@@ -102,6 +104,14 @@ impl Store{
   self.guard(clock,true)?;let tx=self.db.transaction_with_behavior(TransactionBehavior::Immediate)?;
   let data:Vec<u8>=tx.query_row("SELECT payload FROM outbox WHERE id=?1 AND state='queued'",[id],|r|r.get(0)).optional()?.ok_or(Error::Unknown)?;
   tx.execute("UPDATE outbox SET state='sending' WHERE id=?1",[id])?;tx.commit()?;Ok(data)
+ }
+ pub fn revoke(&mut self){self.locked=true;}
+ pub fn state(&mut self,clock:&Clock,id:&str)->Result<String,Error>{
+  self.guard(clock,false)?;Ok(self.db.query_row("SELECT state FROM outbox WHERE id=?1",[id],|r|r.get(0))?)
+ }
+ pub fn conflict(&mut self,clock:&Clock,id:&str)->Result<(),Error>{
+  self.guard(clock,false)?;
+  if self.db.execute("UPDATE outbox SET state='conflict' WHERE id=?1 AND state='sending'",[id])?!=1{return Err(Error::Conflict);}Ok(())
  }
  pub fn unknown(&mut self,clock:&Clock,id:&str)->Result<(),Error>{self.guard(clock,false)?;if self.db.execute("UPDATE outbox SET state='unknown' WHERE id=?1 AND state='sending'",[id])?!=1{return Err(Error::Conflict);}Ok(())}
  pub fn receipt(&mut self,clock:&Clock,r:&Receipt)->Result<(),Error>{
