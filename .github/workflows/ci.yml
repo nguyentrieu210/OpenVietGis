@@ -18,9 +18,33 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  native-api:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.1
+      - uses: Swatinem/rust-cache@v2
+      - name: Build native E08 backend once for this CI run
+        run: |
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          cargo build --locked -p openvietgis-api-rust --bin openvietgis-api-rust
+          (cd target/debug && sha256sum openvietgis-api-rust > openvietgis-api-rust.sha256)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-api-${{ github.sha }}
+          path: |
+            target/debug/openvietgis-api-rust
+            target/debug/openvietgis-api-rust.sha256
+          if-no-files-found: error
+          retention-days: 2
   backend:
+    needs: native-api
     if: ${{ !inputs.browser_only }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     env:
@@ -43,12 +67,15 @@ jobs:
       - name: Install Python dependencies
         run: uv sync --project apps/api --frozen
 
-      - uses: dtolnay/rust-toolchain@master
+      - uses: actions/download-artifact@v4
         with:
-          toolchain: 1.85.1
-      - uses: Swatinem/rust-cache@v2
-      - name: Build native E08 backend for integration and browser tests
-        run: cargo build --locked -p openvietgis-api-rust
+          name: native-api-${{ github.sha }}
+          path: target/debug
+      - name: Verify exact candidate binary
+        run: |
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          chmod +x target/debug/openvietgis-api-rust
+          (cd target/debug && sha256sum --check openvietgis-api-rust.sha256)
 
       - name: Install system GDAL runtime for raster fixtures
         run: |
@@ -103,6 +130,7 @@ jobs:
           pytest apps/api/tests/integration/identity/test_live_keycloak_oidc.py --show-capture=no
 
   validate:
+    needs: native-api
     # Visual baselines were recorded on Ubuntu 24.04; pin font/render stack.
     runs-on: ubuntu-24.04
     permissions:
@@ -140,12 +168,15 @@ jobs:
       - name: Install Python dependencies
         run: uv sync --project apps/api --frozen
 
-      - uses: dtolnay/rust-toolchain@master
+      - uses: actions/download-artifact@v4
         with:
-          toolchain: 1.85.1
-      - uses: Swatinem/rust-cache@v2
-      - name: Build native E08 backend for integration and browser tests
-        run: cargo build --locked -p openvietgis-api-rust
+          name: native-api-${{ github.sha }}
+          path: target/debug
+      - name: Verify exact candidate binary
+        run: |
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          chmod +x target/debug/openvietgis-api-rust
+          (cd target/debug && sha256sum --check openvietgis-api-rust.sha256)
 
       - name: Install system GDAL runtime for raster fixtures
         run: |

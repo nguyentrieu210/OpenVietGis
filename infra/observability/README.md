@@ -10,7 +10,9 @@ extend through 30 seconds; values above that retain the +Inf bucket. Quantiles
 are estimates over the last five minutes, not exact individual-request timings.
 No route, account, organization, project, feature ID, token or URL is a metric label.
 
-Cache hit ratio counts hits / (hits + misses + waits + capacity bypasses).
+Cache hit ratio counts hits / (hits + misses + capacity bypasses). Intermediate
+waits are excluded because a waiter may later become a hit. A zero denominator
+means no observation, not a successful request or cache workload.
 Only eligible unscoped native-4326 tile requests enter those counters.
 Restricted GIS scopes bypass this cache and still execute authorized RLS reads.
 Each lookup revalidates access, source binding, source readiness, revisions and
@@ -28,3 +30,7 @@ duration covers one BuildKit build-and-publish action, including SBOM/provenance
 It contains identification/timing fields only and is not deployment approval.
 Deployment duration and live verification belong to the authorized deployment
 receipt; no production deployment has been inferred from build timing.
+
+Validate rules with `promtool check rules infra/observability/spec066.rules.yml`.
+After an authorized rollout, `python3 infra/release/deployment_receipt.py --help`
+provides the read-only exact-digest timing receipt. No service is started by it.

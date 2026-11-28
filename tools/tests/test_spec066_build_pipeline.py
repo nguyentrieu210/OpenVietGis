@@ -67,3 +67,18 @@ def test_qgis_sync_contracts_are_part_of_package_ci() -> None:
     assert managed in workflow["on"]["pull_request"]["paths"]
     assert managed in runs
     assert "native-qgis-smoke" in workflow["jobs"]
+
+
+def test_ci_builds_native_binary_once_and_verifies_both_consumers() -> None:
+    workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
+    jobs = workflow["jobs"]
+    steps = jobs["native-api"]["steps"]
+    assert sum("cargo build --locked" in s.get("run", "") for s in steps) == 1
+    assert any(s.get("uses") == "actions/upload-artifact@v4" for s in steps)
+    for consumer in ("backend", "validate"):
+        assert jobs[consumer]["needs"] == "native-api"
+        assert jobs[consumer]["runs-on"] == jobs["native-api"]["runs-on"]
+        steps = jobs[consumer]["steps"]
+        assert not any("cargo build --locked" in s.get("run", "") for s in steps)
+        assert any(s.get("uses") == "actions/download-artifact@v4" for s in steps)
+        assert any("sha256sum --check" in s.get("run", "") for s in steps)

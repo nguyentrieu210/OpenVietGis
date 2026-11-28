@@ -71,3 +71,16 @@ app images/config only when schema compatible. Otherwise follow tested database
 recovery with explicit approval. No automatic database rollback. Keep previous
 image artifacts and backups until acceptance. Rollback rehearsal on these exact
 images and live-profile adoption are still outstanding.
+
+After the approved rollout and successful app smoke, record the actual operator-observed
+start and completion Unix seconds using the exact receipt:
+
+```sh
+python3 infra/release/deployment_receipt.py release-images.json \\
+  --repository "$repo" --candidate "$SHA" --project "$PROJECT" \\
+  --started "$ROLLOUT_STARTED" --completed "$ROLLOUT_COMPLETED" \\
+  --output deployment-observation.json
+```
+
+This checks running app digests and health without changing services. It does not
+authenticate operator timestamps, certify release approval, or verify schema/identity.
