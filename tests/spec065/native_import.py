@@ -1,7 +1,6 @@
 """Authenticated Rust vector codec -> atomic publish fixture."""
 import hashlib
 import io
-import json
 import math
 import zipfile
 from uuid import uuid4
@@ -48,8 +47,8 @@ def check_native_import(c,f):
         rows=ex.json()["features"]
         assert len(rows)==2
         if fmt!="geojson":
-            import tempfile
             import subprocess
+            import tempfile
             from pathlib import Path
             export={"layer_id":lid,"content_revision":report["content_revision"],"schema_revision":report["schema_revision"],"output_format":fmt,"output_crs":target}
             pre=post("/exports/preview",json=export)
@@ -76,12 +75,12 @@ def check_native_import(c,f):
                         names=[n for n in archive.namelist() if n.lower().endswith(".shp")]
                         assert len(names)==1
                     reader_path="/vsizip/"+str(file)+"/"+names[0]
-                external=subprocess.run(["ogrinfo","-al","-so",reader_path],capture_output=True,text=True,timeout=20)
+                external=subprocess.run(["ogrinfo","-al","-so",reader_path],capture_output=True,text=True,timeout=20,check=False)
                 assert external.returncode==0 and "Feature Count: 2" in external.stdout,(external.stdout,external.stderr)
             print("PASS durable "+fmt+" export, explicit approvals, digest, tenant, replay and independent GDAL reader/re-import",flush=True)
         return rows,report
     for fmt,name,raw in fixtures():
-        rows,report=publish(fmt,name,raw)
+        rows,_report=publish(fmt,name,raw)
         p1=next(r for r in rows if r["properties"]["rank"]==0)
         p2=next(r for r in rows if r["properties"]["rank"] is None)
         assert p1["properties"]["code"]=="Điểm A" and p1["properties"]["active"] is False
@@ -133,7 +132,6 @@ def check_native_import(c,f):
     print("PASS EPSG:3857 GeoPackage -> EPSG:4326 via approved transformation, native CRS provenance retained; malformed archive and unknown CRS rejected",flush=True)
 
     # Verify actual precision/name disclosure, and native polygon with interior hole.
-    from openvietgis_api.adapters.formats.shapefile_zip import write_shapefile_zip
     rings=(((106.6,10.7),(106.62,10.7),(106.62,10.72),(106.6,10.72),(106.6,10.7)),((106.605,10.705),(106.605,10.71),(106.61,10.71),(106.61,10.705),(106.605,10.705)))
     raw=write_geopackage(layer_name="QA polygon",crs_code=4326,geometry_family="Polygon",field_mappings=[ExportFieldMapping("very_long_field","very_long_field","very_long_field",FieldType.TEXT),ExportFieldMapping("amount","amount","amount",FieldType.DECIMAL)],features=[("p",{"very_long_field":"Đất trồng","amount":"12.123456789"},NativeGeometry("Polygon",rings,4326))])[0]
     upload_result=upload("polygon.gpkg",raw);i=upload_result["inspection"];assert i["confirmable"],i
