@@ -150,3 +150,16 @@ export const unified={
  compensate:(handle:string,operation:string,expected:string)=>host().core.invoke<string>("unified_compensate",{handle,operation,expected}),
  schema:(handle:string,layer:string,fields:AttributeField[],expected:string)=>host().core.invoke<string>("unified_schema",{handle,layer,fields,expected}),
 };
+
+export type UnifiedAssetKind="cad"|"las"|"laz"|"copc"|"glb"|"mbtiles"|"tiff";
+export type UnifiedAsset={id:string;kind:UnifiedAssetKind;count:number;epsg:number|null;metadata:{width:number;height:number;bands:number;epsg:number|null;geotransform:number[]}|null};
+export type AssetRead={chunk?:number;bbox?:[number,number,number,number];bounds?:[number,number,number,number,number,number];level?:number;tile?:[number,number,number];band?:number;pixel?:[number,number,number,number];shape?:[number,number]};
+export const unifiedAssets={
+ open:(handle:string,kind:UnifiedAssetKind,epsg:number|null)=>host().core.invoke<UnifiedAsset|null>("unified_asset_open",{handle,kind,epsg}),
+ close:(handle:string,id:string)=>host().core.invoke<void>("unified_asset_close",{handle,id}),
+ read:async(handle:string,id:string,q:AssetRead={}):Promise<ArrayBuffer>=>{
+  const raw=await host().core.invoke<ArrayBuffer|number[]>("unified_asset_read",{handle,id,chunk:q.chunk??0,bbox:q.bbox??null,bounds:q.bounds??null,level:q.level??null,tile:q.tile??null,band:q.band??null,pixel:q.pixel??null,shape:q.shape??null});
+  const b=raw instanceof ArrayBuffer?raw:Uint8Array.from(raw).buffer;if(b.byteLength>4*1024*1024)throw Error("RESOURCE_LIMIT");return b;
+ },
+ exportParquet:(handle:string,layer:string,expected:string)=>host().core.invoke<number|null>("native_export_parquet",{handle,layer,expected})
+};
