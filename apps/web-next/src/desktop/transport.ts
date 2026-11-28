@@ -1,4 +1,4 @@
-export type Capabilities = {protocol_version:number; standalone:boolean; managed:boolean; cloud:boolean; local_tiles:boolean; transform:boolean;local_edit:boolean;viewport:boolean};
+export type Capabilities = {protocol_version:number; standalone:boolean; managed:boolean; cloud:boolean; local_tiles:boolean; transform:boolean;local_edit:boolean;viewport:boolean;raster_archive:boolean};
 export type Project = {id:string};
 export type Opened = {id:string; handle:string};
 export type Poll = {status:"pending"} | {status:"complete";xy:number[]};
@@ -43,5 +43,14 @@ export const desktop={
   checkpoint:(handle:string)=>host().core.invoke<void>("desktop_checkpoint",{handle}),
   importGeoJSON:(handle:string)=>host().core.invoke<number|null>("desktop_import_geojson",{handle}),
   exportFile:(handle:string,format:"geojson"|"gpkg")=>host().core.invoke<boolean>("desktop_export",{handle,format}),
+  openRaster:(handle:string)=>host().core.invoke<{id:string;attribution:string}|null>("desktop_open_raster",{handle}),
+  closeRaster:(handle:string)=>host().core.invoke<void>("desktop_close_raster",{handle}),
+  resource:async(uri:string):Promise<ArrayBuffer>=>{
+    if(uri.length>512||!uri.startsWith("ovg://v1/"))throw Error("INVALID_RESOURCE");
+    const raw=await host().core.invoke<ArrayBuffer|number[]>("desktop_resource",{uri});
+    const b=raw instanceof ArrayBuffer?raw:Uint8Array.from(raw).buffer;
+    if(b.byteLength>4*1024*1024)throw Error("RESOURCE_LIMIT");
+    return b;
+  },
   menu:(fn:(id:string)=>void)=>host().event?.listen<string>("desktop-menu",e=>fn(e.payload))??Promise.resolve(()=>{}),
 };
