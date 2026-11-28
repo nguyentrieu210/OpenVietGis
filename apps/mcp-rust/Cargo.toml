@@ -6,6 +6,8 @@ rust-version = "1.85.1"
 license = "AGPL-3.0-or-later"
 publish = false
 
+default-run = "openvietgis-mcp-rust"
+
 [workspace]
 
 [dependencies]

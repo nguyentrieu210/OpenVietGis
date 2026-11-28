@@ -230,7 +230,8 @@ async fn provider_list(State(app):State<App>,Path(id):Path<Uuid>,h:HeaderMap,bod
     let v=parse(&body,&h)?;if v!=json!({}){return Err(Failure::new(422,"Invalid provider request"))}
     let(owner,_)=browser_identity(&app,&h,id).await?;
     let providers=if provider_allowed(&owner.subject){openvietgis_mcp_rust::provider::Provider::ALL.into_iter().filter_map(openvietgis_mcp_rust::provider::Config::from_env).map(|c|c.descriptor()).collect::<Vec<_>>()}else{vec![]};
-    Ok(respond(200,json!({"providers":providers})))
+    let acp_agents=if provider_allowed(&owner.subject)&&openvietgis_mcp_rust::acp::Remote::from_env().is_some(){openvietgis_mcp_rust::acp::Remote::agents()}else{vec![]};
+    Ok(respond(200,json!({"providers":providers,"acp_agents":acp_agents})))
 }
 fn active_agents()->&'static Mutex<HashSet<String>>{
     static ACTIVE:std::sync::OnceLock<Mutex<HashSet<String>>>=std::sync::OnceLock::new();
@@ -316,6 +317,49 @@ impl TeamHost<'_>{
         if let Ok(mut r)=reports.lock(){r.extend(batch.clone());}
         if ok{ToolOutcome::Completed(json!({"untrusted_agent_reports":batch}))}else{ToolOutcome::Failed}
     }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AcpInput{agent:String,task:String,consent:bool}
+async fn browser_acp(State(app):State<App>,Path(id):Path<Uuid>,h:HeaderMap,body:Bytes)->Result<Response,Failure>{
+    use openvietgis_mcp_rust::acp::{self,Remote};
+    let input:AcpInput=serde_json::from_value(parse(&body,&h)?).map_err(|_|Failure::new(422,"Invalid ACP request"))?;
+    let run_id=Uuid::new_v4();
+    let req=acp::Input{agent:input.agent,task:input.task,run_id};
+    if !input.consent||!req.valid(){return Err(Failure::new(422,"Explicit coding-agent consent required"))}
+    let(owner,_)=browser_identity(&app,&h,id).await?;
+    if !provider_allowed(&owner.subject)||!Remote::agents().contains(&req.agent){return Err(Failure::new(403,"ACP agent not allowed"))}
+    let remote=Remote::from_env().ok_or(Failure::new(503,"Isolated runner not configured"))?;
+    let slot=AgentSlot::acquire(&owner.subject)?;
+    let(cancel_tx,mut cancel)=tokio::sync::watch::channel(false);
+    {
+        let mut jobs=agent_jobs().lock().map_err(|_|Failure::new(503,"Agent job store unavailable"))?;
+        prune_jobs(&mut jobs);
+        if jobs.len()>=64{return Err(Failure::new(429,"Agent job capacity reached"))}
+        jobs.insert(run_id,AgentJob{owner:owner.clone(),session:id,created:Instant::now(),cancel:cancel_tx,result:None});
+    }
+    tokio::spawn(async move{
+        let _slot=slot;let _guard=AgentJobGuard(run_id);
+        let report=if *cancel.borrow()||!provider_allowed(&owner.subject){acp::Report::failed("cancelled")}else{
+            let work=remote.run(req);tokio::pin!(work);
+            loop{
+                tokio::select!{
+                    biased;
+                    _=cancel.wait_for(|v|*v)=>{remote.cancel(run_id).await;break acp::Report::failed("cancelled")},
+                    r=&mut work=>break r,
+                    _=tokio::time::sleep(Duration::from_secs(5))=>{
+                        if !provider_allowed(&owner.subject)||!matches!(browser_identity(&app,&h,id).await,Ok((fresh,_)) if fresh==owner){
+                            remote.cancel(run_id).await;break acp::Report::failed("cancelled")
+                        }
+                    }
+                }
+            }
+        };
+        let value=json!({"stop":report.stop,"answer":report.answer,"calls":0,"model_steps":null,"acp":true,"denied":report.denied,"frames":report.frames,"unverified_advice":true});
+        if let Ok(mut jobs)=agent_jobs().lock(){if let Some(job)=jobs.get_mut(&run_id){job.result=Some(value);}}
+    });
+    Ok(respond(202,json!({"run_id":run_id,"state":"running"})))
 }
 
 async fn browser_agent(State(app):State<App>,Path(id):Path<Uuid>,h:HeaderMap,body:Bytes)->Result<Response,Failure>{
@@ -425,6 +469,7 @@ fn routes(app:App)->Router{
         .route("/ai-copilot/sessions/{id}/{action}",post(browser_action))
         .route("/ai-copilot/agent/{id}/providers",post(provider_list))
         .route("/ai-copilot/agent/{id}/run",post(browser_agent))
+        .route("/ai-copilot/agent/{id}/acp",post(browser_acp))
         .route("/ai-copilot/agent/{id}/{action}",post(agent_job_action))
         .route("/ai-copilot/sessions/{id}/commands/{cid}/{action}",post(browser_command))
         .layer(DefaultBodyLimit::max(128_000))
