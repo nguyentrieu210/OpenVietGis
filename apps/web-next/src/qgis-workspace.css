@@ -207,3 +207,7 @@ html[data-ovg-icons=large] .qgis-toolrow .qgis-icon-button svg{width:24px;height
 .ovg-secondary-map{position:absolute;right:8px;top:54px;z-index:14;width:min(460px,48%);height:min(580px,72%);min-height:180px;display:flex;flex-direction:column;background:#f7faf8;border:1px solid #a9b8b0;border-radius:5px;box-shadow:0 3px 12px #172f2b26;overflow:hidden;color:#263e36;font-size:11px}
 .ovg-secondary-map>header,.ovg-secondary-actions{display:flex;align-items:center;gap:5px;padding:4px 6px;border-bottom:1px solid #cbd4ce;flex-wrap:wrap}.ovg-secondary-map>header b{flex:1}.ovg-secondary-actions label{display:flex;align-items:center;gap:3px}.ovg-secondary-canvas{position:relative;min-height:80px;flex:1;overflow:hidden}.ovg-secondary-order{max-height:135px;overflow:auto;padding:4px 6px}.ovg-secondary-order>div{display:flex;gap:4px;align-items:center}.ovg-secondary-order label{flex:1;overflow-wrap:anywhere}.ovg-secondary-status,.ovg-secondary-map>p{padding:4px 6px;margin:0;overflow-wrap:anywhere}
 @container(max-width:520px){.ovg-secondary-map{width:calc(100% - 16px);height:55%;top:36px}}
+
+/* Temporary map focus keeps docks mounted and all saved layout/preferences intact. */
+.qgis-work[data-map-focus=on]>.qgis-dock,.qgis-work[data-map-focus=on] .qgis-main-row>.live-inspector,.qgis-work[data-map-focus=on] .qgis-canvas>.qgis-table{display:none!important}
+.qgis-work[data-map-focus=on] .qgis-canvas{flex-direction:column}
