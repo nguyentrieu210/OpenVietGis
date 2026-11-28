@@ -247,3 +247,24 @@ pub async fn unified_export_geojson(window:WebviewWindow,u:State<'_,Unified>,han
   s.export_geojson(handle,layer,&path,number(&expected)?).map(Some)
  }).await
 }
+
+#[cfg(test)]
+mod interchange_tests{
+ use super::*;
+ #[test]fn geojson_atomic_import_export_and_no_clobber(){
+  let d=tempfile::tempdir().unwrap();let u=Unified::new(d.path().join("projects")).unwrap();let p=u.create().unwrap();let w=u.open(p.id).unwrap();
+  let l=u.with(w.handle,|s|s.catalog().map_err(err)).unwrap().layers[0].id;
+  let input=d.path().join("input.geojson");
+  let feature=serde_json::json!({"type":"Feature","geometry":{"type":"Point","coordinates":[106,11]},"properties":{"name":"A"}});
+  let invalid=serde_json::json!({"type":"FeatureCollection","features":[feature.clone(),{"type":"Feature","geometry":{"type":"Point","coordinates":[106,11,5]},"properties":{}}]});
+  fs::write(&input,invalid.to_string()).unwrap();
+  assert!(u.import_geojson(w.handle,l,&input,"1".into(),Uuid::new_v4()).is_err());
+  assert_eq!(u.with(w.handle,|s|s.revision().map_err(err)).unwrap(),1);
+  fs::write(&input,serde_json::json!({"type":"FeatureCollection","features":[feature]}).to_string()).unwrap();
+  u.import_geojson(w.handle,l,&input,"1".into(),Uuid::new_v4()).unwrap();
+  let dest=d.path().join("out.geojson");assert_eq!(u.export_geojson(w.handle,l,&dest,2).unwrap(),1);
+  let v:Value=serde_json::from_slice(&fs::read(&dest).unwrap()).unwrap();assert_eq!(v["features"][0]["properties"]["name"],"A");
+  assert!(u.export_geojson(w.handle,l,&dest,2).is_err());assert!(u.export_geojson(w.handle,l,&d.path().join("stale.geojson"),1).is_err());
+  u.shutdown().unwrap();
+ }
+}
