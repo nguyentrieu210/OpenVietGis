@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:openvietgis_ui/openvietgis_ui.dart';
 import 'package:geolocator/geolocator.dart';
 import 'workspaces.dart';
 
@@ -117,7 +118,7 @@ class _SurveyPageState extends State<SurveyPage> with WidgetsBindingObserver{
    return Scaffold(appBar:AppBar(title:Text(vi?'Khảo sát GPS':'GPS survey')),body:ListView(padding:const EdgeInsets.all(16),children:[
      Text(vi?'Chỉ lấy vị trí khi yêu cầu. Track dừng khi rời ứng dụng; không ghi nền hoặc gửi lên máy chủ.':'Location is requested explicitly. Tracks pause on leaving the app; no background recording or upload.'),
      if(_error!=null)Text(_error!),
-     FilledButton(onPressed:_busy?null:_read,child:Text(vi?'Lấy vị trí':'Get fix')),
+     OvgButton(label:vi?'Lấy vị trí':'Get fix',onPressed:_busy?null:_read,busy:_busy),
      const Divider(),
      FilledButton(onPressed:_busy||_recording?null:()=>_start(null),child:Text(vi?'Bắt đầu track (màn hình mở)':'Start foreground track')),
      if(_recording)Row(children:[TextButton(onPressed:()=>_stop(false),child:Text(vi?'Tạm dừng':'Pause')),TextButton(onPressed:()=>_stop(true),child:Text(vi?'Kết thúc':'Finish'))]),
@@ -126,7 +127,7 @@ class _SurveyPageState extends State<SurveyPage> with WidgetsBindingObserver{
        Text('XY: ${p.longitude.toStringAsFixed(7)}, ${p.latitude.toStringAsFixed(7)}'),
        Text('Accuracy: ${p.accuracy.toStringAsFixed(1)} m · OS fix, RTK unknown'),
        Text(jsonEncode({'time':p.timestamp.toUtc().toIso8601String(),'altitude_m':p.altitude})),
-       FilledButton(onPressed:_busy?null:_save,child:Text(vi?'Lưu điểm khảo sát':'Save waypoint'))
+       OvgButton(label:vi?'Lưu điểm khảo sát':'Save waypoint',onPressed:_busy?null:_save,busy:_busy)
      ],
    ]));
  }

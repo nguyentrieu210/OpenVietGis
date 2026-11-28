@@ -1,0 +1,2 @@
+# OpenVietGIS native UI
+Material Flutter package consuming generated W1 tokens through local path dependency. Widgets: OvgButton, OvgField, OvgLayerTile, OvgFieldStatus, OvgAdaptiveWorkspace. Host owns GIS renderer, GPS, sync and authorization; adaptive breakpoint can remount map (not qualified for actual native renderer). Native package not yet wired into SPEC073. Run flutter pub get, flutter analyze, flutter test using pinned SPEC073 Flutter SDK. No compiled APK claim.
