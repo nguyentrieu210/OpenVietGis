@@ -27,7 +27,7 @@ export function CoreCommandBar(host:Host){
   const [token="",...rest]=text.split(/\s+/),key=normalize(token),alias=aliases[key]??key;
   if(alias==="ESC"||alias==="CANCEL"){escape();return}
   if(alias==="HELP"||alias==="?"){clear();setHelp(true);setFocused(true);report("Danh sách lệnh · bấm Tab để điền");focus();return}
-  if(alias==="ZOOM"&&rest.length&&["E","I","O","L","S"].includes(normalize(rest[0]??""))){void execute("Z"+normalize(rest[0]));return}
+  if(alias==="ZOOM"&&rest.length&&["E","I","O","L","S"].includes(normalize(rest[0]??""))){void execute("Z"+normalize(rest[0]??""));return}
   if((alias==="ZOOM"||alias==="PAN")&&!rest.length){setPending(alias);setValue("");setHelp(false);report(alias==="ZOOM"?"Zoom [E toàn bộ / I / O / L / S / mức zoom]":"Nhập kinh độ,vĩ độ");focus();return}
   const command=resolveCommand(host.commands,token,aliases);
   // Not a command: one box like the QGIS locator, so search features instead.
