@@ -491,3 +491,7 @@ See [W1 implementation checkpoint](evidence/w1-implementation-checkpoint.md) and
 
 ### W2 implementation evidence
 See [W2 checkpoint](evidence/w2-implementation-checkpoint.md) and [execution ledger](evidence/execution-ledger.md). Host native candidate 25 tests passed at 29380f4; full format, device rendering and earlier gate acceptance remain open.
+
+
+### W3 implementation evidence
+See [W3 checkpoint](evidence/w3-implementation-checkpoint.md). Host focused 29 tests PASS at b370310. New grouped edits/media and Flutter test pending. No formal task closure.

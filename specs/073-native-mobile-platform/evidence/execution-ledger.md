@@ -34,16 +34,16 @@ Snapshot based on implementation commit db2ef12c08a9943ee805cec1ebb78725665f4a34
 | E06 | 2 | T029 | CRS | T027 | 3 | IN PROGRESS | 29380f4 GeographicLib oracle PASS | Projected area/bearing profiles and device integration |
 | E05 | 2 | T030 | Native file IO | T023, T027 | 3 | IN PROGRESS | 67cc9ec bounded GeoTIFF ABI | Build/runtime results, FFI, COG and hostile decoder evidence |
 | E16 | 2 | T031 | Security/QA/release | T021, T022, T026, T028, T029, T030 | 3 | IN PROGRESS | 46169490774 targeted tests PASS | Full format and physical device acceptance; prior gates open |
-| E07 | 3 | T032 | GIS editing | T020, T017, T027 | 3 | WAITING | — | Await accepted dependencies |
-| E07 | 3 | T033 | GIS editing | T032, T021, T029 | 3 | WAITING | — | Await accepted dependencies |
-| E07 | 3 | T034 | GIS editing | T032, T017 | 3 | WAITING | — | Await accepted dependencies |
-| E07 | 3 | T035 | GIS editing | T032, T015 | 3 | WAITING | — | Await accepted dependencies |
-| E09 | 3 | T036 | Field survey | T013, T029, T015 | 3 | WAITING | — | Await accepted dependencies |
-| E09 | 3 | T037 | Field survey | T036, T017 | 3 | WAITING | — | Await accepted dependencies |
-| E09 | 3 | T038 | Field survey | T013, T016 | 3 | WAITING | — | Await accepted dependencies |
-| E09 | 3 | T039 | Field survey | T036, T028 | 3 | WAITING | — | Await accepted dependencies |
-| E08 | 3 | T040 | Storage | T016, T017, T022, T038 | 3 | WAITING | — | Await accepted dependencies |
-| E16 | 3 | T041 | Security/QA/release | T031, T033, T034, T035, T037, T038, T040 | 3 | WAITING | — | Await accepted dependencies |
+| E07 | 3 | T032 | GIS editing | T020, T017, T027 | 3 | IN PROGRESS | b370310 topology and draft test PASS | Physical map preview/commit and touch tests |
+| E07 | 3 | T033 | GIS editing | T032, T021, T029 | 3 | IN PROGRESS | b370310 indexed snap test PASS | Touch handles, stale race and physical p95 |
+| E07 | 3 | T034 | GIS editing | T032, T017 | 3 | IN PROGRESS | b370310 persistent history PASS; 2acf58d groups | Latest split/merge test, crash injection |
+| E07 | 3 | T035 | GIS editing | T032, T015 | 3 | IN PROGRESS | b370310 typed schema PASS; 2acf58d editor | Typed form UI, constraint and virtual table acceptance |
+| E09 | 3 | T036 | Field survey | T013, T029, T015 | 3 | IN PROGRESS | b370310 OS foreground GPS UI | Physical recording, denial and bearing UI |
+| E09 | 3 | T037 | Field survey | T036, T017 | 3 | IN PROGRESS | b370310 track journal and GPX test PASS | Background OS service/screen-off, independent GPX oracle |
+| E09 | 3 | T038 | Field survey | T013, T016 | 3 | IN PROGRESS | 7d00cfd scoped encrypted blob vault | Camera/QR consent UI, OS keys, committed queue and cleanup |
+| E09 | 3 | T039 | Field survey | T036, T028 | 3 | IN PROGRESS | b370310 GGA checksum/fix test PASS | NTRIP, transport, real receiver, correction loss |
+| E08 | 3 | T040 | Storage | T016, T017, T022, T038 | 3 | IN PROGRESS | 7d00cfd encrypted blob candidate only | Encrypted DB, key wrapping, WAL/temp/backup, lock lifecycle |
+| E16 | 3 | T041 | Security/QA/release | T031, T033, T034, T035, T037, T038, T040 | 3 | IN PROGRESS | 46170034589 focused native PASS | A1 blocked: prior gates, APK and device workflow |
 | E10 | 4 | T042 | Dart SDK/auth/sync | T006, T008 | 3 | WAITING | — | Await accepted dependencies |
 | E10 | 4 | T043 | Dart SDK/auth/sync | T042, T006 | 3 | WAITING | — | Await accepted dependencies |
 | E10 | 4 | T044 | Dart SDK/auth/sync | T043, T014 | 3 | WAITING | — | Await accepted dependencies |
@@ -106,3 +106,6 @@ See [W1 checkpoint](w1-implementation-checkpoint.md). W0 A0 not waived, no task 
 
 ## W2 source implementation
 See [W2 checkpoint](w2-implementation-checkpoint.md). Targeted host native 25 tests PASS; prior gates and physical/render/format acceptance remain open. No mandatory checkbox changed.
+
+## W3 source implementation
+See [W3 checkpoint](w3-implementation-checkpoint.md). Focused host run passed 29 tests at b370310; later attachment/group/Dart tests pending. A1 and earlier gates remain open.
