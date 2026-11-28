@@ -198,6 +198,22 @@ async fn operate(app:&App,claims:&Claims,name:&str,args:&Value)->Result<Value,Fa
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
 }
+/// Wave 2 native host bridge. Call only with claims verified by the OAuth boundary.
+/// Wave 3 supplies the provider and user-facing entry; no new remote route here.
+#[allow(dead_code)]
+async fn run_workspace_agent<M, MF>(app:&App,claims:&Claims,session:Uuid,allowed:Vec<String>,skill:Option<&str>,user:String,cancel:tokio::sync::watch::Receiver<bool>,model:M)->Result<openvietgis_mcp_rust::agent::Report,Failure>
+where M:FnMut(openvietgis_mcp_rust::agent::ModelRequest)->MF, MF:std::future::Future<Output=Result<openvietgis_mcp_rust::agent::Reply,openvietgis_mcp_rust::agent::ProviderError>>{
+    if claims.exp<=unix_now(){return Err(Failure::new(401,"OAuth token expired"))}
+    app.store()?.resolve(&claims.sub,Some(session),app.now())?;
+    let mut agent=openvietgis_mcp_rust::agent::Agent::new(&app.registry,session,allowed,Duration::from_secs(300));
+    if let Some(name)=skill{agent=agent.with_skill(name).map_err(|_|Failure::new(422,"Unknown GIS skill"))?;}
+    Ok(agent.run(user,cancel,model,|call|async move{
+        match operate(app,claims,&call.name,&call.arguments).await{
+            Ok(value)=>openvietgis_mcp_rust::agent::from_dispatch(&call,value),
+            Err(_)=>openvietgis_mcp_rust::agent::ToolOutcome::Failed
+        }
+    }).await)
+}
 async fn mcp(State(app):State<App>,h:HeaderMap,body:Bytes)->Response{
     if !trusted_host(&h)||!origin_ok(&h){return respond(403,json!({"error":"Untrusted origin"}))}
     let claims=match verify(&app,&h).await{Ok(c)=>c,Err(_)=>return unauthorized()};
@@ -294,7 +310,8 @@ async fn main()->Result<(),Box<dyn std::error::Error>>{
             .route("/api/v1/me/identity-links",get(||async{Json(json!([{"issuer":ISSUER,"subject":"alice"}]))}))
             .route("/api/v1/organizations/{org}/projects/{project}/access/mine",get(move|Path((o,p)):Path<(Uuid,Uuid)>|async move{Json(json!({"restricted":o!=org||(p!=project_a&&p!=project_b)}))}));
         let (core,core_task)=serve(core_router).await;
-        let (url,task)=serve(routes(app(format!("{core}/api/v1"),format!("{core}/jwks")).unwrap())).await;
+        let service=app(format!("{core}/api/v1"),format!("{core}/jwks")).unwrap();
+        let (url,task)=serve(routes(service.clone())).await;
         let client=reqwest::Client::new();
         let valid=sign(&key,claims("alice"));
         let mut wrong=claims("alice");wrong["aud"]=json!("other-resource");
@@ -346,6 +363,30 @@ async fn main()->Result<(),Box<dyn std::error::Error>>{
         assert_eq!(ack.status(),200);
         let result=call.await.unwrap();assert_eq!(result["result"]["structuredContent"]["acknowledged"],true);
         assert!(result["result"]["structuredContent"]["result"].get("unapproved_extra").is_none());
+        use openvietgis_mcp_rust::agent::{Reply,ToolCall,Stop};
+        let auth=verify(&service,&{
+            let mut headers=HeaderMap::new();
+            headers.insert(header::AUTHORIZATION,format!("Bearer {valid}").parse().unwrap());headers
+        }).await.unwrap();
+        let scoped=Uuid::parse_str(sa).unwrap();
+        let (_cancel_tx,cancel)=tokio::sync::watch::channel(false);
+        let mut turns=0;
+        let run=run_workspace_agent(&service,&auth,scoped,vec!["gis_live_view".into()],None,"inspect map".into(),cancel,|_|{
+            turns+=1;
+            std::future::ready(Ok(if turns==1{Reply{text:String::new(),calls:vec![ToolCall{id:"view".into(),name:"gis_live_view".into(),arguments:json!({})}]}}else{Reply{text:"verified".into(),calls:vec![]}}))
+        });
+        let browser_driver=async{
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            let cmd:Value=browser(&client,&url,&format!("/{sa}/poll"),Some(ta),json!({})).await.json().await.unwrap();
+            let cid=cmd["command"]["id"].as_str().unwrap();
+            assert_eq!(cmd["command"]["method"],"map_view");
+            let prep=browser(&client,&url,&format!("/{sa}/commands/{cid}/prepare"),Some(ta),json!({})).await;
+            assert_eq!(prep.status(),200);
+            let ack=browser(&client,&url,&format!("/{sa}/commands/{cid}/ack"),Some(ta),json!({"ok":true,"result":{"crs":"EPSG:4326","center":[1,2],"bbox":[0,0,3,3],"zoom":6}})).await;
+            assert_eq!(ack.status(),200);
+        };
+        let (report,())=tokio::join!(run,browser_driver);
+        let report=report.unwrap();assert_eq!(report.stop,Stop::Complete);assert_eq!(report.calls,1);
         task.abort();core_task.abort();
     }
 }
