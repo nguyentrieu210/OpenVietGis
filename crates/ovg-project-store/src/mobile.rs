@@ -113,6 +113,37 @@ impl NativeProject{
    let result=s.apply(&batch)?;Ok(result.revision.to_string())
   })
  }
+ /// Snap across visible layers at one revision. Exclude the edited feature
+ /// so moving a vertex does not snap back onto its original geometry.
+ pub fn snap(&self,layers:&[String],x:f64,y:f64,tolerance_m:f64,expected:&str,exclude:Option<(&str,&str)>)->Result<String>{
+  if layers.is_empty()||layers.len()>8||!x.is_finite()||!y.is_finite()||x.abs()>180.||y.abs()>85.||!tolerance_m.is_finite()||tolerance_m<=0.||tolerance_m>100.{return Err(Error::Invalid)}
+  let dx=tolerance_m/(110000.*y.to_radians().cos());let dy=tolerance_m/110000.;
+  let bbox=[x-dx,y-dy,x+dx,y+dy];
+  if bbox[0]< -180.||bbox[2]>180.{return Err(Error::Unsupported)}
+  let exclude=exclude.map(|(l,f)|Ok::<_,Error>((id(l)?,id(f)?))).transpose()?;
+  self.with(|s|{
+   let r=revision(expected)?;let mut seen=std::collections::HashSet::new();let mut count=0;
+   let mut best:Option<(Uuid,Uuid,u64,ovg_mobile_engine::edit::Snap)>=None;
+   for layer in layers{
+    let l=id(layer)?;if !seen.insert(l){return Err(Error::Invalid)}
+    let mut cursor=0;
+    loop{
+     let p=s.query(l,bbox,cursor,100,r)?;
+     for f in p.rows{
+      count+=1;if count>256{return Err(Error::Limit)}
+      if exclude==Some((l,f.id)){continue}
+      if let Some(hit)=ovg_mobile_engine::edit::snap(&f.image.wkb,x,y,tolerance_m).map_err(|_|Error::Invalid)?{
+       if best.as_ref().is_none_or(|(_,_,_,b)|hit.distance_m<b.distance_m-1e-9||((hit.distance_m-b.distance_m).abs()<=1e-9&&hit.vertex&&!b.vertex)){
+        best=Some((l,f.id,f.revision,hit));
+       }
+      }
+     }
+     match p.next{Some(n) if n>cursor=>cursor=n,Some(_)=>return Err(Error::Invalid),None=>break}
+    }
+   }
+   encode(&match best{Some((l,f,r,h))=>serde_json::json!({"layer":l,"feature":f,"revision":r.to_string(),"x":h.x,"y":h.y,"distance_m":h.distance_m,"vertex":h.vertex}),None=>Value::Null})
+  })
+ }
  pub fn integrity(&self)->Result<bool>{self.with(|s|s.integrity())}
  /// Backup into private exchange directory, never caller path or cloud.
  pub fn backup(&self,exchange:&Path,expected:&str)->Result<String>{
