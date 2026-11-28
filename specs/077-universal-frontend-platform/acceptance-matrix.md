@@ -35,3 +35,12 @@ Source checks alone are not runtime acceptance. Missing external branch objects 
 | Canvas state and mount ID during tested moves | PASS synthetic only |
 | Reset default recovery and host veto contract | recovery PASS; host integration pending |
 | Native window IPC, real renderer lifecycle, keyboard DnD, performance and integrated rollback | pending T301c |
+
+## W4 GIS/CAD components
+| Gate | Status |
+|---|---|
+| Group visibility, filtering, selection, disabled layer controls, legend | PASS isolated |
+| Host CRS selection, axis/range validation, absolute/relative input, snap capability | PASS isolated |
+| Symbol/ramp preview, typed property updates and revision reset | PASS isolated |
+| TypeScript/Vite and regression suite 18/18 | PASS |
+| Real map/CAD host wiring, renderer and print parity | pending T401c |

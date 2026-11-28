@@ -7,7 +7,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./compat": "./src/compat.tsx",
-    "./styles.css": "./src/styles.css"
+    "./styles.css": "./src/styles.css",
+    "./gis": "./src/gis/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

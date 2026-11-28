@@ -20,7 +20,9 @@
 - [x] T301b TypeScript, production demo build, 4 W3 browser tests plus 9 W2 regression tests; synthetic canvas lifecycle and restore checks.
 - [ ] T301c Real MapLibre/Cesium/CAD lifecycle, keyboard drag/accessibility, layout performance, native IPC window qualification and application integration/rollback after W0/W1 gates.
 ## W4 GIS/CAD
-- [ ] T401 Layer tree/legend/CRS/symbol/property/CAD controls; map event and edit-state parity; isolate renderer and print styling.
+- [x] T401a Shared GIS/CAD UI: LayerTree, Legend, CrsSelector, SymbolEditor/Preview, ColorRamp, CoordinateInput, SnapToolbar and PropertyEditor with typed host intents and scoped styles.
+- [x] T401b Validate inputs, capabilities, revision-bound property updates; TypeScript, Vite and 18/18 isolated tests (5 W4 + 13 regressions).
+- [ ] T401c Wire host adapters to existing map/layer/style/CRS/digitizing/CAD services; verify real render/event/edit-state, print isolation and legacy parity after integration gates.
 ## W5 data
 - [ ] T501 Virtual table/tree, server paging, filters, selection, editable cells, typed validation and large dataset benchmark.
 ## W6 Flutter

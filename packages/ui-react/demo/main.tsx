@@ -1,3 +1,4 @@
+import {GisDemo} from './gis-demo';
 import {WorkbenchDemo} from './workbench-demo';
 import {useState} from 'react';
 import {createRoot} from 'react-dom/client';
@@ -18,4 +19,4 @@ function App(){
  <TableScroll><table style={{minWidth:900}}><tbody><tr><td>Wide attribute data</td></tr></tbody></table></TableScroll>
  </div></Dialog></main>;
 }
-createRoot(document.getElementById('root')!).render(location.search.includes('workbench')?<WorkbenchDemo/>:<App/>);
+createRoot(document.getElementById('root')!).render(location.search.includes('gis')?<GisDemo/>:location.search.includes('workbench')?<WorkbenchDemo/>:<App/>);
