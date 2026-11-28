@@ -78,6 +78,7 @@ RENDERER_NON_API_REFERENCES = {
     "packages/spatial-workspace/src/cesium3d.ts": (
         'import type {geographiccamera,namedmodel,selectablefootprintengine} from "./maplibre3d";',
         'import type {geographiccamera,namedmodel,selectablefootprintengine,sharedvector} from "./maplibre3d";',
+        'import type {geographiccamera,namedmodel,selectablefootprintengine,sharedvector,cloudpoint} from "./maplibre3d";',
     ),
 }
 RENDERER_IMPORT = re.compile(
