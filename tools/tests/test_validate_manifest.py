@@ -99,7 +99,18 @@ def test_backend_ci_is_independent_of_javascript_dependency_install() -> None:
     )
     backend = workflow["jobs"]["backend"]
     frontend = workflow["jobs"]["validate"]
-    assert "needs" not in backend
+    # Both consumers depend only on the shared native build, never each other.
+    assert backend["needs"] == frontend["needs"] == "native-api"
+    native = workflow["jobs"]["native-api"]
+    assert "needs" not in native
+    native_commands = "\n".join(step.get("run", "") for step in native["steps"])
+    assert "pnpm" not in native_commands
+    assert "npm " not in native_commands
+    assert not any(
+        "setup-node" in step.get("uses", "") or "pnpm/" in step.get("uses", "")
+        for step in native["steps"] + backend["steps"]
+    )
+    assert "cargo build --locked" in native_commands
     assert backend["env"] == frontend["env"]
     commands = [step["run"] for step in backend["steps"] if "run" in step]
     all_commands = "\n".join(commands)

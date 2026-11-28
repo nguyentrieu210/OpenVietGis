@@ -19,6 +19,7 @@ on:
       - ".github/workflows/rust-platform.yml"
       - "tests/rust-parity/**"
       - "tools/benchmark/rust-platform/**"
+      - "specs/064-rust-platform/contracts/engines/**"
   pull_request:
     paths:
       - "Cargo.toml"
@@ -35,6 +36,7 @@ on:
       - ".github/workflows/rust-platform.yml"
       - "tests/rust-parity/**"
       - "tools/benchmark/rust-platform/**"
+      - "specs/064-rust-platform/contracts/engines/**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
