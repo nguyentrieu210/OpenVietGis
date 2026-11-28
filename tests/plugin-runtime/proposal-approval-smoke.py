@@ -96,6 +96,39 @@ def main():
                         VALUES(%s,%s,%s,NULL,%s,' 1 ','reserved',%s,%s,now(),now())""",(uuid4(),org,project,route['id'],actor,actor))
                         assert run(db,occupied_sql)==[('1',)]
                 print('PASS exact canonical occupancy SQL: historical raw value preserved and whitespace alias detected')
+                # Entrance observation/review SQL against the migrated fixture.
+                entrance_source=(ROOT/'modules/house_numbering/storage/src/persistence/entrances.rs').read_text()
+                blocker=re.search(r'"(SELECT DISTINCT b.id FROM house_numbering.buildings b.*?ORDER BY b.id)"',entrance_source,re.S).group(1)
+                def blocked(db):
+                    params=[org,project,[uuid4()]]
+                    params[2]=[building['id']]
+                    order=[int(x)-1 for x in re.findall(r'\$(\d+)',blocker)]
+                    return db.execute(re.sub(r'\$\d+','%s',blocker).replace('ANY(%s)','ANY(%s::uuid[])'),[params[i] for i in order]).fetchall()
+                with psycopg.connect(runtime) as db:
+                    scoped(db)
+                    with db.transaction(force_rollback=True):
+                        before=run(db,queries[1])[0][0]; eid=uuid4()
+                        assert not blocked(db)
+                        db.execute("""INSERT INTO house_numbering.building_entrances(id,organization_id,project_id,building_id,route_id,source_id,feature_id,evidence_ref,observed_number,created_by)
+                        VALUES(%s,%s,%s,%s,%s,%s,'p2','fixture observation','1A',%s)""",(eid,org,project,building['id'],route['id'],points,actor))
+                        def review(rev,state,who):
+                            db.execute("INSERT INTO house_numbering.entrance_reviews(organization_id,project_id,entrance_id,revision,state,reason,actor_id) VALUES(%s,%s,%s,%s,%s,'fixture review',%s)",(org,project,eid,rev,state,who))
+                        review(1,'observed',actor)
+                        assert blocked(db)
+                        assert run(db,queries[1])[0][0]!=before
+                        try:
+                            with db.transaction():review(2,'confirmed',actor)
+                        except psycopg.Error as e:assert e.sqlstate=='OV409'
+                        else:raise AssertionError('self confirmation accepted')
+                        review(2,'confirmed',reviewer['id'])
+                        assert not blocked(db)
+                        assert len(run(db,queries[0]))==3
+                        review(3,'retired',reviewer['id'])
+                        assert not blocked(db)
+                        assert not db.execute("SELECT has_table_privilege(current_user,'house_numbering.entrance_reviews','UPDATE')").fetchone()[0]
+                        db.execute("SELECT set_config('openvietgis.project_id',%s,true)",(fx['project_b_id'],))
+                        assert db.execute("SELECT count(*) FROM house_numbering.building_entrances").fetchone()[0]==0
+                print('PASS exact entrance SQL: observed blocks, independent confirmation, digest change, feature lock references, retirement and RLS')
                 # Old candidate supplies a real approved fixture via its ordinary
                 # transition API. New issuance SQL is checked separately.
                 with psycopg.connect(owner) as db:

@@ -431,6 +431,12 @@ async fn submission_digest(edit:&mut ProjectRead<'_>,proposal_id:Uuid,revision_o
            CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_array_length(r.segments)>0 THEN r.segments
              ELSE jsonb_build_array(jsonb_build_object('source_id',r.linked_source_id,'feature_id',r.linked_feature_id)) END) segment
            WHERE i.organization_id=$1 AND i.project_id=$2 AND i.proposal_id=$3
+           UNION ALL
+           SELECT jsonb_build_object('source_id',e.source_id,'feature_id',e.feature_id)
+           FROM house_numbering.proposal_items i JOIN house_numbering.building_entrances e
+             ON (e.organization_id,e.project_id,e.building_id)=(i.organization_id,i.project_id,i.building_id)
+           JOIN LATERAL (SELECT state FROM house_numbering.entrance_reviews er WHERE (er.organization_id,er.project_id,er.entrance_id)=(e.organization_id,e.project_id,e.id) ORDER BY revision DESC LIMIT 1) er ON er.state='confirmed'
+           WHERE i.organization_id=$1 AND i.project_id=$2 AND i.proposal_id=$3
          ) refs WHERE link->>'source_id' IS NOT NULL AND link->>'feature_id' IS NOT NULL"
     ).bind(org).bind(project).bind(proposal_id).fetch_all(&mut **edit.transaction()).await.map_err(db_error)?;
     let refs:Vec<ovg_storage::module_ports::SpatialFeatureRef>=serde_json::from_value(Value::Array(links))
@@ -450,7 +456,12 @@ async fn submission_digest(edit:&mut ProjectRead<'_>,proposal_id:Uuid,revision_o
                  FROM house_numbering.reconcile_cases c WHERE (c.organization_id,c.project_id,c.building_id)=(b.organization_id,b.project_id,b.id)),
               (SELECT coalesce(jsonb_agg(encode(sha256(convert_to(to_jsonb(e)::text,'UTF8')),'hex') ORDER BY e.id),'[]'::jsonb)
                  FROM house_numbering.evidence e WHERE (e.organization_id,e.project_id,e.building_id)=(b.organization_id,b.project_id,b.id))
-            ) AS pin,
+            ) || coalesce((SELECT jsonb_agg(jsonb_build_array(e.id,e.route_id,e.source_id,e.feature_id,er.revision,er.state,ef.content_revision,encode(sha256(ST_AsEWKB(ef.geometry)),'hex'),ef.geometry_state,es.lifecycle,es.validation_state) ORDER BY e.id)
+                 FROM house_numbering.building_entrances e
+                 LEFT JOIN LATERAL (SELECT revision,state FROM house_numbering.entrance_reviews er WHERE (er.organization_id,er.project_id,er.entrance_id)=(e.organization_id,e.project_id,e.id) ORDER BY revision DESC LIMIT 1) er ON true
+                 LEFT JOIN extensions.spatial_features_v1 ef ON (ef.organization_id,ef.project_id,ef.source_id,ef.feature_id)=(e.organization_id,e.project_id,e.source_id,e.feature_id)
+                 LEFT JOIN extensions.spatial_sources_v1 es ON (es.organization_id,es.project_id,es.id)=(ef.organization_id,ef.project_id,ef.source_id)
+                 WHERE (e.organization_id,e.project_id,e.building_id)=(b.organization_id,b.project_id,b.id)),'[]'::jsonb) AS pin,
             line.geometry IS NOT NULL AND f.geometry_state='present' AND s.lifecycle='active' AND s.validation_state='ready' AS ready
           FROM house_numbering.proposal_items i JOIN house_numbering.buildings b
             ON (b.organization_id,b.project_id,b.id)=(i.organization_id,i.project_id,i.building_id)
@@ -469,6 +480,11 @@ async fn submission_digest(edit:&mut ProjectRead<'_>,proposal_id:Uuid,revision_o
 }
 
 async fn check_quality(edit:&mut ProjectRead<'_>,proposal_id:Uuid)->Result<(),AppError>{
+    let buildings:Vec<Uuid>=sqlx::query_scalar("SELECT building_id FROM house_numbering.proposal_items WHERE organization_id=$1 AND project_id=$2 AND proposal_id=$3")
+        .bind(edit.organization_id()).bind(edit.project_id()).bind(proposal_id).fetch_all(&mut **edit.transaction()).await.map_err(db_error)?;
+    if !super::entrance_blockers(edit,&buildings).await?.is_empty(){
+        return Err(AppError::conflict("ENTRANCE_REVIEW_REQUIRED","resolve competing entrance evidence before approval"));
+    }
     let open:bool=sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM house_numbering.proposal_items i JOIN house_numbering.reconcile_cases c
           ON (c.organization_id,c.project_id,c.building_id)=(i.organization_id,i.project_id,i.building_id)

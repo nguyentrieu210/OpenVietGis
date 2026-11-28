@@ -119,7 +119,15 @@ pub async fn route_snapshot(
     .fetch_all(&mut **edit.transaction())
     .await
     .map_err(db_error)?;
-    let payload = json!([buildings, numbers]);
+    let entrances: Vec<Value> = sqlx::query_scalar(
+        "SELECT jsonb_build_array(e.id,e.route_id,e.source_id,e.feature_id,r.revision,r.state,f.content_revision,f.geometry_state,s.lifecycle,s.validation_state)
+         FROM house_numbering.building_entrances e JOIN house_numbering.buildings b ON (b.organization_id,b.project_id,b.id)=(e.organization_id,e.project_id,e.building_id)
+         LEFT JOIN LATERAL (SELECT revision,state FROM house_numbering.entrance_reviews r WHERE (r.organization_id,r.project_id,r.entrance_id)=(e.organization_id,e.project_id,e.id) ORDER BY revision DESC LIMIT 1) r ON true
+         LEFT JOIN extensions.spatial_features_v1 f ON (f.organization_id,f.project_id,f.source_id,f.feature_id)=(e.organization_id,e.project_id,e.source_id,e.feature_id)
+         LEFT JOIN extensions.spatial_sources_v1 s ON (s.organization_id,s.project_id,s.id)=(f.organization_id,f.project_id,f.source_id)
+         WHERE b.organization_id=$1 AND b.project_id=$2 AND b.route_id=$3 AND b.state='active' ORDER BY e.id"
+    ).bind(edit.organization_id()).bind(edit.project_id()).bind(route_id).fetch_all(&mut **edit.transaction()).await.map_err(db_error)?;
+    let payload = if entrances.is_empty(){json!([buildings,numbers])}else{json!([buildings,numbers,entrances])};
     Ok(format!(
         "{:x}",
         Sha256::digest(py_json_dumps(&payload).as_bytes())
@@ -646,6 +654,9 @@ pub async fn apply_preview(
                 "INELIGIBLE_BUILDING",
                 "ineligible building cannot receive a number",
             ));
+        }
+        if !super::entrance_blockers(edit,&[building_id]).await?.is_empty(){
+            return Err(AppError::conflict("ENTRANCE_REVIEW_REQUIRED","building has unresolved or competing entrance evidence"));
         }
         let number = text(&change["number"]);
         let occupied = sqlx::query(

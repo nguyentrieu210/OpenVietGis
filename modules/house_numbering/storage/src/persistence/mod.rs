@@ -13,6 +13,7 @@ use crate::catalog::ProjectRead;
 
 mod assignment;
 mod buildings;
+mod entrances;
 mod field;
 mod hierarchy;
 mod issuance;
@@ -23,6 +24,7 @@ mod route_import;
 
 pub use assignment::*;
 pub use buildings::*;
+pub use entrances::*;
 pub use field::*;
 pub use hierarchy::*;
 pub use issuance::*;

@@ -309,7 +309,9 @@ async fn preview_assignment(
     }
     let mut warnings: Vec<String> = Vec::new();
     let mut groups: BTreeMap<String, Vec<&store::NumberingTarget>> = BTreeMap::new();
+    let blocked:BTreeSet<Uuid>=store::entrance_blockers(edit,&body.building_ids).await?.into_iter().collect();
     for target in &targets {
+        if blocked.contains(&target.id){warnings.push(format!("building {}: entrance_review_required",target.id));continue;}
         match target.route_id {
             None => warnings.push(format!("building {}: no_route", target.id)),
             Some(route_id) => groups.entry(route_id.to_string()).or_default().push(target),

@@ -498,40 +498,21 @@ pub fn match_certificate(
         .iter()
         .filter(|row| row.route_id == route_id)
         .collect();
-    let fields: [(&str, Option<&str>); 2] = [("old", old_number), ("new", new_number)];
-    for (field, number) in fields {
-        let Some(number) = number.filter(|value| !value.is_empty()) else {
-            continue;
-        };
-        let ids: BTreeSet<&str> = rows
-            .iter()
-            .filter(|row| {
-                let value = if field == "old" {
-                    &row.old_number
-                } else {
-                    &row.new_number
-                };
-                value.as_deref() == Some(number)
-            })
-            .map(|row| row.building_id.as_str())
-            .collect();
-        if ids.len() == 1 {
-            let reason = if field == "old" {
-                "unique_old_number"
-            } else {
-                "unique_new_number"
-            };
-            return Ok((ids.into_iter().next().map(str::to_owned), reason));
-        }
-        if ids.len() > 1 {
-            let reason = if field == "old" {
-                "ambiguous_old_number"
-            } else {
-                "ambiguous_new_number"
-            };
-            return Ok((None, reason));
-        }
-    }
+    let matches = |old: bool, number: Option<&str>| -> BTreeSet<&str> {
+        let Some(number)=number.filter(|v|!v.trim().is_empty()) else{return BTreeSet::new();};
+        let key=number_collision_key(number);
+        rows.iter().filter(|row|{
+            let value=if old{&row.old_number}else{&row.new_number};
+            value.as_ref().is_some_and(|v|number_collision_key(v)==key)
+        }).map(|row|row.building_id.as_str()).collect()
+    };
+    let old=matches(true,old_number);
+    let new=matches(false,new_number);
+    if old.len()>1{return Ok((None,"ambiguous_old_number"));}
+    if new.len()>1{return Ok((None,"ambiguous_new_number"));}
+    if !old.is_empty()&&!new.is_empty()&&old!=new{return Ok((None,"conflicting_old_new_number"));}
+    if let Some(id)=old.iter().next(){return Ok((Some((*id).to_owned()),"unique_old_number"));}
+    if let Some(id)=new.iter().next(){return Ok((Some((*id).to_owned()),"unique_new_number"));}
     Ok((None, "no_match"))
 }
 
@@ -610,6 +591,19 @@ mod tests {
         assert_eq!(s.number,None);assert_eq!(s.reason,"numbering_range_exhausted");
         let rows=vec![Address::new("a","1ZZZZZZ",1.0,"left","approved").unwrap(),Address::new("b","3",3.0,"left","approved").unwrap()];
         assert_eq!(suggest_number(&rows,2.0,"left",&r,SuggestOptions::default()).unwrap().number,None);
+    }
+
+    #[test]
+    fn certificate_match_checks_every_source_and_refuses_conflicting_identities(){
+        let candidate=|id:&str,old:Option<&str>,new:Option<&str>|EvidenceCandidate{building_id:id.into(),route_id:"r".into(),old_number:old.map(str::to_owned),new_number:new.map(str::to_owned)};
+        let mut rows=vec![candidate("a",Some("98"),None),candidate("a",Some(" 100a "),None),candidate("a",None,Some("100A"))];
+        assert_eq!(match_certificate(&rows,"r",Some("100A"),Some("100A")).unwrap(),(Some("a".into()),"unique_old_number"));
+        rows.push(candidate("b",None,Some("100A")));
+        assert_eq!(match_certificate(&rows,"r",Some("100A"),Some("100A")).unwrap(),(None,"ambiguous_new_number"));
+        rows.remove(2);
+        assert_eq!(match_certificate(&rows,"r",Some("100A"),Some("100A")).unwrap(),(None,"conflicting_old_new_number"));
+        rows.push(candidate("b",Some("100A"),None));
+        assert_eq!(match_certificate(&rows,"r",Some("100A"),None).unwrap(),(None,"ambiguous_old_number"));
     }
 
     #[test]

@@ -1052,3 +1052,16 @@ export type LifecycleKpi={active_buildings:number;eligible:number;unknown:number
 export function getHouseNumberingLifecycleKpi(client:ApiClient,org:string,project:string){
  return client.request<LifecycleKpi>(base(org,project)+"/lifecycle-kpi");
 }
+
+export type EntranceState="observed"|"confirmed"|"rejected"|"retired";
+export type BuildingEntrance={id:string;building_id:string;route_id:string;route_name:string;source_id:string;feature_id:string;evidence_ref:string;observed_number:string|null;state:EntranceState;revision:number;geometry_ready:boolean};
+export type EntranceInput={route_id:string;source_id:string;feature_id:string;evidence_ref:string;observed_number:string|null};
+export function listBuildingEntrances(client:ApiClient,org:string,project:string,id:string){
+ return client.request<{items:BuildingEntrance[]}>(base(org,project)+"/buildings/"+encodeURIComponent(id)+"/entrances");
+}
+export function observeBuildingEntrance(client:ApiClient,org:string,project:string,id:string,input:EntranceInput){
+ return jsonMutation<unknown>(client,base(org,project)+"/buildings/"+encodeURIComponent(id)+"/entrances","POST",input);
+}
+export function reviewBuildingEntrance(client:ApiClient,org:string,project:string,id:string,input:{expected_revision:number;state:Exclude<EntranceState,"observed">;reason:string}){
+ return jsonMutation<unknown>(client,base(org,project)+"/entrances/"+encodeURIComponent(id)+"/review","POST",input);
+}

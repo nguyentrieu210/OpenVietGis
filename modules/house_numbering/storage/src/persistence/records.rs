@@ -303,7 +303,8 @@ pub async fn certificate_scope(
          JOIN house_numbering.address_numbers n
            ON n.organization_id=b.organization_id AND n.project_id=b.project_id
           AND n.building_id=b.id AND n.retired_at IS NULL
-         WHERE b.organization_id=$1 AND b.project_id=$2 AND n.route_id=$3",
+         WHERE b.organization_id=$1 AND b.project_id=$2 AND n.route_id=$3 AND b.state='active'
+         ORDER BY b.id,n.kind,n.id",
     )
     .bind(read.organization_id())
     .bind(read.project_id())
@@ -311,30 +312,17 @@ pub async fn certificate_scope(
     .fetch_all(&mut **read.transaction())
     .await
     .map_err(db_error)?;
-    let mut order: Vec<Uuid> = Vec::new();
-    let mut grouped: HashMap<Uuid, (Option<String>, Option<String>)> = HashMap::new();
+    let mut candidates = Vec::new();
     for row in &rows {
         let building: Uuid = row.try_get("building_id").map_err(db_error)?;
         let number: String = row.try_get("number_text").map_err(db_error)?;
         let kind: String = row.try_get("kind").map_err(db_error)?;
-        let entry = grouped.entry(building).or_insert_with(|| {
-            order.push(building);
-            (None, None)
-        });
-        if matches!(kind.as_str(), "old" | "certificate" | "cad" | "survey") && entry.0.is_none() {
-            entry.0 = Some(number.clone());
-        }
-        if matches!(kind.as_str(), "proposed" | "submitted" | "approved") && entry.1.is_none() {
-            entry.1 = Some(number);
+        if matches!(kind.as_str(),"old"|"certificate"|"cad"|"survey"){
+            candidates.push((building,Some(number),None));
+        } else if matches!(kind.as_str(),"proposed"|"submitted"|"approved"){
+            candidates.push((building,None,Some(number)));
         }
     }
-    let candidates = order
-        .into_iter()
-        .map(|building| {
-            let (old, new) = grouped.remove(&building).unwrap_or_default();
-            (building, old, new)
-        })
-        .collect();
     Ok(CertificateScope {
         route_id,
         raw_number,
