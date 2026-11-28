@@ -36,7 +36,8 @@ try {
  assert.ok(result.initial.includes("Điểm thử"),"point label rendered");
  assert.ok(result.initial.includes("Vùng thử"),"polygon label rendered");
  assert.ok(result.initial.includes("Đường thử"),"line label rendered");
- assert.ok(result.zoomed.includes("Vùng thử")&&result.animated.includes("Vùng thử"),"polygon label survives camera movement");
+ assert.equal(result.zoomed.filter(v=>v==="Vùng thử").length,1,"polygon must have exactly one label across tiles");
+ assert.equal(result.animated.filter(v=>v==="Vùng thử").length,1,"polygon must have exactly one label during zoom");
  assert.equal(result.writes,0,"camera must not update label geometry");
  assert.equal(result.removed,true);assert.deepEqual(result.errors,[]);assert.deepEqual(errors,[]);
  console.log("PASS native WebGL labels: Vietnamese, point, polygon, line, background, zoom and cleanup");

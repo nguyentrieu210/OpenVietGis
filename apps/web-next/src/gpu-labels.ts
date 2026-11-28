@@ -1,6 +1,7 @@
 import type {Feature,FeatureCollection,Geometry,Position} from "geojson";
 import type {Map as MLMap, GeoJSONSource, SymbolLayerSpecification} from "./map-surface";
 import type {LayerView} from "./LayerProperties";
+import {polygonLabelAnchor} from "./polygon-label-anchor";
 import type {StudioRow} from "./studio-contract";
 
 const SOURCE="ovg-gpu-labels";
@@ -23,13 +24,13 @@ function midpoint(a:Position[]):Position|null{
  for(let i=0;i<d.length;i++){const l=d[i]!;if(l>0&&h<=l){const p=a[i]!,q=a[i+1]!,t=h/l;return [p[0]!+(q[0]!-p[0]!)*t,p[1]!+(q[1]!-p[1]!)*t]}h-=l}return a[0]??null;
 }
 export function planGpuLabels(rows:StudioRow[],views:Record<string,LayerView>,text:(r:StudioRow,v:LayerView)=>string,anchor:(g:Geometry)=>[number,number]|null):LabelPlan{
- const groups=new Map<string,LabelGroup>(),features:LabelFeature[]=[],bounds=new Map<string,Bounds>();
+ const groups=new Map<string,LabelGroup>(),features:LabelFeature[]=[],bounds=new Map<string,Bounds>(),seen=new Set<string>();
  for(const r of rows){
   const layerId=r.layer.id,v=views[layerId],g=r.geometry;
   if(!v?.labelField||v.labelHidden||!g||Math.max(v.labelMinZoom,v.minZoom)>=Math.min(v.labelMaxZoom,v.maxZoom))continue;
   const value=text(r,v);if(!value)continue;
   let geometry:Geometry=g,kind:Kind;
-  if(g.type==="Polygon"||g.type==="MultiPolygon")kind="polygon";
+  if(g.type==="Polygon"||g.type==="MultiPolygon"){const p=polygonLabelAnchor(g);if(!p)continue;geometry={type:"Point",coordinates:p};kind="polygon";}
   else if((g.type==="LineString"||g.type==="MultiLineString")&&(v.labelPlacement==="auto"||v.labelPlacement==="line"))kind="line";
   else if(g.type==="Point"||g.type==="MultiPoint")kind="point";
   else{
@@ -37,6 +38,7 @@ export function planGpuLabels(rows:StudioRow[],views:Record<string,LayerView>,te
    if(!p)continue;geometry={type:"Point",coordinates:p};kind="point";
   }
   const group=layerId+":"+kind,key=layerId+":"+r.key;
+  if(seen.has(key))continue;seen.add(key);
   if(!groups.has(group))groups.set(group,{id:group,layerId,kind,view:v});
   features.push({type:"Feature",id:key,geometry,properties:{text:value,layerId,group,key,unique:v.labelUnique}});
   if(v.labelUnique)bounds.set(key,geometryBounds(geometry));
