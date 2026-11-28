@@ -36,7 +36,7 @@ impl Role{
     pub fn allowed(self,registry:&Registry,parent:&[String])->Vec<String>{
         registry.list().iter().filter(|t|t["annotations"]["readOnlyHint"]==true)
             .filter_map(|t|t["name"].as_str())
-            .filter(|n|self.tools().contains(n)&&parent.iter().any(|x|x==n))
+            .filter(|n|self.tools().contains(n)&&parent.iter().any(|x|x.as_str()==*n))
             .map(str::to_owned).collect()
     }
 }

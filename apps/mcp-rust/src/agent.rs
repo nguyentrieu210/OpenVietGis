@@ -214,6 +214,51 @@ mod tests {
     fn call(id:&str,name:&str,args:Value)->ToolCall{ToolCall{id:id.into(),name:name.into(),arguments:args}}
     fn response(calls:Vec<ToolCall>)->Reply{Reply{text:"".into(),calls}}
     #[tokio::test]
+    async fn children_cannot_delegate_even_with_forged_allowlist(){
+        let registry=Registry::new();let (_tx,rx)=watch::channel(false);
+        let budget=std::sync::Arc::new(crate::team::Budget::default());
+        let child=Agent::new(&registry,Uuid::new_v4(),vec![crate::team::DELEGATE.into()],Duration::from_secs(2)).with_team(budget,false);
+        let r=child.run("inspect".into(),rx,|req|{
+            assert!(!req.tools.iter().any(|t|t["name"]==crate::team::DELEGATE));
+            std::future::ready(Ok(response(vec![call("a",crate::team::DELEGATE,json!({"tasks":[{"role":"data","task":"inspect"}]}))])))
+        },|_|std::future::ready(ToolOutcome::Failed)).await;
+        assert_eq!(r.stop,Stop::InvalidReply);assert_eq!(r.calls,0);
+    }
+    #[tokio::test]
+    async fn parallel_children_share_budget_and_parent_receives_reports(){
+        let registry=Registry::new();let session=Uuid::new_v4();let (_tx,rx)=watch::channel(false);
+        let budget=std::sync::Arc::new(crate::team::Budget::default());
+        let parent=Agent::new(&registry,session,Vec::<String>::new(),Duration::from_secs(5)).with_team(budget.clone(),true);
+        let child_rx=&rx;let b=&budget;let reg=&registry;let mut turns=0;
+        let r=parent.run("inspect".into(),rx.clone(),|req|{
+            turns+=1;
+            assert!(req.tools.iter().any(|t|t["name"]==crate::team::DELEGATE));
+            let reply=if turns==1{response(vec![call("delegate",crate::team::DELEGATE,json!({"tasks":[{"role":"data","task":"a"},{"role":"quality","task":"b"}]}))])}
+            else{assert!(matches!(req.turns.last(),Some(Turn::Tool{observation,..}) if observation["reports"].as_array().unwrap().len()==2));Reply{text:"combined".into(),calls:vec![]}};
+            std::future::ready(Ok(reply))
+        },|c|async move{
+            let tasks=crate::team::tasks(&c.arguments).unwrap();
+            assert!(b.children(tasks.len()));
+            let barrier=tokio::sync::Barrier::new(2);
+            let run_child=|task:crate::team::Task|{
+                let barrier=&barrier;
+                async move{
+                    let child=Agent::new(reg,session,Vec::<String>::new(),Duration::from_secs(3)).with_team(b.clone(),false);
+                    let report=child.run(task.task,child_rx.clone(),|_|async move{
+                        barrier.wait().await;
+                        Ok(Reply{text:"child result".into(),calls:vec![]})
+                    },|_|std::future::ready(ToolOutcome::Failed)).await;
+                    assert_eq!(report.stop,Stop::Complete);
+                    crate::team::summary(task.role,&report)
+                }
+            };
+            let (x,y)=tokio::join!(run_child(tasks[0].clone()),run_child(tasks[1].clone()));
+            ToolOutcome::Completed(json!({"reports":[x,y]}))
+        }).await;
+        assert_eq!(r.stop,Stop::Complete);assert_eq!(r.answer.as_deref(),Some("combined"));
+        assert_eq!(budget.snapshot()["model_steps"],4);assert_eq!(budget.snapshot()["children"],2);
+    }
+    #[tokio::test]
     async fn multi_step_and_scoped_observation(){
         let registry=Registry::new();let session=Uuid::new_v4();let (_tx,rx)=watch::channel(false);
         let agent=Agent::new(&registry,session,["gis_live_view".into(),"gis_layers".into()],Duration::from_secs(5)).with_skill("explore-data").unwrap();

@@ -284,10 +284,13 @@ impl TeamHost<'_>{
         use openvietgis_mcp_rust::agent::{ToolOutcome,from_dispatch};
         let mut next=self.pace.lock().await;
         if call.arguments["session_id"]!=json!(self.session){return ToolOutcome::Failed}
-        if call.name!="gis_operation_status"{tokio::time::sleep_until(*next).await;*next=tokio::time::Instant::now()+Duration::from_millis(2050);}
+        if call.name!="gis_operation_status"{tokio::time::sleep_until(*next).await;}
         if unix_now()>=self.deadline||!provider_allowed(&self.owner.subject){return ToolOutcome::Failed}
         match browser_identity(self.app,self.headers,self.session).await{
-            Ok((fresh,_)) if fresh==*self.owner=>match operate_subject(self.app,&self.owner.subject,self.deadline,&call.name,&call.arguments).await{Ok(value)=>from_dispatch(&call,value),Err(_)=>ToolOutcome::Failed},
+            Ok((fresh,_)) if fresh==*self.owner=>{
+                if call.name!="gis_operation_status"{*next=tokio::time::Instant::now()+Duration::from_millis(2050);}
+                match operate_subject(self.app,&self.owner.subject,self.deadline,&call.name,&call.arguments).await{Ok(value)=>from_dispatch(&call,value),Err(_)=>ToolOutcome::Failed}
+            },
             _=>ToolOutcome::Failed
         }
     }
@@ -304,11 +307,12 @@ impl TeamHost<'_>{
     async fn delegate(&self,gateway:&openvietgis_mcp_rust::provider::Gateway,budget:Arc<openvietgis_mcp_rust::team::Budget>,parent:&[String],call:openvietgis_mcp_rust::agent::ToolCall,cancel:tokio::sync::watch::Receiver<bool>,reports:&Mutex<Vec<Value>>)->openvietgis_mcp_rust::agent::ToolOutcome{
         use openvietgis_mcp_rust::{agent::ToolOutcome,team};
         let Some(tasks)=team::tasks(&call.arguments)else{return ToolOutcome::Failed};
-        if !budget.children(tasks.len()){return ToolOutcome::Failed}
+        let expected_count=tasks.len();
+        if !budget.children(expected_count){return ToolOutcome::Failed}
         let mut it=tasks.into_iter();
         let (a,b,c)=tokio::join!(self.child(gateway,budget.clone(),parent,it.next(),cancel.clone()),self.child(gateway,budget.clone(),parent,it.next(),cancel.clone()),self.child(gateway,budget,parent,it.next(),cancel));
         let batch:Vec<Value>=[a,b,c].into_iter().flatten().collect();
-        let ok=!batch.is_empty()&&batch.iter().all(|r|r["complete"]==true&&r["uncertain_call"].is_null()&&r["unresolved_ticket"].is_null());
+        let ok=batch.len()==expected_count&&batch.iter().all(|r|r["complete"]==true&&r["uncertain_call"].is_null()&&r["unresolved_ticket"].is_null());
         if let Ok(mut r)=reports.lock(){r.extend(batch.clone());}
         if ok{ToolOutcome::Completed(json!({"untrusted_agent_reports":batch}))}else{ToolOutcome::Failed}
     }

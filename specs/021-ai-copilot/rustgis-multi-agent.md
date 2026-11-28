@@ -10,3 +10,5 @@ Base Wave 3 PR #107 at 3f006d94c259d37528e12042035e494718654c93; upstream RustGI
 - Child reports treated as untrusted observations. Parent stops if a child fails or has uncertain receipt. Report UI includes role, stop, result and uncertainty; counts aggregate all agents.
 - Existing MCP external registry remains 39 tools; internal delegation never routed through MCP dispatcher.
 - Run native tests and browser smoke. Real multi-agent/provider integration and deployment remain gated; no production claims.
+
+Hardening: pacing timestamp is set immediately before dispatch after fresh identity verification; missing child report fails closed. Added scripted concurrent-child barrier, shared-budget and recursive-delegation rejection tests. Child reports are model-generated summaries, not independent proof of factual correctness.
