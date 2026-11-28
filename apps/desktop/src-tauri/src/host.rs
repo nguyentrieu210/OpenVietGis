@@ -19,7 +19,7 @@ pub struct Opened { pub id: Uuid, pub handle: Uuid }
 #[derive(Serialize)]
 #[serde(tag="status", rename_all="snake_case")]
 pub enum Poll { Pending, Complete { xy: Vec<f64> } }
-struct Open { engine: Workspace, _store: LocalStore, project: Uuid, generation: u64, cache: ovg_mobile_engine::viewport::Cache, raster: Option<(Uuid,ovg_local_storage::mbtiles::Archive)> }
+struct Open { engine: Workspace, _store: LocalStore, project: Uuid, generation: u64, cache: ovg_mobile_engine::viewport::Cache, raster: Option<(Uuid,ovg_local_storage::mbtiles::Archive)>, assets: HashMap<Uuid,Asset> }
 struct TrackedJob { handle: Uuid, job: Job }
 struct State { session: Session, open: HashMap<Uuid,Open>, jobs: HashMap<Uuid,TrackedJob> }
 #[derive(Clone)]
@@ -50,6 +50,9 @@ const MAX_IMPORT:u64=16*1024*1024;
 const MAX_READ:usize=2*1024*1024;
 #[derive(Serialize)]
 pub struct Viewport { pub generation:String, pub data:Value, pub truncated:bool }
+enum Asset { Cad(crate::resource_files::Cad), Las(crate::resource_files::Las), Glb(crate::resource_files::Glb) }
+#[derive(Serialize)]
+pub struct AssetInfo {pub id:Uuid,pub kind:String,pub count:u64,pub epsg:Option<u32>}
 #[derive(Serialize)]
 pub struct Raster { pub id:Uuid, pub attribution:String }
 impl Host {
@@ -108,6 +111,36 @@ impl Host {
     }
     pub fn import_gpkg(&self,handle:Uuid,path:&Path)->Result<u32>{
         self.mutate(handle,|s|crate::gpkg_import::import(s,path))
+    }
+    pub fn open_asset(&self,handle:Uuid,path:&Path,kind:&str,epsg:Option<u32>)->Result<AssetInfo>{
+        // Explicit source CRS. CAD adapter only accepts WGS84 XY; LAS emits
+        // native XYZ and must not be displayed as degrees without reprojection.
+        let asset=match kind{
+            "cad" if epsg==Some(4326)=>Asset::Cad(crate::resource_files::Cad::open(path)?),
+            "las" if epsg.is_some_and(|n|n>0)=>Asset::Las(crate::resource_files::Las::open(path)?),
+            "glb" if epsg.is_none()=>Asset::Glb(crate::resource_files::Glb::open(path)?),
+            _=>return Err("EXPLICIT_CRS_OR_FORMAT_REQUIRED")
+        };
+        let count=match &asset{Asset::Cad(a)=>a.count(),Asset::Las(a)=>a.count(),Asset::Glb(a)=>a.len()};
+        let mut s=self.lock()?;let w=s.open.get_mut(&handle).ok_or("STALE_HANDLE")?;
+        if w.assets.len()>=3{return Err("RESOURCE_LIMIT")}
+        let id=Uuid::new_v4();w.assets.insert(id,asset);
+        Ok(AssetInfo{id,kind:kind.into(),count,epsg})
+    }
+    pub fn close_asset(&self,handle:Uuid,id:Uuid)->Result<()>{
+        let mut s=self.lock()?;let w=s.open.get_mut(&handle).ok_or("STALE_HANDLE")?;
+        w.assets.remove(&id).ok_or("STALE_HANDLE")?;Ok(())
+    }
+    pub fn asset_resource(&self,handle:Uuid,id:Uuid,resource:crate::protocol::Resource)->Result<Vec<u8>>{
+        let mut s=self.lock()?;let w=s.open.get_mut(&handle).ok_or("STALE_HANDLE")?;
+        let a=w.assets.get_mut(&id).ok_or("STALE_HANDLE")?;
+        let b=match(a,resource){
+            (Asset::Cad(a),crate::protocol::Resource::CadChunk(n))=>a.chunk(n)?,
+            (Asset::Las(a),crate::protocol::Resource::PointNode(n))=>a.chunk(n)?,
+            (Asset::Glb(a),crate::protocol::Resource::Asset)=>a.bytes(),
+            _=>return Err("UNSUPPORTED_RESOURCE")
+        };
+        if b.len()>4*1024*1024{return Err("RESOURCE_LIMIT")}Ok(b)
     }
     pub fn generation(&self,handle:Uuid)->Result<String>{self.read(handle,|w|Ok(w.generation.to_string()))}
     pub fn viewport(&self,handle:Uuid,bbox:[f64;4])->Result<Viewport>{
@@ -265,7 +298,7 @@ impl Host {
         let store=LocalStore::open(&path,QUOTA).map_err(|_|"STORAGE_UNAVAILABLE")?;
         let workspace=self.engine.open_workspace(s.session).map_err(err)?;
         let handle=Uuid::new_v4();
-        s.open.insert(handle,Open{engine:workspace,_store:store,project:id,generation:0,cache:ovg_mobile_engine::viewport::Cache::new(16*1024*1024).map_err(err)?,raster:None});
+        s.open.insert(handle,Open{engine:workspace,_store:store,project:id,generation:0,cache:ovg_mobile_engine::viewport::Cache::new(16*1024*1024).map_err(err)?,raster:None,assets:HashMap::new()});
         Ok(Opened{id,handle})
     }
     pub fn close(&self,handle:Uuid)->Result<()> {
