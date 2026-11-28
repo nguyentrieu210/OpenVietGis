@@ -22,7 +22,7 @@ class UnifiedPage extends StatefulWidget{
   @override State<UnifiedPage> createState()=>_UnifiedPageState();
 }
 class _UnifiedPageState extends State<UnifiedPage>{
-  String? _root,_exchange,_selected,_layer,_revision;
+  String? _root,_exchange,_legacyRoot,_selected,_layer,_revision;
   NativeUnifiedProject? _project;
   List<String> _ids=[];
   List<Map<String,dynamic>> _layers=[],_rows=[];
@@ -36,6 +36,7 @@ class _UnifiedPageState extends State<UnifiedPage>{
   @override void initState(){super.initState();unawaited(_run(()async{
     final root=await getApplicationSupportDirectory();
     _root='${root.path}${Platform.pathSeparator}unified-projects';
+    _legacyRoot='${root.path}${Platform.pathSeparator}local-workspaces';
     _exchange='${root.path}${Platform.pathSeparator}unified-exchange';
     final ids=await listUnifiedProjects(rootPath:_root!);
     if(mounted)setState(()=>_ids=ids);
@@ -79,6 +80,39 @@ class _UnifiedPageState extends State<UnifiedPage>{
     final id=_uuid();
     await p.addLayer(layerId:id,name:name,expected:_revision!);
     await _refresh();if(mounted)setState(()=>_layer=id);
+  }
+  Future<void> _migrateLegacy()async{
+    final ids=await listLocalWorkspaces(rootPath:_legacyRoot!);
+    if(!mounted)return;
+    final id=await showDialog<String>(context:context,builder:(d)=>AlertDialog(
+      title:const Text('Sao chép dự án GeoPackage'),
+      content:SizedBox(width:320,child:ListView(shrinkWrap:true,children:[
+        const Text('Giữ nguyên file nguồn, vector, revision và GPS Survey. Media mã hóa vẫn ở kho cũ; lịch sử cũ chỉ lưu trữ, không phát lại Undo.'),
+        for(final id in ids)ListTile(title:Text(id),onTap:()=>Navigator.pop(d,id))
+      ])),actions:[TextButton(onPressed:()=>Navigator.pop(d),child:const Text('Hủy'))]));
+    if(id==null||!mounted)return;
+    final legacy=await openLocalWorkspace(rootPath:_legacyRoot!,workspaceId:id);
+    String project;
+    try{project=await legacy.migrateUnifiedCopy(unifiedRoot:_root!,layerId:id,name:'Imported $id');}
+    finally{await legacy.close();}
+    final projects=await listUnifiedProjects(rootPath:_root!);
+    if(!mounted)return;setState(()=>_ids=projects);await _open(project);
+    if(mounted)setState(()=>_message='Đã sao chép vector và GPS Survey; media mã hóa vẫn ở nguồn.');
+  }
+  Future<void> _survey()async{
+    final p=_project,l=_layer,r=_revision;if(p==null||l==null||r==null)return;
+    final tracks=<Map<String,dynamic>>[];var after='';
+    for(var page=0;page<10;page++){
+      final list=(jsonDecode(await p.surveyTracks(layerId:l,after:after,expected:r)) as List).cast<Map<String,dynamic>>();
+      tracks.addAll(list);if(list.length<100)break;after=list.last['id'].toString();
+    }
+    if(!mounted)return;
+    final track=await showDialog<String>(context:context,builder:(d)=>AlertDialog(title:const Text('GPS Survey đã lưu (tối đa 1.000 track)'),content:SizedBox(width:320,child:ListView(shrinkWrap:true,children:[
+      if(tracks.isEmpty)const Text('Không có track trong lớp này.'),
+      for(final t in tracks)ListTile(title:Text(t['name'].toString()),subtitle:Text('${t["state"]} · ${t["segment"]} đoạn'),onTap:()=>Navigator.pop(d,t['id'].toString()))
+    ])),actions:[TextButton(onPressed:()=>Navigator.pop(d),child:const Text('Đóng'))]));
+    if(track==null||!mounted)return;
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>_SurveyReadPage(project:p,layer:l,track:track,revision:r)));
   }
   Future<void> _openMap()async{
     final p=_project,l=_layer,r=_revision;
@@ -145,11 +179,13 @@ class _UnifiedPageState extends State<UnifiedPage>{
         Wrap(spacing:8,runSpacing:8,children:[
           FilledButton(onPressed:ready?()=>unawaited(_run(_create)):null,child:const Text('Tạo dự án')),
           OutlinedButton(onPressed:ready?()=>unawaited(_run(_restore)):null,child:const Text('Nhập backup SQLite')),
+          OutlinedButton(onPressed:ready?()=>unawaited(_run(_migrateLegacy)):null,child:const Text('Sao chép GeoPackage / Survey')),
         ]),
         for(final id in _ids)ListTile(title:Text(id),leading:Icon(id==_selected?Icons.check_circle:Icons.folder),enabled:ready,onTap:()=>unawaited(_run(()=>_open(id)))),
         if(_project!=null)...[
           Text('Revision ${_revision??"?"}'),
           FilledButton.icon(onPressed:edit?()=>unawaited(_run(_openMap)):null,icon:const Icon(Icons.map),label:const Text('Mở bản đồ Unified')),
+          OutlinedButton(onPressed:edit?()=>unawaited(_run(_survey)):null,child:const Text('GPS Survey đã lưu')),
           for(final l in _layers)ListTile(title:Text(l['name'].toString()),leading:Icon(l['id']==_layer?Icons.check_circle:Icons.layers),enabled:ready,onTap:()=>setState((){_layer=l['id'].toString();_rows=[];_cursor=null;})),
           TextField(controller:_name,enabled:ready,maxLength:256,decoration:const InputDecoration(labelText:'Tên lớp')),
           OutlinedButton(onPressed:ready&&_revision!=null?()=>unawaited(_run(_add)):null,child:const Text('Thêm lớp')),
@@ -168,4 +204,26 @@ class _UnifiedPageState extends State<UnifiedPage>{
         ]
       ])));
   }
+}
+
+class _SurveyReadPage extends StatefulWidget{
+ final NativeUnifiedProject project;final String layer,track,revision;
+ const _SurveyReadPage({required this.project,required this.layer,required this.track,required this.revision});
+ @override State<_SurveyReadPage> createState()=>_SurveyReadPageState();
+}
+class _SurveyReadPageState extends State<_SurveyReadPage>{
+ List<Map<String,dynamic>> _rows=[];String? _next,_error;bool _busy=false;
+ @override void initState(){super.initState();unawaited(_load('0'));}
+ Future<void> _load(String after)async{
+  if(_busy)return;setState(()=>_busy=true);
+  try{
+   final v=jsonDecode(await widget.project.surveyFixes(layerId:widget.layer,trackId:widget.track,after:after,expected:widget.revision)) as Map<String,dynamic>;
+   if(mounted)setState((){_rows=(v['rows'] as List).cast<Map<String,dynamic>>();_next=v['next']?.toString();_error=null;});
+  }catch(e){if(mounted)setState(()=>_error=e.toString());}finally{if(mounted)setState(()=>_busy=false);}
+ }
+ @override Widget build(BuildContext context)=>PopScope(canPop:!_busy,child:Scaffold(appBar:AppBar(title:const Text('GPS Fix · dữ liệu gốc')),body:ListView(padding:const EdgeInsets.all(12),children:[
+  if(_busy)const LinearProgressIndicator(),if(_error!=null)Text(_error!),
+  for(final row in _rows)ListTile(title:Text('Fix ${row["seq"]} · Đoạn ${row["segment"]}'),subtitle:Text(jsonEncode(row['fix']))),
+  if(_next!=null)OutlinedButton(onPressed:_busy?null:()=>unawaited(_load(_next!)),child:const Text('Trang tiếp'))
+ ])));
 }
