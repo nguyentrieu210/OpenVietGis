@@ -3,6 +3,7 @@ import maplibregl,{type GeoJSONSource} from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {desktop,type FeatureRecord,type FeatureRow,type AssetInfo} from "./transport";
 
+import {vertices,moveVertex} from "./vertices";
 type Kind="point"|"line"|"polygon";
 const empty=():GeoJSON.FeatureCollection=>({type:"FeatureCollection",features:[]});
 export default function LocalWorkbench({handle}:{handle:string}){
@@ -12,6 +13,9 @@ export default function LocalWorkbench({handle}:{handle:string}){
   const [rows,setRows]=useState<FeatureRow[]>([]),[cursor,setCursor]=useState<string|null>("0"),[filter,setFilter]=useState("");
   const [selected,setSelected]=useState<FeatureRecord>(),[attrs,setAttrs]=useState("{}"),[geometryText,setGeometryText]=useState("");
   const [catalog,setCatalog]=useState<Awaited<ReturnType<typeof desktop.inspectGPKG>>>(null),[table,setTable]=useState("");
+  const [vertexMode,setVertexMode]=useState(false);
+  const vertexMarkers=useRef<maplibregl.Marker[]>([]);
+  const vertexGeometry=useRef<Exclude<GeoJSON.Geometry,GeoJSON.GeometryCollection>|undefined>(undefined);
   const [tiles,setTiles]=useState(false);const tileMode=useRef(false);
   const [raster,setRaster]=useState<{id:string;attribution:string}>();
   const styleReady=useRef(false);
@@ -59,7 +63,7 @@ export default function LocalWorkbench({handle}:{handle:string}){
   },[handle]);
   const select=useCallback(async(id:string)=>{
     const f=await desktop.feature(handle,id);
-    if(alive.current){setSelected(f);setAttrs(JSON.stringify(f.attributes,null,2));setGeometryText(JSON.stringify(f.geometry,null,2))}
+    if(alive.current){setVertexMode(false);setSelected(f);setAttrs(JSON.stringify(f.attributes,null,2));setGeometryText(JSON.stringify(f.geometry,null,2))}
   },[handle]);
   const run=useCallback(async(f:()=>Promise<void>)=>{
     if(working.current)return;
@@ -68,7 +72,7 @@ export default function LocalWorkbench({handle}:{handle:string}){
     finally{working.current=false;if(alive.current)setBusy(false)}
   },[]);
   const clearDraft=()=>{draft.current=[];mode.current=undefined;setKind(undefined);setCount(0);draftSource()?.setData(empty())};
-  const begin=(k:Kind)=>{clearDraft();mode.current=k;setKind(k)};
+  const begin=(k:Kind)=>{setVertexMode(false);clearDraft();mode.current=k;setKind(k)};
   const setVectorTiles=async(on:boolean)=>{
     const m=map.current;if(!m||!styleReady.current)return;
     for(const suffix of ["fill","line","point"])if(m.getLayer("mvt-"+suffix))m.removeLayer("mvt-"+suffix);
@@ -85,7 +89,7 @@ export default function LocalWorkbench({handle}:{handle:string}){
     m.addLayer({id:"mvt-point",...layer,type:"circle",filter:["==",["geometry-type"],"Point"],paint:{"circle-color":"#1976a3","circle-radius":5}},"draft-fill");
     setNotice("MVT · Tile theo revision "+rev);
   };
-  const afterMutation=async()=>{setSelected(undefined);setAttrs("{}");setGeometryText("");await page("0",filter);if(tileMode.current)await setVectorTiles(true);else invalidate()};
+  const afterMutation=async()=>{setVertexMode(false);setSelected(undefined);setAttrs("{}");setGeometryText("");await page("0",filter);if(tileMode.current)await setVectorTiles(true);else invalidate()};
   useEffect(()=>{
     alive.current=true;styleReady.current=false;
     maplibregl.addProtocol("ovg",async(params,abort)=>{
@@ -132,6 +136,26 @@ export default function LocalWorkbench({handle}:{handle:string}){
     }catch(e){setNotice(String(e))}
     return()=>{alive.current=false;sequence.current++;dirty.current=false;styleReady.current=false;map.current=undefined;m?.remove();maplibregl.removeProtocol("ovg")};
   },[handle,invalidate,page,run,select]);
+  useEffect(()=>{
+    const m=map.current;
+    if(!m||!ready||!selected||!vertexMode)return;
+    try{
+      const g=JSON.parse(geometryText) as Exclude<GeoJSON.Geometry,GeoJSON.GeometryCollection>;
+      vertexGeometry.current=g;
+      const draw=()=>{if(vertexGeometry.current) (m.getSource("draft") as GeoJSONSource|undefined)?.setData({type:"FeatureCollection",features:[{type:"Feature",geometry:vertexGeometry.current,properties:{}}]})};
+      for(const v of vertices(g)){
+        const element=document.createElement("button");element.type="button";element.className="ovg-vertex";element.title="Kéo đỉnh";element.setAttribute("aria-label","Kéo đỉnh "+v.path.join("."));
+        element.addEventListener("click",e=>e.stopPropagation());
+        const marker=new maplibregl.Marker({element,draggable:true}).setLngLat(v.xy).addTo(m);
+        marker.on("drag",()=>{try{const p=marker.getLngLat();if(vertexGeometry.current){vertexGeometry.current=moveVertex(vertexGeometry.current,v,[p.lng,p.lat]);draw()}}catch(e){setNotice(String(e))}});
+        marker.on("dragend",()=>{if(vertexGeometry.current)setGeometryText(JSON.stringify(vertexGeometry.current,null,2))});
+        vertexMarkers.current.push(marker);
+      }
+      draw();
+    }catch(e){setNotice(String(e));setVertexMode(false)}
+    return()=>{for(const marker of vertexMarkers.current)marker.remove();vertexMarkers.current=[];vertexGeometry.current=undefined;(m.getSource("draft") as GeoJSONSource|undefined)?.setData(empty())};
+    // Geometry text updates on drag end, rebuilding marker coordinates.
+  },[vertexMode,selected,geometryText,ready]);
   const openAsset=(kind:"cad"|"las"|"glb")=>run(async()=>{
     if(asset)throw Error("Đóng tài nguyên hiện tại trước khi mở tài nguyên khác");
     const epsg=kind==="cad"?4326:kind==="las"?Number(lasEpsg):null;
@@ -218,7 +242,7 @@ export default function LocalWorkbench({handle}:{handle:string}){
       <button disabled={busy} onClick={()=>void run(()=>page("0",filter))}>Trang đầu</button>
       <button disabled={busy||!cursor} onClick={()=>void run(()=>page(cursor??"0",filter))}>Trang tiếp</button></div>
       <div className="ovg-local-rows"><table><thead><tr><th>ID</th><th>Revision</th><th>Thuộc tính</th></tr></thead><tbody>{rows.map(r=><tr key={r.id}><td><button disabled={busy} onClick={()=>void run(()=>select(r.id))}>{r.id.slice(0,8)}</button></td><td>{r.revision}</td><td>{JSON.stringify(r.attributes).slice(0,200)}</td></tr>)}</tbody></table></div>
-      {selected&&<div><label>Thuộc tính {selected.id}<textarea rows={3} value={attrs} onChange={e=>setAttrs(e.target.value)}/></label><button disabled={busy} onClick={()=>void update()}>Ghi thuộc tính</button><label>Tọa độ hình học GeoJSON<textarea rows={4} value={geometryText} onChange={e=>setGeometryText(e.target.value)}/></label><button disabled={busy} onClick={()=>void reshape()}>Ghi sửa hình học</button><button disabled={busy} onClick={()=>void remove()}>Xóa đối tượng</button></div>}
+      {selected&&<div><label>Thuộc tính {selected.id}<textarea rows={3} value={attrs} onChange={e=>setAttrs(e.target.value)}/></label><button disabled={busy} onClick={()=>void update()}>Ghi thuộc tính</button><label>Tọa độ hình học GeoJSON<textarea rows={4} value={geometryText} onChange={e=>setGeometryText(e.target.value)}/></label><button disabled={busy||!!kind} aria-pressed={vertexMode} onClick={()=>setVertexMode(!vertexMode)}>Kéo đỉnh trên bản đồ</button><button disabled={busy} onClick={()=>void reshape()}>Ghi sửa hình học</button><button disabled={busy} onClick={()=>void remove()}>Xóa đối tượng</button></div>}
     </div>
   </section>;
 }
