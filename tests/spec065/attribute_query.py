@@ -3,7 +3,6 @@ Run with the repository's migration Python environment and a newly built Rust bi
 Never pass a live DB URL. The companion shell script owns the disposable container.
 """
 import argparse
-import os
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
