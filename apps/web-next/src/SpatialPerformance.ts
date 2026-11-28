@@ -23,6 +23,6 @@ export class SpatialPerformance{
     const percentile=(p:number)=>ordered.length?ordered[Math.ceil(ordered.length*p)-1]:null;
     const totals=ok.reduce((a,m)=>({cacheHits:a.cacheHits+m.cacheHits,cacheMisses:a.cacheMisses+m.cacheMisses,cacheBytes:a.cacheBytes+m.cacheBytes,invalidations:a.invalidations+m.invalidations}),{cacheHits:0,cacheMisses:0,cacheBytes:0,invalidations:0});
     const eligible=totals.cacheHits+totals.cacheMisses;
-    return {count:all.length,failures:all.length-ok.length,p50:percentile(.5),p95:percentile(.95),cacheHitRate:eligible?totals.cacheHits/eligible:null,...totals,last:all.at(-1)??null};
+    return {count:all.length,failures:all.length-ok.length,p50:percentile(.5),p95:percentile(.95),p99:percentile(.99),cacheHitRate:eligible?totals.cacheHits/eligible:null,...totals,last:all.at(-1)??null};
   }
 }

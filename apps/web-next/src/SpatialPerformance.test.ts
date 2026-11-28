@@ -10,7 +10,7 @@ describe("SpatialPerformance aggregate telemetry",()=>{
   expect(p.snapshot()).toHaveLength(60);
   const s=p.summary("open");
   expect(s.count).toBe(60);expect(s.cacheHitRate).toBeCloseTo(2/3);
-  expect(s.cacheBytes).toBe(6000);expect(s.p95).not.toBeNull();
+  expect(s.cacheBytes).toBe(6000);expect(s.p95).not.toBeNull();expect(s.p99).toBe(65);
   expect(JSON.stringify(p.snapshot())).not.toContain("project");
  });
 });
