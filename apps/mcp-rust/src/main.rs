@@ -378,7 +378,7 @@ async fn browser_agent(State(app):State<App>,Path(id):Path<Uuid>,h:HeaderMap,bod
         }).await;
         let totals=budget.snapshot();
         let children=reports.lock().map(|r|r.clone()).unwrap_or_default();
-        let value=json!({"stop":report.stop,"answer":report.answer,"model_steps":totals["model_steps"],"calls":totals["calls"],"model_attempts":totals["model_attempts"],"children":children,"child_count":totals["children"],"snapshot":vision_metadata,"unresolved_ticket":report.unresolved_ticket,"uncertain_call":report.uncertain_call});
+        let value=json!({"stop":report.stop,"answer":report.answer,"model_steps":totals["model_steps"],"calls":totals["calls"],"model_attempts":totals["model_attempts"],"children":children,"child_count":totals["children"],"snapshot":vision_metadata,"context":report.context,"unresolved_ticket":report.unresolved_ticket,"uncertain_call":report.uncertain_call});
         if let Ok(mut jobs)=agent_jobs().lock(){if let Some(job)=jobs.get_mut(&run_id){job.result=Some(value);}}
     });
     Ok(respond(202,json!({"run_id":run_id,"state":"running"})))
