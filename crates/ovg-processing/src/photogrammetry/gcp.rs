@@ -49,6 +49,49 @@ pub(crate) fn reprojection(o:&Observation,p:[f64;3])->Option<[f64;2]>{
  let e=[c.fx*x/z+c.cx-o.pixel[0],c.fy*y/z+c.cy-o.pixel[1]];
  e.iter().all(|v|v.is_finite()).then_some(e)
 }
+/// Fixed-camera weighted nonlinear reprojection refinement. Damped normal
+/// equations, bounded iterations and monotone decrease of weighted residuals.
+fn refine(obs:&[Observation],ids:&[usize],mut point:[f64;3])->Option<[f64;3]>{
+ let min_sigma=ids.iter().map(|&i|obs[i].sigma_px).fold(f64::INFINITY,f64::min);
+ let cost=|p:[f64;3]|->Option<f64>{
+ let mut total=0.;
+ for &i in ids{let e=reprojection(&obs[i],p)?;let w=min_sigma/obs[i].sigma_px;
+ total+=(w*e[0]).powi(2)+(w*e[1]).powi(2);}
+ total.is_finite().then_some(total)
+ };
+ let mut old=cost(point)?;let mut damping=1e-3;
+ for _ in 0..24{
+ if old<=1e-24{return Some(point);}
+ let mut h=[[0.;3];3];let mut g=[0.;3];
+ for &i in ids{
+ let o=&obs[i];let c=o.camera;let [x,y,z]=c.world_to_camera.map(|r|dot(r,sub(point,c.center)));
+ if z<=1e-9||!z.is_finite(){return None;}
+ let e=reprojection(o,point)?;
+ let w=(min_sigma/o.sigma_px).powi(2);
+ let j:[[f64;3];2]=std::array::from_fn(|k|std::array::from_fn(|a|{
+ let (f,v)=if k==0{(c.fx,x)}else{(c.fy,y)};
+ (f/z)*(c.world_to_camera[k][a]-(v/z)*c.world_to_camera[2][a])
+ }));
+ for k in 0..2{for a in 0..3{
+ g[a]+=w*j[k][a]*e[k];for b in 0..3{h[a][b]+=w*j[k][a]*j[k][b];}
+ }}
+ }
+ let scale=(0..3).map(|i|h[i][i]).fold(0.,f64::max);
+ if !scale.is_finite()||scale<=0.{return None;}
+ for i in 0..3{h[i][i]+=damping*h[i][i].max(scale*1e-9);}
+ let delta=solve3(h,g.map(|v|-v))?;
+ let candidate=std::array::from_fn(|i|point[i]+delta[i]);
+ if let Some(next)=cost(candidate){
+ if next<old{
+ let gain=old-next;point=candidate;old=next;damping=(damping*0.3).max(1e-12);
+ if gain<=1e-12*old.max(1.){return Some(point);}
+ continue;
+ }
+ }
+ damping*=10.;if damping>1e12{break;}
+ }
+ Some(point)
+}
 fn score(obs:&[Observation],p:[f64;3],limit:f64)->(Vec<usize>,f64){
  let mut ids=Vec::new();let mut cost=0.;
  for(i,o)in obs.iter().enumerate(){if let Some(e)=reprojection(o,p){
@@ -86,7 +129,8 @@ pub fn triangulate(obs:&[Observation],p:Policy)->Result<ResultPoint,Error>{
  let(mut ids,_)=best.ok_or(Error::NoConsensus)?;
  // Refit consensus and re-evaluate; fail rather than publish unstable membership.
  for _ in 0..8{
- let x=intersect(obs,&rays,&ids).ok_or(Error::Degenerate)?;
+ let initial=intersect(obs,&rays,&ids).ok_or(Error::Degenerate)?;
+ let x=refine(obs,&ids,initial).ok_or(Error::Degenerate)?;
  let(next,cost)=score(obs,x,p.max_error_px);
  if next.len()<p.min_views||!baseline(&rays,&next,cos){return Err(Error::NoConsensus);}
  if next==ids{return Ok(ResultPoint{xyz:x,inliers:ids.iter().map(|&i|obs[i].camera_id).collect(),
@@ -104,6 +148,12 @@ pub fn triangulate(obs:&[Observation],p:Policy)->Result<ResultPoint,Error>{
  let a=[o(1,-2.,20.),o(2,0.,0.),o(3,2.,-20.),o(4,3.,70.)];
  let r=triangulate(&a,policy()).unwrap();assert!(norm(sub(r.xyz,[0.,0.,10.]))<1e-8);
  assert_eq!(r.inliers,vec![1,2,3]);assert_eq!(r.rejected,vec![4]);assert!(r.rmse_px<1e-8);}
+ #[test]fn nonlinear_refinement_reduces_weighted_reprojection(){
+ let mut a=[o(1,-2.,20.),o(2,0.,0.),o(3,2.,-20.)];a[1].pixel[1]=0.2;
+ let ids=[0,1,2];let start=[0.1,0.2,9.5];let after=refine(&a,&ids,start).unwrap();
+ let cost=|p|a.iter().map(|o|{let e=reprojection(o,p).unwrap();e[0]*e[0]+e[1]*e[1]}).sum::<f64>();
+ assert!(cost(after)<cost(start));assert!(cost(after)<0.1);
+ }
  #[test]fn duplicate_and_parallel_rays_fail(){
  assert_eq!(triangulate(&[o(1,0.,0.),o(1,1.,0.),o(3,2.,0.)],policy()),Err(Error::Duplicate));
  assert_eq!(triangulate(&[o(1,0.,0.),o(2,1.,0.),o(3,2.,0.)],policy()),Err(Error::Degenerate));}

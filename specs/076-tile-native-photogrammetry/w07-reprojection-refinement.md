@@ -1,0 +1,2 @@
+# W07 fixed-camera nonlinear refinement
+GCP triangulation now refines each consensus point using bounded damped least-squares on pixel reprojection residuals with analytic Jacobians and observation uncertainty weights. Only decreasing objective steps accepted, positive depth required, consensus re-evaluated after refinement. This optimizes 3D points with fixed cameras, not joint sparse bundle adjustment, calibration, pose graph or covariance. Synthetic improvement test written, not executed. Production survey gate remains disabled.
