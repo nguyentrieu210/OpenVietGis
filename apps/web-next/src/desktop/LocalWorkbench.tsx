@@ -10,6 +10,9 @@ type Overlay={id:string;handle:string;name:string;style:LayerStyle};
 export default function LocalWorkbench({handle,overlays=[],initialView,onView,layerStyle}:{handle:string;overlays?:Overlay[];initialView?:ViewState;onView?:(v:ViewState)=>void;layerStyle?:LayerStyle}){
   const viewAtStart=useRef(initialView);const viewCallback=useRef(onView);viewCallback.current=onView;
   const styleRef=useRef(layerStyle);styleRef.current=layerStyle;
+  const [direct,setDirect]=useState<Awaited<ReturnType<typeof desktop.directOpen>>>(null),[directTable,setDirectTable]=useState("");
+  const directRef=useRef<{id:string;table:string}|null>(null);
+  const [report,setReport]=useState("");
   const [schemaText,setSchemaText]=useState("[]"),[schemaOpen,setSchemaOpen]=useState(false);
   const canvas=useRef<HTMLDivElement>(null);
   const map=useRef<maplibregl.Map|undefined>(undefined);
@@ -45,6 +48,13 @@ export default function LocalWorkbench({handle,overlays=[],initialView,onView,la
         const south=Math.max(-90,b.getSouth()),north=Math.min(90,b.getNorth());
         if(west>east||south>north||b.getWest() < -180||b.getEast()>180){
           dataSource()?.setData(empty());setNotice("Khung nhìn vượt phạm vi kinh độ hỗ trợ; hãy thu phóng vào vùng dữ liệu.");continue;
+        }
+        const d=directRef.current;
+        if(d){
+          const page=await desktop.directPage(handle,d.id,d.table,[west,south,east,north]);
+          if(!alive.current||id!==sequence.current||dirty.current)continue;
+          (m.getSource("direct") as GeoJSONSource|undefined)?.setData(page.data);
+          if(page.next)setNotice("Lớp chỉ đọc vượt giới hạn khung nhìn; hãy phóng to.");
         }
         const currentCad=cad.current;
         if(currentCad){
@@ -110,9 +120,9 @@ export default function LocalWorkbench({handle,overlays=[],initialView,onView,la
       map.current=m;m.addControl(new maplibregl.NavigationControl(),"top-right");
       m.on("load",()=>{
         if(!m)return;
-        m.addSource("local",{type:"geojson",data:empty()});m.addSource("draft",{type:"geojson",data:empty()});m.addSource("cad",{type:"geojson",data:empty()});
-        for(const src of ["local","cad","draft"]){
-          const color=src==="local"?(styleRef.current?.color??"#1976a3"):src==="cad"?"#7048ab":"#d77718";
+        m.addSource("local",{type:"geojson",data:empty()});m.addSource("draft",{type:"geojson",data:empty()});m.addSource("cad",{type:"geojson",data:empty()});m.addSource("direct",{type:"geojson",data:empty()});
+        for(const src of ["local","cad","direct","draft"]){
+          const color=src==="local"?(styleRef.current?.color??"#1976a3"):src==="cad"?"#7048ab":src==="direct"?"#247d55":"#d77718";
           m.addLayer({id:src+"-fill",source:src,type:"fill",filter:["==",["geometry-type"],"Polygon"],paint:{"fill-color":color,"fill-opacity":src==="local"?(styleRef.current?.opacity??.25):.25}});
           m.addLayer({id:src+"-line",source:src,type:"line",filter:["in",["geometry-type"],["literal",["LineString","Polygon"]]],paint:{"line-color":color,"line-width":2}});
           m.addLayer({id:src+"-point",source:src,type:"circle",filter:["==",["geometry-type"],"Point"],paint:{"circle-color":color,"circle-radius":5,"circle-stroke-color":"#fff","circle-stroke-width":1}});
@@ -204,6 +214,16 @@ export default function LocalWorkbench({handle,overlays=[],initialView,onView,la
     if(!window.confirm("Áp dụng schema mới? Tất cả dữ liệu hiện có phải hợp lệ; lịch sử Undo/Redo của lớp sẽ được đặt lại."))return;
     await desktop.setSchema(handle,f as AttributeField[],true);setSchemaOpen(false);await afterMutation();
   });
+  const openDirect=()=>run(async()=>{
+    const d=await desktop.directOpen(handle);if(!d)return;
+    setDirect(d);const table=d.layers.find(l=>l.epsg===4326&&l.z===0&&l.m===0)?.table??"";
+    setDirectTable(table);directRef.current=table?{id:d.id,table}:null;
+    (map.current?.getSource("direct") as GeoJSONSource|undefined)?.setData(empty());invalidate();
+  });
+  const closeDirect=()=>run(async()=>{
+    if(!direct)return;await desktop.directClose(handle,direct.id);directRef.current=null;setDirect(null);setDirectTable("");
+    (map.current?.getSource("direct") as GeoJSONSource|undefined)?.setData(empty());invalidate();
+  });
   const openAsset=(kind:"cad"|"las"|"laz"|"copc"|"glb")=>run(async()=>{
     if(asset)throw Error("Đóng tài nguyên hiện tại trước khi mở tài nguyên khác");
     const epsg=kind==="cad"?4326:kind==="glb"?null:Number(lasEpsg);
@@ -280,6 +300,9 @@ export default function LocalWorkbench({handle,overlays=[],initialView,onView,la
   });
   return <section className="ovg-local-workbench">
     <div className="ovg-local-tools" role="toolbar" aria-label="Công cụ GIS cục bộ">
+      <button disabled={busy||!ready||!!direct} onClick={()=>void openDirect()}>Mở GPKG chỉ đọc</button>
+      {direct&&<><select aria-label="Lớp chỉ đọc" value={directTable} onChange={e=>{const table=e.target.value;setDirectTable(table);directRef.current=table?{id:direct.id,table}:null;(map.current?.getSource("direct") as GeoJSONSource|undefined)?.setData(empty());invalidate()}}><option value="">Chọn lớp</option>{direct.layers.filter(l=>l.epsg===4326&&l.z===0&&l.m===0).map(l=><option key={l.table} value={l.table}>{l.table}</option>)}</select><button disabled={busy} onClick={()=>void closeDirect()}>Đóng lớp chỉ đọc</button></>}
+      <button disabled={busy} onClick={()=>void run(async()=>setReport(JSON.stringify(await desktop.integrity(handle),null,2)))}>Kiểm tra CSDL</button><button disabled={busy} onClick={()=>void run(async()=>setReport(JSON.stringify(await desktop.providers(),null,2)))}>Data Provider</button>
       <button disabled={busy||!ready} aria-pressed={tiles} onClick={()=>void run(()=>setVectorTiles(!tiles))}>MVT vector tile</button>
       <button disabled={busy} onClick={()=>void run(async()=>{const c=await desktop.inspectGPKG(handle);if(c){setCatalog(c);setTable(c.layers[0]?.table??"")}})}>Mở danh sách lớp GPKG</button>
       {catalog&&<><select aria-label="Lớp GeoPackage" value={table} onChange={e=>setTable(e.target.value)}>{catalog.layers.map(l=><option key={l.table} value={l.table}>{l.table} · EPSG:{l.epsg}</option>)}</select><button disabled={busy||!table} onClick={()=>void run(async()=>{await desktop.importLayer(handle,catalog.id,table);await afterMutation()})}>Nhập lớp vào dự án hiện tại</button></>}
@@ -297,6 +320,7 @@ export default function LocalWorkbench({handle,overlays=[],initialView,onView,la
       <button disabled={busy} onClick={()=>void run(async()=>{await desktop.history(handle,true);await afterMutation()})}>Redo</button>
     </div>
     {schemaOpen&&<div className="ovg-local-tools"><label>Định nghĩa trường (JSON)<textarea rows={4} value={schemaText} onChange={e=>setSchemaText(e.target.value)}/></label><button disabled={busy} onClick={()=>void saveSchema()}>Áp dụng schema</button></div>}
+    {report&&<section className="ovg-local-table"><button onClick={()=>setReport("")}>Đóng báo cáo</button><pre>{report}</pre></section>}
     <div ref={canvas} className="ovg-local-map" aria-label="Bản đồ dữ liệu cục bộ"/>
     {asset&&["las","laz","copc"].includes(asset.kind)&&<div className="ovg-local-tools"><button disabled={busy||pointPage===0} onClick={()=>void readPointPage(pointPage-1)}>Khối điểm trước</button><button disabled={busy||(pointPage+1)*2048>=asset.count} onClick={()=>void readPointPage(pointPage+1)}>Khối điểm tiếp</button>{asset.kind==="copc"&&<><input aria-label="COPC bbox XYZ min max" value={copcBounds} onChange={e=>setCopcBounds(e.target.value)}/><input aria-label="LOD" value={copcLevel} onChange={e=>setCopcLevel(e.target.value)}/><button disabled={busy} onClick={()=>void queryCopc()}>Truy vấn COPC LOD</button></>}</div>}
     <div role="status" className="ovg-local-status">{notice}{assetPreview&&" · "+assetPreview}{raster&&" · Nguồn: "+raster.attribution}{kind&&" · Nhấp bản đồ để vẽ: "+count+" đỉnh"}</div>
