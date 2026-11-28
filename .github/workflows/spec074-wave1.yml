@@ -1,0 +1,45 @@
+name: SPEC 074 Wave 1 desktop candidate
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'apps/desktop/**'
+      - 'apps/web-next/src/desktop/**'
+      - 'apps/web-next/src/main.tsx'
+      - '.github/workflows/spec074-wave1.yml'
+permissions:
+  contents: read
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-14, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.21.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+      - uses: dtolnay/rust-toolchain@stable
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @openvietgis/web-next build
+      - run: pnpm --filter @openvietgis/web-next build
+        env:
+          VITE_OVG_DESKTOP: '1'
+      - run: cargo generate-lockfile --manifest-path apps/desktop/src-tauri/Cargo.toml
+      - run: cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
+      - run: cargo build --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-candidate-${{ matrix.os }}
+          path: |
+            apps/desktop/src-tauri/Cargo.lock
+            apps/desktop/src-tauri/target/debug/openvietgis-desktop
+            apps/desktop/src-tauri/target/debug/openvietgis-desktop.exe
