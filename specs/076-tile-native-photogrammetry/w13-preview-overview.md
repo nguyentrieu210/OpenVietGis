@@ -1,0 +1,2 @@
+# W13 local map overview candidate
+Reads canonical immutable GeoTIFF shards sequentially, verifies SHA256 and canonical header/affine, creates bounded RGBA overview up to 1024x1024, transforms four WGS84 UTM corners to lon/lat using inverse series. Restricted to 20km local extents and standard zone coordinates. Four-corner placement is approximate (not a true Web Mercator warp), overview is not native-resolution streaming, and sampled coverage check is not a complete topology check for arbitrary manifests. Tests authored, not executed.
