@@ -125,14 +125,16 @@
     {
       "id": "DOCK-03",
       "task": "T021",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/CatalogManager.tsx",
         "apps/web-next/src/DsmPanes.tsx",
         "apps/web-next/src/QgisWorkspace.tsx",
-        "apps/web-next/dsm-sources.test.mjs"
+        "apps/web-next/dsm-sources.test.mjs",
+        "apps/web-next/src/source-browser.ts",
+        "apps/web-next/src/source-browser.test.ts"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Server source browser has metadata, scoped pagination, duplicate active/retired source checks and bounded scan. New tests written but not executed; source-to-map drag/drop, provider errors and authenticated browser/QGIS acceptance remain."
     },
     {
       "id": "DOCK-04",
@@ -170,24 +172,29 @@
     {
       "id": "DOCK-07",
       "task": "T025",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/LayerProperties.tsx",
         "apps/web-next/src/QgisWorkspace.tsx",
-        "apps/web-next/graduated.test.mjs"
+        "apps/web-next/graduated.test.mjs",
+        "apps/web-next/src/layer-visibility.ts",
+        "apps/web-next/src/layer-visibility.test.ts"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Existing tree implements categorized legend, text/view filter, scale range and visibility policy; style parity, category counts across entire source and authenticated browser/QGIS acceptance remain."
     },
     {
       "id": "DOCK-08",
       "task": "T026",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/QgisWorkspace.tsx",
         "apps/web-next/src/LayerProperties.tsx",
-        "apps/web-next/workspace-preferences.test.mjs"
+        "apps/web-next/workspace-preferences.test.mjs",
+        "apps/web-next/src/map-themes.ts",
+        "apps/web-next/src/map-themes.test.ts",
+        "apps/web-next/src/layer-visibility.ts"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Personal map theme save/apply/delete and exclusive groups implemented; snapshot now rejects duplicates and oversized membership, delayed prompt saves guard project scope and recheck names. New tests not executed; paired QGIS/browser and shared-theme policy remain."
     },
     {
       "id": "DOCK-09",
@@ -351,14 +358,16 @@
     {
       "id": "TABLE-03",
       "task": "T044",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/ProfessionalTools.tsx",
         "apps/web-next/src/AttributeServerQuery.tsx",
         "apps/api-rust/src/queries.rs",
-        "apps/web-next/src/table-query.test.ts"
+        "apps/web-next/src/table-query.test.ts",
+        "apps/web-next/src/query-selection.ts",
+        "apps/web-next/src/query-selection.test.ts"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Existing source-wide attribute selection implements pinned paging and replace/add/remove/intersect/invert with a 5000-FID bound. Spatial/location selection parity and authenticated browser/QGIS acceptance remain."
     },
     {
       "id": "TABLE-04",
