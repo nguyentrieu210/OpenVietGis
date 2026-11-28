@@ -19,7 +19,7 @@ pub struct Opened { pub id: Uuid, pub handle: Uuid }
 #[derive(Serialize)]
 #[serde(tag="status", rename_all="snake_case")]
 pub enum Poll { Pending, Complete { xy: Vec<f64> } }
-struct Open { engine: Workspace, _store: LocalStore, project: Uuid, generation: u64, cache: ovg_mobile_engine::viewport::Cache, raster: Option<(Uuid,ovg_local_storage::mbtiles::Archive)>, assets: HashMap<Uuid,Asset> }
+struct Open { engine: Workspace, _store: LocalStore, project: Uuid, generation: u64, cache: ovg_mobile_engine::viewport::Cache, raster: Option<(Uuid,ovg_local_storage::mbtiles::Archive)>, assets: HashMap<Uuid,Asset>, catalog:Option<(Uuid,crate::gpkg_import::Catalog)> }
 struct TrackedJob { handle: Uuid, job: Job }
 struct State { session: Session, open: HashMap<Uuid,Open>, jobs: HashMap<Uuid,TrackedJob> }
 #[derive(Clone)]
@@ -116,6 +116,19 @@ impl Host {
               "tiles":[format!("ovg://v1/workspaces/{handle}/layers/{id}/revisions/{revision}/tiles/{{z}}/{{x}}/{{y}}.mvt")],
               "vector_layers":[{"id":"local","fields":{"stable_id":"String"},"minzoom":0,"maxzoom":22}]})).map_err(|_|"INVALID_LOCAL_DATA")
         })
+    }
+    pub fn inspect_gpkg(&self,handle:Uuid,path:&Path)->Result<Value>{
+        let catalog=crate::gpkg_import::Catalog::open(path)?;
+        let mut s=self.lock()?;let w=s.open.get_mut(&handle).ok_or("STALE_HANDLE")?;
+        let id=Uuid::new_v4();let value=json!({"id":id,"layers":catalog.layers});
+        w.catalog=Some((id,catalog));Ok(value)
+    }
+    pub fn import_layer(&self,handle:Uuid,grant:Uuid,table:&str)->Result<u32>{
+        let mut s=self.lock()?;let w=s.open.get_mut(&handle).ok_or("STALE_HANDLE")?;
+        let (_,c)=w.catalog.as_ref().filter(|(id,_)|*id==grant).ok_or("STALE_HANDLE")?;
+        let next=w.generation.checked_add(1).ok_or("RESOURCE_LIMIT")?;
+        let n=c.import(&w._store,table)?;
+        w.generation=next;w.cache.invalidate_layer(&handle.to_string(),&handle.to_string());Ok(n)
     }
     pub fn import_gpkg(&self,handle:Uuid,path:&Path)->Result<u32>{
         self.mutate(handle,|s|crate::gpkg_import::import(s,path))
@@ -327,7 +340,7 @@ impl Host {
         let store=LocalStore::open(&path,QUOTA).map_err(|_|"STORAGE_UNAVAILABLE")?;
         let workspace=self.engine.open_workspace(s.session).map_err(err)?;
         let handle=Uuid::new_v4();
-        s.open.insert(handle,Open{engine:workspace,_store:store,project:id,generation:0,cache:ovg_mobile_engine::viewport::Cache::new(16*1024*1024).map_err(err)?,raster:None,assets:HashMap::new()});
+        s.open.insert(handle,Open{engine:workspace,_store:store,project:id,generation:0,cache:ovg_mobile_engine::viewport::Cache::new(16*1024*1024).map_err(err)?,raster:None,assets:HashMap::new(),catalog:None});
         Ok(Opened{id,handle})
     }
     pub fn close(&self,handle:Uuid)->Result<()> {
