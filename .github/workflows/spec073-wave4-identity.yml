@@ -10,9 +10,27 @@ jobs:
   identity:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: fixture-admin
+          POSTGRES_DB: ovg_mobile_fixture
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
       - run: cargo test --locked -p ovg-storage mobile_identity::tests
       - run: cargo test --locked -p openvietgis-api-rust --test spec073_mobile_contract_baseline
+      - name: Isolated identity repository integration
+        env:
+          PGPASSWORD: fixture-admin
+          OVG_MOBILE_IDENTITY_TEST_DATABASE_URL: postgresql://openvietgis_runtime:fixture-runtime@127.0.0.1:5432/ovg_mobile_fixture
+        run: |
+          set -euxo pipefail
+          psql -h 127.0.0.1 -U postgres -d ovg_mobile_fixture -v ON_ERROR_STOP=1 -f tests/mobile/connected/identity-fixture.sql
+          psql -h 127.0.0.1 -U postgres -d ovg_mobile_fixture -v ON_ERROR_STOP=1 -f specs/073-native-mobile-platform/contracts/mobile-identity-candidate.sql
+          psql -h 127.0.0.1 -U postgres -d ovg_mobile_fixture -v ON_ERROR_STOP=1 -c 'GRANT USAGE ON SCHEMA identity TO openvietgis_runtime; GRANT SELECT ON identity.users,identity.identity_links,identity.web_sessions TO openvietgis_runtime; GRANT SELECT,INSERT,UPDATE ON identity.mobile_grants,identity.mobile_sessions,identity.mobile_refresh TO openvietgis_runtime;'
+          cargo test --locked -p ovg-storage --test mobile_identity_postgres
