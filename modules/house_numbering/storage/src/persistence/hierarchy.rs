@@ -361,9 +361,9 @@ pub(crate) async fn validate_route_segments(
     let usable: Option<bool> = sqlx::query_scalar(
         "SELECT house_numbering.resolve_route_line(array_agg(f.geometry ORDER BY l.ord)) IS NOT NULL
          FROM jsonb_array_elements($3::jsonb) WITH ORDINALITY l(v,ord)
-         LEFT JOIN spatial.reference_features f ON f.organization_id=$1 AND f.project_id=$2
+         LEFT JOIN extensions.spatial_features_v1 f ON f.organization_id=$1 AND f.project_id=$2
            AND f.source_id=(l.v->>'source_id')::uuid AND f.feature_id=l.v->>'feature_id'
-         LEFT JOIN spatial.data_sources s ON s.organization_id=$1 AND s.project_id=$2 AND s.id=f.source_id
+         LEFT JOIN extensions.spatial_sources_v1 s ON s.organization_id=$1 AND s.project_id=$2 AND s.id=f.source_id
          HAVING bool_and(COALESCE(f.geometry_state='present' AND s.lifecycle='active' AND s.validation_state='ready',false))",
     )
     .bind(edit.organization_id())

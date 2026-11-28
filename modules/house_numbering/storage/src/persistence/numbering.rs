@@ -92,10 +92,10 @@ pub async fn route_snapshot(
                 'geometry_state',f.geometry_state,'lifecycle',s.lifecycle,
                 'validation_state',s.validation_state)
          FROM house_numbering.buildings b
-         LEFT JOIN spatial.reference_features f
+         LEFT JOIN extensions.spatial_features_v1 f
            ON (f.organization_id,f.project_id,f.source_id,f.feature_id)
             =(b.organization_id,b.project_id,b.linked_source_id,b.linked_feature_id)
-         LEFT JOIN spatial.data_sources s
+         LEFT JOIN extensions.spatial_sources_v1 s
            ON (s.organization_id,s.project_id,s.id)=(f.organization_id,f.project_id,f.source_id)
          WHERE b.organization_id=$1 AND b.project_id=$2 AND b.route_id=$3 AND b.state='active'
          ORDER BY b.id",
@@ -239,10 +239,10 @@ pub async fn building_points(
                 ST_X(ST_Transform(ST_PointOnSurface(f.geometry),$4)) AS x,
                 ST_Y(ST_Transform(ST_PointOnSurface(f.geometry),$4)) AS y
          FROM house_numbering.buildings b
-         JOIN spatial.reference_features f
+         JOIN extensions.spatial_features_v1 f
            ON f.organization_id=b.organization_id AND f.project_id=b.project_id
           AND f.source_id=b.linked_source_id AND f.feature_id=b.linked_feature_id
-         JOIN spatial.data_sources s ON (s.organization_id,s.project_id,s.id)=(f.organization_id,f.project_id,f.source_id)
+         JOIN extensions.spatial_sources_v1 s ON (s.organization_id,s.project_id,s.id)=(f.organization_id,f.project_id,f.source_id)
          LEFT JOIN LATERAL (
              SELECT * FROM house_numbering.address_numbers n
              WHERE n.organization_id=b.organization_id AND n.project_id=b.project_id
@@ -761,7 +761,7 @@ pub async fn inspection_context(
                 'linked_source_id',b.linked_source_id,'linked_feature_id',b.linked_feature_id,
                 'core_feature_attributes',f.attributes) AS wire
          FROM house_numbering.buildings b
-         LEFT JOIN spatial.reference_features f
+         LEFT JOIN extensions.spatial_features_v1 f
            ON f.organization_id=b.organization_id AND f.project_id=b.project_id
           AND f.source_id=b.linked_source_id AND f.feature_id=b.linked_feature_id
          WHERE b.organization_id=$1 AND b.project_id=$2 AND b.id=$3 AND b.route_id=$4",

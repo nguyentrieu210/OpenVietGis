@@ -48,7 +48,7 @@ pub async fn route_import_features(
         "SELECT jsonb_build_object('feature_id',f.feature_id,'attributes',f.attributes,
                   'content_revision',f.content_revision,'geometry_state',f.geometry_state,
                   'geometry_type',ST_GeometryType(f.geometry),'srid',ST_SRID(f.geometry)) AS wire
-         FROM spatial.data_sources s JOIN spatial.reference_features f
+         FROM extensions.spatial_sources_v1 s JOIN extensions.spatial_features_v1 f
            ON f.organization_id=s.organization_id AND f.project_id=s.project_id AND f.source_id=s.id
          WHERE s.organization_id=$1 AND s.project_id=$2 AND s.id=$3
            AND s.lifecycle='active' AND s.validation_state='ready'
@@ -74,9 +74,9 @@ pub async fn merge_connected(
          merged AS (
            SELECT s.id,house_numbering.resolve_route_line(array_agg(f.geometry ORDER BY l.ord)) g
            FROM specs s CROSS JOIN LATERAL jsonb_array_elements(s.links) WITH ORDINALITY l(v,ord)
-           LEFT JOIN spatial.reference_features f ON f.organization_id=$1 AND f.project_id=$2
+           LEFT JOIN extensions.spatial_features_v1 f ON f.organization_id=$1 AND f.project_id=$2
               AND f.source_id=(l.v->>'source_id')::uuid AND f.feature_id=l.v->>'feature_id'
-           LEFT JOIN spatial.data_sources ds ON ds.organization_id=f.organization_id AND ds.project_id=f.project_id AND ds.id=f.source_id
+           LEFT JOIN extensions.spatial_sources_v1 ds ON ds.organization_id=f.organization_id AND ds.project_id=f.project_id AND ds.id=f.source_id
            GROUP BY s.id HAVING bool_and(COALESCE(f.geometry_state='present' AND ds.lifecycle='active' AND ds.validation_state='ready',false))
          ) SELECT id FROM merged WHERE g IS NOT NULL",
     )
@@ -97,7 +97,7 @@ pub async fn parent_feature(
     let row = sqlx::query(
         "SELECT jsonb_build_object('content_revision',f.content_revision,'geometry_state',f.geometry_state,
                   'geometry_type',ST_GeometryType(f.geometry),'srid',ST_SRID(f.geometry)) AS wire
-         FROM spatial.reference_features f JOIN spatial.data_sources ds
+         FROM extensions.spatial_features_v1 f JOIN extensions.spatial_sources_v1 ds
            ON (ds.organization_id,ds.project_id,ds.id)=(f.organization_id,f.project_id,f.source_id)
          WHERE f.organization_id=$1 AND f.project_id=$2 AND f.source_id=$3 AND f.feature_id=$4
            AND ds.lifecycle='active' AND ds.validation_state='ready'",
@@ -142,9 +142,9 @@ pub async fn parent_distances(
            SELECT s.key,house_numbering.resolve_route_line(array_agg(f.geometry ORDER BY l.ord)) geom,
                   string_agg(f.content_revision,'|' ORDER BY l.ord) AS revision
            FROM specs s CROSS JOIN LATERAL jsonb_array_elements(s.links) WITH ORDINALITY l(v,ord)
-           LEFT JOIN spatial.reference_features f ON f.organization_id=$1 AND f.project_id=$2
+           LEFT JOIN extensions.spatial_features_v1 f ON f.organization_id=$1 AND f.project_id=$2
              AND f.source_id=(l.v->>'source_id')::uuid AND f.feature_id=l.v->>'feature_id'
-           LEFT JOIN spatial.data_sources ds ON ds.organization_id=f.organization_id AND ds.project_id=f.project_id AND ds.id=f.source_id
+           LEFT JOIN extensions.spatial_sources_v1 ds ON ds.organization_id=f.organization_id AND ds.project_id=f.project_id AND ds.id=f.source_id
            GROUP BY s.key HAVING bool_and(COALESCE(f.geometry_state='present' AND ds.lifecycle='active' AND ds.validation_state='ready',false))
          ), lines AS MATERIALIZED (
            SELECT key,ST_Transform(geom,4326)::geography g,revision FROM planned_lines WHERE geom IS NOT NULL
@@ -193,7 +193,7 @@ pub async fn survey_observations(
                   f.attributes->>'hem' alley, b.route_id IS NULL unassigned, count(*) amount,
                   (array_agg(b.linked_source_id::text ORDER BY b.id))[1:20] example_sources,
                   (array_agg(b.linked_feature_id ORDER BY b.id))[1:20] example_features
-           FROM house_numbering.buildings b JOIN spatial.reference_features f
+           FROM house_numbering.buildings b JOIN extensions.spatial_features_v1 f
              ON (f.organization_id,f.project_id,f.source_id,f.feature_id)=(b.organization_id,b.project_id,b.linked_source_id,b.linked_feature_id)
            WHERE b.organization_id=$1 AND b.project_id=$2 AND b.state='active'
              AND f.attributes->>'tuyen_id'=ANY($3)
@@ -279,9 +279,9 @@ const REPORT_CTE: &str = "
   WITH links AS (SELECT * FROM jsonb_to_recordset(CAST($3 AS jsonb)) AS x(source_id uuid,feature_id text,revision text)),
   line AS (
    SELECT house_numbering.resolve_route_line(array_agg(f.geometry ORDER BY x.source_id,x.feature_id)) AS g
-   FROM links x JOIN spatial.reference_features f ON f.organization_id=$1 AND f.project_id=$2
+   FROM links x JOIN extensions.spatial_features_v1 f ON f.organization_id=$1 AND f.project_id=$2
       AND f.source_id=x.source_id AND f.feature_id=x.feature_id AND f.content_revision=x.revision
-   JOIN spatial.data_sources ds ON (ds.organization_id,ds.project_id,ds.id)=(f.organization_id,f.project_id,f.source_id)
+   JOIN extensions.spatial_sources_v1 ds ON (ds.organization_id,ds.project_id,ds.id)=(f.organization_id,f.project_id,f.source_id)
    WHERE f.geometry_state='present' AND ds.lifecycle='active' AND ds.validation_state='ready'
    HAVING count(*)=(SELECT count(*) FROM links)
   ), valid AS (
@@ -329,8 +329,8 @@ pub async fn report_rows(
         CASE WHEN f.geometry_state='present' AND ST_SRID(f.geometry)>0 AND NOT ST_IsEmpty(f.geometry)
           AND ST_GeometryType(f.geometry) IN ('ST_Point','ST_Polygon') AND ds.lifecycle='active' AND ds.validation_state='ready'
           THEN ST_Distance(ST_Transform(ST_PointOnSurface(f.geometry),4326)::geography,valid.g) END distance
-      FROM house_numbering.buildings b JOIN spatial.reference_features f ON (f.organization_id,f.project_id,f.source_id,f.feature_id)=(b.organization_id,b.project_id,b.linked_source_id,b.linked_feature_id)
-      JOIN spatial.data_sources ds ON (ds.organization_id,ds.project_id,ds.id)=(f.organization_id,f.project_id,f.source_id)
+      FROM house_numbering.buildings b JOIN extensions.spatial_features_v1 f ON (f.organization_id,f.project_id,f.source_id,f.feature_id)=(b.organization_id,b.project_id,b.linked_source_id,b.linked_feature_id)
+      JOIN extensions.spatial_sources_v1 ds ON (ds.organization_id,ds.project_id,ds.id)=(f.organization_id,f.project_id,f.source_id)
       CROSS JOIN valid
       LEFT JOIN house_numbering.geometry_address_reviews a ON (a.organization_id,a.project_id,a.building_id,a.geometry_review_id)=(b.organization_id,b.project_id,b.id,$7)
       WHERE b.organization_id=$1 AND b.project_id=$2 AND b.state='active' AND f.attributes->>'tuyen_id'=ANY($8)
@@ -510,9 +510,9 @@ pub async fn suggestion_distances(
     let rows = sqlx::query(
         "WITH buildings AS MATERIALIZED (
            SELECT b.id,ST_Transform(ST_PointOnSurface(f.geometry),4326)::geography g
-           FROM house_numbering.buildings b JOIN spatial.reference_features f
+           FROM house_numbering.buildings b JOIN extensions.spatial_features_v1 f
              ON (f.organization_id,f.project_id,f.source_id,f.feature_id)=(b.organization_id,b.project_id,b.linked_source_id,b.linked_feature_id)
-           JOIN spatial.data_sources ds ON (ds.organization_id,ds.project_id,ds.id)=(f.organization_id,f.project_id,f.source_id)
+           JOIN extensions.spatial_sources_v1 ds ON (ds.organization_id,ds.project_id,ds.id)=(f.organization_id,f.project_id,f.source_id)
            WHERE b.organization_id=$1 AND b.project_id=$2 AND b.id=ANY($3)
              AND f.geometry_state='present' AND ST_SRID(f.geometry)>0 AND NOT ST_IsEmpty(f.geometry)
              AND ST_GeometryType(f.geometry) IN ('ST_Point','ST_Polygon') AND ds.lifecycle='active' AND ds.validation_state='ready'
@@ -583,26 +583,27 @@ pub async fn lock_review_buildings(
     ids: &[Uuid],
     with_sources: bool,
 ) -> Result<usize, AppError> {
-    let sql = if with_sources {
-        "SELECT b.id FROM house_numbering.buildings b JOIN spatial.reference_features f
-           ON (b.organization_id,b.project_id,b.linked_source_id,b.linked_feature_id)=(f.organization_id,f.project_id,f.source_id,f.feature_id)
-         JOIN spatial.data_sources ds ON (ds.organization_id,ds.project_id,ds.id)=(f.organization_id,f.project_id,f.source_id)
+    // Lock domain rows first, then use the Core port for the linked features.
+    // A missing link still fails the caller's original all-items count check.
+    let rows = sqlx::query(
+        "SELECT b.linked_source_id,b.linked_feature_id FROM house_numbering.buildings b
          WHERE b.organization_id=$1 AND b.project_id=$2 AND b.id=ANY($3)
-         ORDER BY b.id FOR UPDATE OF b FOR SHARE OF f,ds"
-    } else {
-        "SELECT b.id FROM house_numbering.buildings b JOIN spatial.reference_features f
-           ON (f.organization_id,f.project_id,f.source_id,f.feature_id)=(b.organization_id,b.project_id,b.linked_source_id,b.linked_feature_id)
-         WHERE b.organization_id=$1 AND b.project_id=$2 AND b.id=ANY($3)
-         ORDER BY b.id FOR UPDATE OF b FOR SHARE OF f"
-    };
-    let rows = sqlx::query(sql)
-        .bind(edit.organization_id())
-        .bind(edit.project_id())
-        .bind(ids)
-        .fetch_all(&mut **edit.transaction())
-        .await
-        .map_err(db_error)?;
-    Ok(rows.len())
+         ORDER BY b.id FOR UPDATE OF b",
+    )
+    .bind(edit.organization_id()).bind(edit.project_id()).bind(ids)
+    .fetch_all(&mut **edit.transaction()).await.map_err(db_error)?;
+    let mut links = Vec::with_capacity(rows.len());
+    for row in &rows {
+        let source_id: Option<Uuid> = row.try_get("linked_source_id").map_err(db_error)?;
+        let feature_id: Option<String> = row.try_get("linked_feature_id").map_err(db_error)?;
+        if let (Some(source_id),Some(feature_id)) = (source_id,feature_id) {
+            links.push(ovg_storage::module_ports::SpatialFeatureRef {source_id,feature_id});
+        }
+    }
+    let locked = ovg_storage::module_ports::lock_linked_features(edit,&links,with_sources).await?;
+    // Multiple domain rows may reference the same feature; preserve row-count semantics.
+    let count = links.iter().filter(|link|locked.contains(*link)).count();
+    Ok(count)
 }
 
 /// The exact route promoted from a staged snapshot (only when unique).
@@ -708,18 +709,9 @@ pub async fn lock_link_features(
     edit: &mut ProjectRead<'_>,
     links: Vec<Value>,
 ) -> Result<(), AppError> {
-    sqlx::query(
-        "SELECT f.source_id,f.feature_id FROM jsonb_to_recordset(CAST($3 AS jsonb)) AS x(source_id uuid,feature_id text)
-         JOIN spatial.reference_features f ON f.organization_id=$1 AND f.project_id=$2 AND f.source_id=x.source_id AND f.feature_id=x.feature_id
-         JOIN spatial.data_sources ds ON (ds.organization_id,ds.project_id,ds.id)=(f.organization_id,f.project_id,f.source_id)
-         ORDER BY f.source_id,f.feature_id FOR SHARE OF f,ds",
-    )
-    .bind(edit.organization_id())
-    .bind(edit.project_id())
-    .bind(Value::Array(links))
-    .fetch_all(&mut **edit.transaction())
-    .await
-    .map_err(db_error)?;
+    let links: Vec<ovg_storage::module_ports::SpatialFeatureRef> =
+        serde_json::from_value(Value::Array(links)).map_err(|_|AppError::validation("INVALID_FEATURE_REF","invalid linked feature reference"))?;
+    ovg_storage::module_ports::lock_linked_features(edit,&links,true).await?;
     Ok(())
 }
 

@@ -51,7 +51,7 @@ pub async fn assignment_routes(read: &mut ProjectRead<'_>) -> Result<Vec<Value>,
                   'planned_name', f.attributes->>'ten_quy_hoach') AS wire
          FROM house_numbering.routes r JOIN house_numbering.route_lines l
            ON (l.organization_id,l.project_id,l.route_id)=(r.organization_id,r.project_id,r.id)
-         LEFT JOIN spatial.reference_features f
+         LEFT JOIN extensions.spatial_features_v1 f
            ON (f.organization_id,f.project_id,f.source_id,f.feature_id)=(r.organization_id,r.project_id,r.linked_source_id,r.linked_feature_id)
          WHERE r.organization_id=$1 AND r.project_id=$2 ORDER BY r.id",
     )
@@ -69,7 +69,7 @@ pub async fn pending_route_features(read: &mut ProjectRead<'_>) -> Result<Vec<Va
         "SELECT jsonb_build_object('source_id',f.source_id,'feature_id',f.feature_id,
                   'code',f.attributes->>'route_code','reason',f.attributes->>'review_reason',
                   'parent_code',f.attributes->>'parent_code','name',f.attributes->>'ten') AS wire
-         FROM spatial.reference_features f JOIN spatial.data_sources s
+         FROM extensions.spatial_features_v1 f JOIN extensions.spatial_sources_v1 s
            ON (s.organization_id,s.project_id,s.id)=(f.organization_id,f.project_id,f.source_id)
          WHERE f.organization_id=$1 AND f.project_id=$2 AND s.lifecycle='active'
            AND s.validation_state='ready' AND s.geometry_family='LineString'
@@ -102,8 +102,8 @@ pub async fn audit_buildings(
            'locked',EXISTS(SELECT 1 FROM house_numbering.address_numbers n WHERE n.organization_id=b.organization_id AND n.project_id=b.project_id
              AND n.building_id=b.id AND n.retired_at IS NULL AND n.kind IN ('submitted','approved','reserved','proposed'))) AS wire
          FROM house_numbering.buildings b
-         LEFT JOIN spatial.reference_features f ON (f.organization_id,f.project_id,f.source_id,f.feature_id)=(b.organization_id,b.project_id,b.linked_source_id,b.linked_feature_id)
-         LEFT JOIN spatial.data_sources s ON (s.organization_id,s.project_id,s.id)=(f.organization_id,f.project_id,f.source_id)
+         LEFT JOIN extensions.spatial_features_v1 f ON (f.organization_id,f.project_id,f.source_id,f.feature_id)=(b.organization_id,b.project_id,b.linked_source_id,b.linked_feature_id)
+         LEFT JOIN extensions.spatial_sources_v1 s ON (s.organization_id,s.project_id,s.id)=(f.organization_id,f.project_id,f.source_id)
          WHERE b.organization_id=$1 AND b.project_id=$2 AND b.state='active' AND b.route_id IS NULL
            AND (CAST($6 AS uuid) IS NULL OR b.linked_source_id=$6)
          ORDER BY b.id",
@@ -134,7 +134,7 @@ pub async fn pair_distances(
                             ST_Transform(r.geometry,4326)::geography) AS distance
          FROM pairs p JOIN house_numbering.buildings b ON b.id=p.building_id
           AND b.organization_id=$1 AND b.project_id=$2 AND b.route_id IS NULL
-         JOIN spatial.reference_features f ON (f.organization_id,f.project_id,f.source_id,f.feature_id)=(b.organization_id,b.project_id,b.linked_source_id,b.linked_feature_id)
+         JOIN extensions.spatial_features_v1 f ON (f.organization_id,f.project_id,f.source_id,f.feature_id)=(b.organization_id,b.project_id,b.linked_source_id,b.linked_feature_id)
          JOIN house_numbering.route_lines r ON r.route_id=p.route_id AND r.organization_id=$1 AND r.project_id=$2",
     )
     .bind(read.organization_id())
@@ -173,9 +173,9 @@ pub async fn preview_buildings(
                     AND s.lifecycle='active' AND s.validation_state='ready',false),
                   'locked',EXISTS(SELECT 1 FROM house_numbering.address_numbers n WHERE n.organization_id=b.organization_id AND n.project_id=b.project_id
                     AND n.building_id=b.id AND n.retired_at IS NULL AND n.kind IN ('submitted','approved','reserved'))) AS wire
-         FROM house_numbering.buildings b LEFT JOIN spatial.reference_features f
+         FROM house_numbering.buildings b LEFT JOIN extensions.spatial_features_v1 f
            ON (f.organization_id,f.project_id,f.source_id,f.feature_id)=(b.organization_id,b.project_id,b.linked_source_id,b.linked_feature_id)
-         LEFT JOIN spatial.data_sources s ON (s.organization_id,s.project_id,s.id)=(f.organization_id,f.project_id,f.source_id)
+         LEFT JOIN extensions.spatial_sources_v1 s ON (s.organization_id,s.project_id,s.id)=(f.organization_id,f.project_id,f.source_id)
          WHERE b.organization_id=$1 AND b.project_id=$2 AND b.state='active' AND b.route_id IS NULL
            AND (CAST($3 AS uuid) IS NULL OR b.linked_source_id=$3)
            AND (CAST($4 AS uuid) IS NULL OR b.id>$4)
@@ -210,7 +210,7 @@ pub async fn preview_distances(
     let rows = sqlx::query(
         "WITH buildings AS MATERIALIZED (
            SELECT b.id,ST_Transform(ST_PointOnSurface(f.geometry),4326)::geography g
-           FROM house_numbering.buildings b JOIN spatial.reference_features f
+           FROM house_numbering.buildings b JOIN extensions.spatial_features_v1 f
              ON (f.organization_id,f.project_id,f.source_id,f.feature_id)=(b.organization_id,b.project_id,b.linked_source_id,b.linked_feature_id)
            WHERE b.organization_id=$1 AND b.project_id=$2 AND b.id=ANY(CAST($3 AS uuid[]))
          ), routes AS MATERIALIZED (
@@ -268,8 +268,8 @@ pub async fn correction_buildings(
                  WHERE n.organization_id=b.organization_id AND n.project_id=b.project_id AND n.building_id=b.id
                    AND n.retired_at IS NULL AND n.kind IN ('submitted','approved','reserved','proposed'))) AS wire
          FROM house_numbering.buildings b
-         LEFT JOIN spatial.reference_features f ON (f.organization_id,f.project_id,f.source_id,f.feature_id)=(b.organization_id,b.project_id,b.linked_source_id,b.linked_feature_id)
-         LEFT JOIN spatial.data_sources s ON (s.organization_id,s.project_id,s.id)=(f.organization_id,f.project_id,f.source_id)
+         LEFT JOIN extensions.spatial_features_v1 f ON (f.organization_id,f.project_id,f.source_id,f.feature_id)=(b.organization_id,b.project_id,b.linked_source_id,b.linked_feature_id)
+         LEFT JOIN extensions.spatial_sources_v1 s ON (s.organization_id,s.project_id,s.id)=(f.organization_id,f.project_id,f.source_id)
          WHERE b.organization_id=$1 AND b.project_id=$2 AND b.id=ANY(CAST($3 AS uuid[]))
          ORDER BY b.id",
     )
@@ -294,7 +294,7 @@ pub async fn correction_distances(
     let rows = sqlx::query(
         "WITH buildings AS MATERIALIZED (
              SELECT b.id,ST_Transform(ST_PointOnSurface(f.geometry),4326)::geography g
-             FROM house_numbering.buildings b JOIN spatial.reference_features f
+             FROM house_numbering.buildings b JOIN extensions.spatial_features_v1 f
                ON (f.organization_id,f.project_id,f.source_id,f.feature_id)=(b.organization_id,b.project_id,b.linked_source_id,b.linked_feature_id)
              WHERE b.organization_id=$1 AND b.project_id=$2 AND b.id=ANY(CAST($3 AS uuid[]))
          ), routes AS MATERIALIZED (
@@ -327,7 +327,7 @@ pub async fn catalog_lines(read: &mut ProjectRead<'_>) -> Result<Vec<Value>, App
         "SELECT jsonb_build_object('source_id',f.source_id,'feature_id',f.feature_id,'name',f.attributes->>'ten',
            'prefix',f.attributes->>'prefix','route_type',f.attributes->>'route_type',
            'code',f.attributes->>'route_code','review_reason',f.attributes->>'review_reason') AS wire
-         FROM spatial.reference_features f JOIN spatial.data_sources s ON (s.organization_id,s.project_id,s.id)=(f.organization_id,f.project_id,f.source_id)
+         FROM extensions.spatial_features_v1 f JOIN extensions.spatial_sources_v1 s ON (s.organization_id,s.project_id,s.id)=(f.organization_id,f.project_id,f.source_id)
          WHERE f.organization_id=$1 AND f.project_id=$2 AND s.lifecycle='active' AND s.validation_state='ready'
            AND f.geometry_state='present' AND ST_GeometryType(f.geometry)='ST_LineString' AND ST_SRID(f.geometry)>0
            AND nullif(f.attributes->>'ten','') IS NOT NULL
@@ -356,9 +356,9 @@ pub async fn catalog_observations(
              AND ST_GeometryType(f.geometry) IN ('ST_Point','ST_Polygon') AND s.lifecycle='active' AND s.validation_state='ready',false),
            'locked',EXISTS(SELECT 1 FROM house_numbering.address_numbers n WHERE n.organization_id=b.organization_id AND n.project_id=b.project_id
              AND n.building_id=b.id AND n.retired_at IS NULL AND n.kind IN ('proposed','submitted','approved','reserved'))) AS wire
-         FROM house_numbering.buildings b JOIN spatial.reference_features f
+         FROM house_numbering.buildings b JOIN extensions.spatial_features_v1 f
           ON (f.organization_id,f.project_id,f.source_id,f.feature_id)=(b.organization_id,b.project_id,b.linked_source_id,b.linked_feature_id)
-         JOIN spatial.data_sources s ON (s.organization_id,s.project_id,s.id)=(f.organization_id,f.project_id,f.source_id)
+         JOIN extensions.spatial_sources_v1 s ON (s.organization_id,s.project_id,s.id)=(f.organization_id,f.project_id,f.source_id)
          WHERE b.organization_id=$1 AND b.project_id=$2 AND b.state='active'
            AND (CAST($6 AS uuid) IS NULL OR b.linked_source_id=$6)
          ORDER BY b.id",
@@ -380,7 +380,7 @@ const MERGED_LINES: &str = "
     merged AS MATERIALIZED (
       SELECT s.id,house_numbering.resolve_route_line(array_agg(f.geometry ORDER BY l.ord)) geom
       FROM specs s CROSS JOIN LATERAL jsonb_array_elements(s.links) WITH ORDINALITY l(v,ord)
-      JOIN spatial.reference_features f ON f.organization_id=$1 AND f.project_id=$2 AND f.source_id=(l.v->>'source_id')::uuid AND f.feature_id=l.v->>'feature_id'
+      JOIN extensions.spatial_features_v1 f ON f.organization_id=$1 AND f.project_id=$2 AND f.source_id=(l.v->>'source_id')::uuid AND f.feature_id=l.v->>'feature_id'
       GROUP BY s.id HAVING count(*)=max(jsonb_array_length(s.links))
     ), lines AS MATERIALIZED (SELECT id,ST_Transform(geom,4326)::geography g FROM merged WHERE geom IS NOT NULL)
 ";
@@ -397,7 +397,7 @@ pub async fn prefix_spec_stats(
         FROM specs s LEFT JOIN lines l ON s.id=l.id
         CROSS JOIN LATERAL jsonb_array_elements_text(s.ids) bid(val)
         JOIN house_numbering.buildings b ON b.organization_id=$1 AND b.project_id=$2 AND b.id=bid.val::uuid
-        JOIN spatial.reference_features f ON (f.organization_id,f.project_id,f.source_id,f.feature_id)=(b.organization_id,b.project_id,b.linked_source_id,b.linked_feature_id)
+        JOIN extensions.spatial_features_v1 f ON (f.organization_id,f.project_id,f.source_id,f.feature_id)=(b.organization_id,b.project_id,b.linked_source_id,b.linked_feature_id)
         GROUP BY s.id,l.id"
     );
     let rows = sqlx::query(&sql)

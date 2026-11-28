@@ -143,6 +143,8 @@ def rust_boundary_violations(root: Path) -> list[str]:
             # Do not mistake a quoted example of an extension key for a code import.
             if rel.startswith("crates/") and (RUST_VERTICAL_IMPORT.search(content) or RUST_VERTICAL_DEP.search(content)):
                 errors.append(f"{rel} Core Rust depends on vertical module")
+            if rel.startswith("modules/") and path.suffix == ".rs" and re.search(r"\bspatial\.(?:reference_features|data_sources)\b", content):
+                errors.append(f"{rel} bypasses versioned Core spatial read contract")
             if rel.startswith("modules/") and RUST_APP_IMPORT.search(content):
                 errors.append(f"{rel} Rust module depends on HTTP application internals")
             if rel.startswith("apps/api-rust/src/") and rel not in RUST_COMPOSITION and RUST_VERTICAL_IMPORT.search(content):

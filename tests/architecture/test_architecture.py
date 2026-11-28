@@ -152,3 +152,10 @@ def test_rust_http_sdk_allowed_but_legacy_handler_path_rejected(tmp_path: Path) 
     assert find_violations(tmp_path) == []
     write_source(tmp_path, "apps/api-rust/src/house_numbering/mod.rs", "// legacy")
     assert any("module-owned HTTP adapter in Core" in v for v in find_violations(tmp_path))
+
+
+def test_rust_modules_use_versioned_spatial_contract(tmp_path: Path) -> None:
+    write_source(tmp_path, "modules/example/storage/src/lib.rs", 'const SQL: &str = "SELECT * FROM extensions.spatial_features_v1";')
+    assert find_violations(tmp_path) == []
+    write_source(tmp_path, "modules/example/storage/src/bad.rs", 'const SQL: &str = "SELECT * FROM spatial.reference_features";')
+    assert any("bypasses versioned Core spatial read contract" in v for v in find_violations(tmp_path))

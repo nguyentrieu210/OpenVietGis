@@ -61,6 +61,14 @@ def main():
             rows=db.execute("SELECT actor_id::text,actor_type,resource_id::text FROM audit.audit_events WHERE resource_id IN (%s,%s)",(area['id'],rule['id'])).fetchall()
             assert set(rows)=={(fixture['user_a_id'],'human',area['id']),(fixture['user_a_id'],'human',rule['id'])},rows
           expect(api.post(root+'/areas',json={'name':'CSRF denied'},headers=parity.session_headers(fixture['session_a_token'])),403)
+          # Linked building and assignment audit exercise the versioned GIS read view.
+          point_source=fixture['layers']['epsg4326_1k']['source_id']
+          with psycopg.connect(owner) as db:
+            feature_id=db.execute("SELECT feature_id FROM spatial.reference_features WHERE source_id=%s ORDER BY feature_id LIMIT 1",(point_source,)).fetchone()[0]
+          building=expect(api.post(root+'/buildings',json={'source_id':point_source,'feature_id':feature_id,'area_id':area['id']},headers=h),201)
+          assert building['linked_source_id']==point_source and building['linked_feature_id']==feature_id
+          report=expect(api.post(root+'/building-assignment/audit',json={'source_id':point_source},headers=h),200)
+          assert isinstance(report,dict)
           assert expect(api.get(bindings,headers=h),200)=={'configured':False,'revision':0,'items':[]}
           layer=expect(api.post(project+'/layers/manual',json={'operation_id':str(uuid4()),'name':'Original survey','geometry_family':'Point','fields':[{'field_id':f,'name':f,'type':'text','nullable':True} for f in ['ap','ten_duong','xu_ly']]},headers=h),201)
           source=layer['source_id'];layer_id=layer['layer_id'];schema=expect(api.get(project+'/layers/'+layer_id,headers=h),200)['source']['schema_revision']

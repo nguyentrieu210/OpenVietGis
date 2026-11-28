@@ -617,7 +617,7 @@ pub async fn integration_addresses(
          LEFT JOIN house_numbering.areas a
            ON a.organization_id=b.organization_id AND a.project_id=b.project_id
           AND a.id=b.area_id
-         JOIN spatial.reference_features f
+         JOIN extensions.spatial_features_v1 f
            ON f.organization_id=b.organization_id AND f.project_id=b.project_id
           AND f.source_id=b.linked_source_id AND f.feature_id=b.linked_feature_id
          WHERE n.organization_id=$1 AND n.project_id=$2
@@ -773,7 +773,7 @@ pub async fn search(read: &mut ProjectRead<'_>, input: SearchInput<'_>) -> Resul
                       ST_SetSRID(ST_MakePoint($4,$5),$3)
                     ) AS distance
              FROM house_numbering.buildings b
-             JOIN spatial.reference_features f
+             JOIN extensions.spatial_features_v1 f
                ON f.organization_id=b.organization_id AND f.project_id=b.project_id
               AND f.source_id=b.linked_source_id AND f.feature_id=b.linked_feature_id
              LEFT JOIN house_numbering.routes r

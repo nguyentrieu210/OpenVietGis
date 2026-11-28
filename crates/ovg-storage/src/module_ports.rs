@@ -103,3 +103,41 @@ pub async fn validate_linked_feature(
     }
     Ok(srid)
 }
+
+/// Stable source identity and feature identity; layer display names are not keys.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct SpatialFeatureRef {
+    pub source_id: Uuid,
+    pub feature_id: String,
+}
+
+/// Pin existing feature rows (and optionally their sources) for the caller's
+/// transaction. No module-specific business row or write is handled here.
+/// Missing references are returned by omission, allowing caller-specific policy.
+pub async fn lock_linked_features(
+    edit: &mut ProjectRead<'_>,
+    links: &[SpatialFeatureRef],
+    with_sources: bool,
+) -> Result<std::collections::HashSet<SpatialFeatureRef>, AppError> {
+    if edit.is_gis_scoped() {
+        return Err(AppError::forbidden("unrestricted project scope required for module feature locks"));
+    }
+    if links.len() > 100_000 || links.iter().any(|l|l.feature_id.is_empty()||l.feature_id.len()>128) {
+        return Err(AppError::validation("INVALID_FEATURE_REF","invalid or oversized feature reference batch"));
+    }
+    if links.is_empty(){return Ok(std::collections::HashSet::new());}
+    let sql = if with_sources {
+        "SELECT f.source_id,f.feature_id FROM jsonb_to_recordset($3::jsonb) AS x(source_id uuid,feature_id text)
+         JOIN spatial.reference_features f ON f.organization_id=$1 AND f.project_id=$2 AND f.source_id=x.source_id AND f.feature_id=x.feature_id
+         JOIN spatial.data_sources ds ON (ds.organization_id,ds.project_id,ds.id)=(f.organization_id,f.project_id,f.source_id)
+         ORDER BY f.source_id,f.feature_id FOR SHARE OF f,ds"
+    } else {
+        "SELECT f.source_id,f.feature_id FROM jsonb_to_recordset($3::jsonb) AS x(source_id uuid,feature_id text)
+         JOIN spatial.reference_features f ON f.organization_id=$1 AND f.project_id=$2 AND f.source_id=x.source_id AND f.feature_id=x.feature_id
+         ORDER BY f.source_id,f.feature_id FOR SHARE OF f"
+    };
+    let payload=serde_json::to_value(links).map_err(|_|AppError::internal("feature reference serialization failed"))?;
+    let rows=sqlx::query(sql).bind(edit.organization_id()).bind(edit.project_id()).bind(payload)
+        .fetch_all(&mut **edit.transaction()).await.map_err(db_error)?;
+    rows.iter().map(|row|Ok(SpatialFeatureRef{source_id:row.try_get("source_id").map_err(db_error)?,feature_id:row.try_get("feature_id").map_err(db_error)?})).collect()
+}

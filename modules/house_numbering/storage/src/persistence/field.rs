@@ -457,7 +457,7 @@ async fn gps_observation(
                 ST_Transform(ST_SetSRID(ST_MakePoint($4,$5),$6),4326)::geography
             ) AS deviation_m
          FROM house_numbering.buildings b
-         JOIN spatial.reference_features rf
+         JOIN extensions.spatial_features_v1 rf
            ON rf.organization_id=b.organization_id AND rf.project_id=b.project_id
           AND rf.source_id=b.linked_source_id AND rf.feature_id=b.linked_feature_id
          WHERE b.organization_id=$1 AND b.project_id=$2 AND b.id=$3 AND b.state='active'
@@ -792,7 +792,7 @@ pub async fn sign_scope(
         .map_err(db_error)?;
         let row = sqlx::query(&format!(
             "SELECT count(*)::bigint AS total, count(*) FILTER (WHERE {PENDING})::bigint AS pending
-             FROM spatial.reference_features
+             FROM extensions.spatial_features_v1
              WHERE organization_id=$1 AND project_id=$2 AND source_id=$3
                AND attributes ? 'xu_ly' AND btrim(attributes->>'ap')=$4
                AND ($5::text IS NULL OR btrim(attributes->>'ten_duong')=$5)"
