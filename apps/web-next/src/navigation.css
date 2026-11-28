@@ -1,0 +1,7 @@
+.ovg-navigation{display:grid;gap:10px;max-height:65vh;overflow:auto}
+.ovg-navigation .ovg-address{display:grid;gap:5px}
+.ovg-navigation label{display:grid;gap:4px}
+.ovg-navigation input,.ovg-navigation select{width:100%;box-sizing:border-box}
+.ovg-navigation .live-search-result{text-align:left;white-space:normal}
+.ovg-navigation ol{margin:0;padding-left:22px}
+.ovg-navigation [aria-pressed="true"]{font-weight:bold}

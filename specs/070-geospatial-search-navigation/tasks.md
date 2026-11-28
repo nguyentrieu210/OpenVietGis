@@ -1,0 +1,18 @@
+# Tasks
+- [ ] E01 OSM import, versioned updates and attribution
+- [ ] E02 Photon/Nominatim gateway, search and reverse
+- [ ] E03 Rust unified provider contract and cache
+- [ ] E04 Vietnamese normalization and administrative aliases
+- [ ] E05 Locator suggestions, UX and keyboard
+- [ ] E06 Fly To 2D/3D and extent
+- [ ] E07 Reverse lookup and map context menu
+- [ ] E08 Valhalla route profiles and waypoints
+- [ ] E09 Directions panel, alternatives and translated instructions
+- [ ] E10 Bookmarks and account/project isolation
+- [ ] E11 Module search providers including house numbering
+- [ ] E12 Authorized server-side layer search
+- [ ] E13 GIS export and create layer
+- [ ] E14 Matrix, isochrone, optimization
+- [ ] E15 MCP tools
+- [ ] E16 Rate limit, cache, operations and updates
+- [ ] E17 Tests, review, benchmarks, deploy and acceptance
