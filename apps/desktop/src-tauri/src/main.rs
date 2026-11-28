@@ -13,7 +13,27 @@ use serde_json::Value;
 use tauri_plugin_dialog::DialogExt;
 use tauri::{Emitter, Manager, State, WebviewWindow};
 use uuid::Uuid;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc,Mutex,OnceLock,atomic::{AtomicBool,AtomicUsize, Ordering}};
+use std::collections::HashMap;
+type Requests=HashMap<Uuid,Arc<AtomicBool>>;
+static READS:OnceLock<Mutex<Requests>>=OnceLock::new();
+struct ReadPermit{ id:Uuid, token:Arc<AtomicBool> }
+impl ReadPermit{
+    fn acquire(id:Uuid)->Reply<Self>{
+        let mut r=READS.get_or_init(||Mutex::new(HashMap::new())).lock().map_err(|_|"SESSION_FAILED".to_owned())?;
+        if r.len()>=4||r.contains_key(&id){return Err("RESOURCE_LIMIT".into())}
+        let token=Arc::new(AtomicBool::new(false));r.insert(id,token.clone());Ok(Self{id,token})
+    }
+}
+impl Drop for ReadPermit{fn drop(&mut self){if let Ok(mut r)=READS.get_or_init(||Mutex::new(HashMap::new())).lock(){r.remove(&self.id);}}}
+#[tauri::command]
+fn desktop_cancel_resource(window:WebviewWindow,request_id:Uuid)->Reply<()>{
+    trusted(&window)?;
+    let r=READS.get_or_init(||Mutex::new(HashMap::new())).lock().map_err(|_|"SESSION_FAILED".to_owned())?;
+    if let Some(token)=r.get(&request_id){token.store(true,Ordering::Release);}
+    Ok(())
+}
+
 static IN_FLIGHT: AtomicUsize = AtomicUsize::new(0);
 struct Permit;
 impl Permit {
@@ -150,18 +170,25 @@ async fn desktop_close_raster(window:WebviewWindow,host:State<'_,Host>,handle:Uu
 // Logical ovg:// resource route, transported as binary IPC until OS custom
 // scheme origin/session qualification completes. No generic file reads.
 #[tauri::command]
-async fn desktop_resource(window:WebviewWindow,host:State<'_,Host>,uri:String)->Reply<tauri::ipc::Response>{
+async fn desktop_resource(window:WebviewWindow,host:State<'_,Host>,uri:String,request_id:Uuid)->Reply<tauri::ipc::Response>{
+    trusted(&window)?;
+    let read=ReadPermit::acquire(request_id)?;
     let req=protocol::parse(&uri).map_err(|_|"INVALID_RESOURCE".to_owned())?;
     let handle=Uuid::parse_str(req.workspace).map_err(|_|"INVALID_RESOURCE".to_owned())?;
     let source=Uuid::parse_str(req.source).map_err(|_|"INVALID_RESOURCE".to_owned())?;
     let revision=req.revision;
     let resource=req.resource;
-    let b=run(window,host.inner().clone(),move|h|match resource{
+    let b=run(window,host.inner().clone(),move|h|{
+        if read.token.load(Ordering::Acquire){return Err("CANCELLED")}
+        let data=match resource{
         protocol::Resource::RasterTile{z,x,y} if revision==0=>h.raster_tile(handle,source,z,x,y),
-        protocol::Resource::VectorTile{z,x,y}=>h.vector_tile(handle,source,revision,z,x,y),
+        protocol::Resource::VectorTile{z,x,y}=>h.vector_tile_cancel(handle,source,revision,z,x,y,&read.token),
         protocol::Resource::TileJson=>h.tilejson(handle,source,revision),
         protocol::Resource::CadChunk(_) | protocol::Resource::PointNode(_) | protocol::Resource::Asset if revision==0=>h.asset_resource(handle,source,resource),
         _=>Err("NOT_AVAILABLE")
+        }?;
+        if read.token.load(Ordering::Acquire){return Err("CANCELLED")}
+        Ok(data)
     }).await?;
     Ok(tauri::ipc::Response::new(b))
 }
@@ -238,6 +265,6 @@ fn main(){
                 if let Some(host)=window.try_state::<Host>(){let _=host.shutdown();}
             }
         })
-        .invoke_handler(tauri::generate_handler![desktop_capabilities,desktop_list,desktop_create,desktop_open,desktop_close,desktop_start_transform,desktop_poll,desktop_cancel,desktop_viewport,desktop_attributes,desktop_feature,desktop_edit,desktop_update_attributes,desktop_history,desktop_checkpoint,desktop_import_geojson,desktop_export,desktop_open_raster,desktop_close_raster,desktop_resource,desktop_import_gpkg,desktop_generation,desktop_reshape,desktop_open_asset,desktop_close_asset,desktop_cad_viewport])
+        .invoke_handler(tauri::generate_handler![desktop_capabilities,desktop_list,desktop_create,desktop_open,desktop_close,desktop_start_transform,desktop_poll,desktop_cancel,desktop_viewport,desktop_attributes,desktop_feature,desktop_edit,desktop_update_attributes,desktop_history,desktop_checkpoint,desktop_import_geojson,desktop_export,desktop_open_raster,desktop_close_raster,desktop_resource,desktop_import_gpkg,desktop_generation,desktop_reshape,desktop_open_asset,desktop_close_asset,desktop_cad_viewport,desktop_cancel_resource])
         .run(tauri::generate_context!()).expect("Desktop host failed");
 }
