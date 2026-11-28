@@ -9,3 +9,6 @@ pub type Result<T>=std::result::Result<T,&'static str>;
 pub mod http_range;
 
 pub mod remote_tiff;
+
+#[cfg(feature="remote-copc")]
+pub mod remote_copc;
