@@ -828,9 +828,10 @@
         "apps/web-next/src/load-netcdf.ts",
         "apps/web-next/src/mesh-sms-dat.ts",
         "apps/web-next/src/mesh-sms-dat.test.ts",
-        "apps/web-next/src/fixtures/point-cloud/README.md"
+        "apps/web-next/src/fixtures/point-cloud/README.md",
+        "tests/e2e/qgis-parity-proc10-point-cloud.spec.ts"
       ],
-      "blocker": "Current implementation includes bounded local LAS/LAZ decoding (LAS 1.2–1.4 subset), public HTTPS remote COPC range reads pinned to ETag, local/remote binary EPT LOD, classic CDF-1/2 and NetCDF4/HDF5 mesh-node datasets, plus JSON/SMS DAT mesh datasets. Consumer unit job in E17 run 46178329115 on 1998ce1 passed laz-real, remote-copc, remote-ept, local-ept, point-cloud-lod, netcdf-classic, netcdf4, mesh-dataset and SMS DAT suites; these provider files are unchanged through current candidate. Remaining: authenticated in-project upload/source/permission/render flow and paired QGIS 3.44 fixture comparison have not passed on the exact final SHA; provider support is intentionally bounded (public CORS/range access only, capped bytes/nodes/points, limited CRS/codec/schema); no durable server-side mesh provider or full provider parity is claimed."
+      "blocker": "Current implementation includes bounded local LAS/LAZ decoding (LAS 1.2–1.4 subset), public HTTPS remote COPC range reads pinned to ETag, local/remote binary EPT LOD, classic CDF-1/2 and NetCDF4/HDF5 mesh-node datasets, plus JSON/SMS DAT mesh datasets. Consumer unit job in E17 run 46178329115 on 1998ce1 passed the provider suites (web-next 88 files/314 tests); these provider files are unchanged through the current candidate. Added tests/e2e/qgis-parity-proc10-point-cloud.spec.ts for authenticated project-scoped real-LAZ preview/render plus anonymous route gating; exact-head browser result is pending. Remaining: authenticated NetCDF/EPT/COPC UI paths and paired QGIS 3.44 fixture comparison have not passed on the exact final SHA; providers remain bounded (public CORS/range access only, capped bytes/nodes/points, limited CRS/codec/schema), and no durable server-side mesh provider or full provider parity is claimed."
     },
     {
       "id": "OUTPUT-01",
