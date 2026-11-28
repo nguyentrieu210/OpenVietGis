@@ -19,6 +19,7 @@ pub(super) fn router()->Router<AppState>{
         .route(&format!("{BASE}/issuances/{{issuance_id}}/replace"),post(replace))
         .route(&format!("{BASE}/buildings/{{building_id}}/issuances"),get(list))
         .route(&format!("{BASE}/address-lookup/{{issuance_id}}"),get(lookup))
+        .route(&format!("{BASE}/addresses/{{number_id}}/lookup"),get(stable_lookup))
 }
 
 #[derive(Deserialize)]
@@ -113,4 +114,10 @@ async fn staff_kpi(State(state):State<AppState>,auth:HumanSession,Path(params):P
     let mut read=module_manage(&state,&auth,org,project).await?;
     let result=store::survey_staff_kpi(&mut read,window.start_date,window.end_date_exclusive).await?;
     read.commit().await?;Ok(Json(result))
+}
+
+async fn stable_lookup(State(state):State<AppState>,auth:HumanSession,Path(params):Path<HashMap<String,String>>)->HnResult<Json<Value>>{
+    let (org,project)=scope_ids(&params)?;let id=path_id(&params,"number_id")?;
+    let mut read=module_read(&state,&auth,org,project).await?;
+    let result=store::lookup_stable_address(&mut read,id).await?;read.commit().await?;Ok(Json(result))
 }

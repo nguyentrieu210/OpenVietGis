@@ -10,6 +10,7 @@ def check_issuance_sql(root, runtime, scoped, org, project, actor, proposal, num
     create=re.search(r'"(WITH inserted AS \(.*?SELECT to_jsonb\(inserted\) FROM inserted)"',src,re.S).group(1)
     event=re.search(r'"(INSERT INTO house_numbering.issuance_events.*?)"',src,re.S).group(1)
     lookup=re.search(r'"(SELECT jsonb_build_object\(\x27id\x27,r.id.*?route.status=\x27confirmed\x27)"',src,re.S).group(1)
+    stable=re.search(r'"(SELECT jsonb_build_object\(\x27address_id\x27,r.number_id.*?route.status=\x27confirmed\x27)"',src,re.S).group(1)
     iid=str(uuid4())
     def query(db,sql,params):
         order=[int(x)-1 for x in re.findall(r'\$(\d+)',sql)]
@@ -29,6 +30,7 @@ def check_issuance_sql(root, runtime, scoped, org, project, actor, proposal, num
         kpi='WITH buildings AS ('+kpi
         def counts():return query(db,kpi,[org,project]).fetchone()[0]["total"]
         assert counts()['registered_buildings']==1 and counts()['installed_buildings']==0
+        assert query(db,stable,[org,project,number]).fetchone()[0]['issuance_id']==iid
         assert state()=='recorded'
         try:
             with db.transaction():append(db,2,'installed')
@@ -55,6 +57,7 @@ def check_issuance_sql(root, runtime, scoped, org, project, actor, proposal, num
         assert state()=='installed'
         append(db,5,'void')
         assert state() is None
+        assert query(db,stable,[org,project,number]).fetchone() is None
         try:
             with db.transaction():append(db,6,'printed')
         except psycopg.Error as e:assert e.sqlstate=='OV409'
@@ -62,6 +65,7 @@ def check_issuance_sql(root, runtime, scoped, org, project, actor, proposal, num
         assert str(query(db,replace,new_params).fetchone()[0])==replacement_id
         query(db,event,[org,project,replacement_id,1,'recorded','fixture replacement',actor])
         assert query(db,lookup,[org,project,replacement_id]).fetchone()[0]['plate_state']=='recorded'
+        assert query(db,stable,[org,project,number]).fetchone()[0]['issuance_id']==replacement_id
         assert state() is None
         assert counts()['registered_buildings']==1 and counts()['installed_buildings']==0
         grouped=query(db,kpi,[org,project]).fetchone()[0]
@@ -76,4 +80,5 @@ def check_issuance_sql(root, runtime, scoped, org, project, actor, proposal, num
         assert not db.execute("SELECT has_table_privilege(current_user,'house_numbering.issuance_records','DELETE')").fetchone()[0]
         db.execute("SELECT set_config('openvietgis.project_id',%s,true)",(other_project,))
         assert db.execute("SELECT count(*) FROM house_numbering.issuance_records").fetchone()[0]==0
+        assert query(db,stable,[org,project,number]).fetchone() is None
     print('PASS exact issuance SQL: duplicate protection, ordered stages, void lookup, atomic replacement rollback, single successor, immutable grants, RLS')

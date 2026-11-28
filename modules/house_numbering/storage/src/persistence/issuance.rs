@@ -111,6 +111,25 @@ pub async fn lookup_issuance(read:&mut ProjectRead<'_>,id:Uuid)->Result<Value,Ap
         .ok_or_else(||AppError::not_found("current registered address not found"))
 }
 
+/// Stable identifier of an allocated number, independent of certificate reissue.
+pub async fn lookup_stable_address(read:&mut ProjectRead<'_>,id:Uuid)->Result<Value,AppError>{
+    let rows:Vec<Value>=sqlx::query_scalar(
+        "SELECT jsonb_build_object('address_id',r.number_id,'issuance_id',r.id,'number_text',r.number_text,'route_name',r.route_name,
+           'effective_date',r.effective_date,'plate_state',e.state,'status','recorded')
+         FROM house_numbering.issuance_records r JOIN LATERAL (
+           SELECT state FROM house_numbering.issuance_events e WHERE (e.organization_id,e.project_id,e.issuance_id)=(r.organization_id,r.project_id,r.id)
+           ORDER BY revision DESC LIMIT 1) e ON true
+         JOIN house_numbering.address_numbers n ON (n.organization_id,n.project_id,n.id)=(r.organization_id,r.project_id,r.number_id)
+         JOIN house_numbering.buildings b ON (b.organization_id,b.project_id,b.id)=(r.organization_id,r.project_id,r.building_id)
+         JOIN house_numbering.routes route ON (route.organization_id,route.project_id,route.id)=(n.organization_id,n.project_id,n.route_id)
+         WHERE r.organization_id=$1 AND r.project_id=$2 AND r.number_id=$3 AND e.state<>'void'
+           AND n.kind='approved' AND n.retired_at IS NULL AND n.number_text=r.number_text AND b.state='active'
+           AND b.eligibility='eligible' AND b.id=n.building_id AND b.route_id=n.route_id AND n.route_id=r.route_id AND route.name=r.route_name AND route.status='confirmed'"
+    ).bind(read.organization_id()).bind(read.project_id()).bind(id).fetch_all(&mut **read.transaction()).await.map_err(db_error)?;
+    if rows.len()!=1{return Err(AppError::not_found("unique current registered address not found"));}
+    Ok(rows.into_iter().next().unwrap())
+}
+
 pub struct ReplacementInput<'a>{
     pub expected_revision:i64,pub authority_name:&'a str,pub decision_ref:&'a str,
     pub certificate_ref:&'a str,pub effective_date:chrono::NaiveDate,pub template_revision:&'a str,

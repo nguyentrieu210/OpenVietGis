@@ -1083,3 +1083,22 @@ export function getHouseNumberingSurveyStaffKpi(client:ApiClient,org:string,proj
 export function chooseBuildingPrimaryEntrance(client:ApiClient,org:string,project:string,building:string,input:{entrance_id:string;expected_revision:number;reason:string}){
  return jsonMutation<{items:BuildingEntrance[]}>(client,base(org,project)+"/buildings/"+encodeURIComponent(building)+"/primary-entrance","POST",input);
 }
+
+export type ParcelRecord={id:string;reference:string;source_id:string;feature_id:string;geometry_ready:boolean;evidence_ref:string};
+export type ParcelLinkState="observed"|"confirmed"|"rejected"|"detached";
+export type ParcelLink={parcel_id:string;reference:string;source_id:string;feature_id:string;revision:number;state:ParcelLinkState;geometry_current:boolean;history:{revision:number;state:ParcelLinkState;evidence_ref:string;occurred_at:string}[]};
+export function listParcels(client:ApiClient,org:string,project:string,offset:number){
+ return client.request<{items:ParcelRecord[];next_offset:number|null}>(base(org,project)+"/parcels?limit=100&offset="+offset);
+}
+export function createParcel(client:ApiClient,org:string,project:string,input:{source_id:string;feature_id:string;reference:string;evidence_ref:string}){
+ return jsonMutation<ParcelRecord>(client,base(org,project)+"/parcels","POST",input);
+}
+export function listParcelLinks(client:ApiClient,org:string,project:string,building:string){
+ return client.request<{items:ParcelLink[]}>(base(org,project)+"/buildings/"+encodeURIComponent(building)+"/parcels");
+}
+export function transitionParcelLink(client:ApiClient,org:string,project:string,building:string,parcel:string,input:{expected_revision:number;state:ParcelLinkState;evidence_ref:string}){
+ return jsonMutation<{items:ParcelLink[]}>(client,base(org,project)+"/buildings/"+encodeURIComponent(building)+"/parcels/"+encodeURIComponent(parcel)+"/transition","POST",input);
+}
+export function stableAddressLookupUrl(org:string,project:string,number:string){
+ return "/api/v1"+base(org,project)+"/addresses/"+encodeURIComponent(number)+"/lookup";
+}

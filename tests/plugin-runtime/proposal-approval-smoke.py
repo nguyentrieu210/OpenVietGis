@@ -35,6 +35,7 @@ def main():
         editor=make_member(owner,fx,'editor','Editor')
         points=seed_source(owner,fx,'Point',{'p1':'POINT(10 10)','p2':'POINT(20 10)'})
         lines=seed_source(owner,fx,'LineString',{'r1':'LINESTRING(0 0,100 0)'})
+        polygon=seed_source(owner,fx,'Polygon',{'parcel1':'POLYGON((0 0,40 0,40 40,0 40,0 0))','parcel2':'POLYGON((40 0,80 0,80 40,40 40,40 0))'})
         with parity.rust_client(args.candidate.resolve(),runtime,work) as api:
             manifest=expect(api.post(base+'/extensions/official/house_numbering/register',headers=h),201)
             expect(api.post(proj+'/extensions/activations',json={'manifest_id':manifest['id']},headers=h),201)
@@ -203,6 +204,39 @@ def main():
                         db.execute("SELECT set_config('openvietgis.project_id',%s,true)",(fx['project_b_id'],))
                         assert staff(db,date(2026,11,1),date(2026,12,1))['items']==[]
                 print('PASS staff KPI SQL: distinct buildings, current review states, draft exclusion, UTC period, identity label and cross-project RLS')
+                # Parcel identity and many-to-many associations with immutable review.
+                parcel_src=(ROOT/'modules/house_numbering/storage/src/persistence/parcels.rs').read_text()
+                create_sql=re.search(r'"(WITH inserted AS \(INSERT INTO house_numbering.parcels.*?FROM inserted)"',parcel_src,re.S).group(1)
+                link_sql=re.search(r'"(INSERT INTO house_numbering.parcel_building_links.*?END IS NOT NULL)"',parcel_src,re.S).group(1)
+                def execute(db,sql,args):
+                    order=[int(x)-1 for x in re.findall(r'\$(\d+)',sql)]
+                    return db.execute(re.sub(r'\$\d+','%s',sql),[args[i] for i in order])
+                with psycopg.connect(runtime) as db:
+                    scoped(db)
+                    with db.transaction(force_rollback=True):
+                        pid=str(uuid4());pid2=str(uuid4())
+                        def register(id,feature):
+                            return execute(db,create_sql,[id,org,project,polygon,feature,'fixture parcel','test evidence',actor]).fetchone()
+                        assert register(pid,'parcel1')[0]['id']==pid
+                        assert register(str(uuid4()),'parcel1') is None
+                        assert register(pid2,'parcel2')[0]['id']==pid2
+                        def link(parcel,rev,state,who):
+                            return execute(db,link_sql,[org,project,parcel,building['id'],rev,state,'fixture link',who]).rowcount
+                        assert link(pid,1,'observed',actor)==1
+                        try:
+                            with db.transaction():link(pid,2,'confirmed',actor)
+                        except psycopg.Error as e:assert e.sqlstate=='OV409'
+                        else:raise AssertionError('self confirmation accepted')
+                        assert link(pid,2,'confirmed',reviewer['id'])==1
+                        assert link(pid,2,'detached',reviewer['id'])==0
+                        assert link(pid2,1,'observed',actor)==1
+                        assert link(pid2,2,'confirmed',reviewer['id'])==1
+                        assert link(pid,3,'detached',reviewer['id'])==1
+                        assert link(pid,4,'observed',actor)==1
+                        assert not db.execute("SELECT has_table_privilege(current_user,'house_numbering.parcel_building_links','UPDATE')").fetchone()[0]
+                        db.execute("SELECT set_config('openvietgis.project_id',%s,true)",(fx['project_b_id'],))
+                        assert db.execute("SELECT count(*) FROM house_numbering.parcels").fetchone()[0]==0
+                print('PASS parcel SQL: distinct identity, duplicate geometry link, independent review, multiple parcels, revision CAS, detach/reobserve and RLS')
                 # Old candidate supplies a real approved fixture via its ordinary
                 # transition API. New issuance SQL is checked separately.
                 with psycopg.connect(owner) as db:

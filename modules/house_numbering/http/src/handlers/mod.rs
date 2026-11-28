@@ -7,6 +7,7 @@ mod field;
 mod hierarchy;
 mod issuance;
 mod numbering;
+mod parcels;
 mod proposals;
 mod records;
 mod route_import;
@@ -50,6 +51,7 @@ pub fn router() -> Router<AppState> {
         .merge(assignment::router())
         .merge(buildings::router())
         .merge(entrances::router())
+        .merge(parcels::router())
         .merge(proposals::router())
         .merge(issuance::router())
         .merge(field::router())
