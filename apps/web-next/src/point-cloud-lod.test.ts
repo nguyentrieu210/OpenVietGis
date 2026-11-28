@@ -19,3 +19,7 @@ describe("camera LOD session",()=>{
   }finally{vi.useRealTimers()}
  });
 });
+
+it("panning at the same zoom selects another camera region and refetches",async()=>{
+ vi.useFakeTimers();try{const render=vi.fn(),load=vi.fn(async (_s:RemoteCloudSource,d:number,_signal:AbortSignal,_region?:import("./cloud-region").CloudRegion)=>cloud(d));const lod=new PointCloudLod(source,cloud(0),render,vi.fn(),load);lod.update({longitude:106,latitude:10,zoom:12});await vi.advanceTimersByTimeAsync(350);lod.update({longitude:107,latitude:10,zoom:12});await vi.advanceTimersByTimeAsync(350);expect(load).toHaveBeenCalledTimes(2);expect(load.mock.calls[0]![3]).not.toEqual(load.mock.calls[1]![3]);lod.dispose()}finally{vi.useRealTimers()}
+});

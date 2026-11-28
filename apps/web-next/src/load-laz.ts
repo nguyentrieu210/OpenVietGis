@@ -1,6 +1,7 @@
+import type {CloudRegion} from "./cloud-region";
 import type {LasCloud} from "./local-las";
 import type {CopcPreview} from "./remote-copc";
-type Request={kind:"file";bytes:ArrayBuffer;crs:4326|3857}|{kind:"copc";url:string;depth:number;crs:4326|3857};
+type Request={kind:"file";bytes:ArrayBuffer;crs:4326|3857}|{kind:"copc";url:string;depth:number;crs:4326|3857;region?:CloudRegion};
 function request<T extends LasCloud>(message:Request,signal:AbortSignal):Promise<T>{
  return new Promise((resolve,reject)=>{
   if(signal.aborted){reject(signal.reason);return}
@@ -14,4 +15,4 @@ function request<T extends LasCloud>(message:Request,signal:AbortSignal):Promise
 }
 
 export function loadLaz(bytes:ArrayBuffer,crs:4326|3857,signal:AbortSignal){return request<LasCloud>({kind:"file",bytes,crs},signal)}
-export function loadRemoteCopc(url:string,crs:4326|3857,depth:number,signal:AbortSignal){return request<CopcPreview>({kind:"copc",url,crs,depth},signal)}
+export function loadRemoteCopc(url:string,crs:4326|3857,depth:number,signal:AbortSignal,region?:CloudRegion){return request<CopcPreview>({kind:"copc",url,crs,depth,region},signal)}

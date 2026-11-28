@@ -1,4 +1,5 @@
 import type {LasCloud,LasPoint} from "./local-las";
+import {nativeRegion,intersectsCloudNode,type CloudRegion} from "./cloud-region";
 import {boundedParallel} from "./bounded-parallel";
 /** Bounded local EPT binary subset. See https://entwine.io/en/latest/entwine-point-tile.html */
 const ROOT="0-0-0-0",MAX_BYTES=64*1024*1024,MAX_POINTS=2000000,MAX_NODES=1024,R=6378137;
@@ -60,7 +61,7 @@ export async function parseEpt(files:ReadonlyMap<string,LocalEntry>,crs:4326|385
 
 /** Remote EPT preview: bounded breadth-first LOD, only selected nodes downloaded.
  * No server proxy, no credentials, no redirect, no arbitrary paths from metadata.
- * This is a user-selected depth preview rather than continuous camera LOD.
+ * Optional quantized camera region prunes descendants, retaining the root.
  */
 export type RemoteEptPreview=LasCloud&{datasetCount:number;nodeCount:number;complete:boolean};
 export function remoteEptUrl(raw:string){
@@ -68,7 +69,7 @@ export function remoteEptUrl(raw:string){
  if(url.protocol!=="https:"||url.username||url.password||url.search||url.hash||url.port&&url.port!=="443"||!url.pathname.endsWith("/ept.json")||!url.hostname.includes(".")||/^(?:\d+(?:\.\d+){3}|\[.*\])$/.test(url.hostname)||/\.(?:local|internal|localhost|test|invalid)$/.test(url.hostname)||url.hostname==="localhost"||typeof location!=="undefined"&&url.origin===location.origin)throw Error("Use a public HTTPS EPT manifest URL without credentials or parameters");
  return url;
 }
-export async function loadRemoteEpt(raw:string,crs:4326|3857,depth:number,signal:AbortSignal,fetcher:typeof fetch=fetch):Promise<RemoteEptPreview>{
+export async function loadRemoteEpt(raw:string,crs:4326|3857,depth:number,signal:AbortSignal,fetcher:typeof fetch=fetch,region?:CloudRegion):Promise<RemoteEptPreview>{
  const url=remoteEptUrl(raw);
  if(!Number.isInteger(depth)||depth<0||depth>12)throw Error("Remote EPT depth must be 0–12");
  const base=new URL(".",url),files=new Map<string,Blob>(),MAX_REMOTE_BYTES=32*1024*1024,MAX_REMOTE_NODES=128,MAX_REMOTE_POINTS=500000;
@@ -89,6 +90,8 @@ export async function loadRemoteEpt(raw:string,crs:4326|3857,depth:number,signal
  const metadata=await get("ept.json",1024*1024),meta:unknown=JSON.parse(await metadata.text());
  if(!obj(meta)||meta.dataType!=="binary"||(meta.hierarchyType??"json")!=="json"||!Array.isArray(meta.schema)||meta.schema.length<3||meta.schema.length>64||!finite(meta.points)||!Number.isSafeInteger(meta.points)||meta.points<1)throw Error("Only remote EPT binary/JSON is supported");
  const datasetCount=meta.points;
+ if(!Array.isArray(meta.bounds)||meta.bounds.length!==6||!meta.bounds.every(finite))throw Error("Invalid remote EPT bounds");
+ const window=nativeRegion(region,crs),bounds=meta.bounds as number[];
  const stride=meta.schema.reduce((sum:number,d:unknown)=>{if(!obj(d)||!finite(d.size)||![1,2,4,8].includes(d.size))throw Error("Invalid remote EPT schema");return sum+d.size},0);
  const queue=new Map<string,number>(),seenPages=new Set<string>(),seenNodes=new Set<string>();
  let complete=true;
@@ -98,7 +101,7 @@ export async function loadRemoteEpt(raw:string,crs:4326|3857,depth:number,signal
   if(!obj(v)||!finite(v[root])||v[root]<1||Object.keys(v).length>65536)throw Error("Invalid EPT hierarchy");
   for(const [k,n] of Object.entries(v)){
    if(!within(k,root)||!finite(n)||!Number.isSafeInteger(n)||n===0||n< -1||n>datasetCount)throw Error("Invalid EPT hierarchy entry");
-   if(node(k)[0]>depth){complete=false;continue}
+   if(node(k)[0]>depth||!intersectsCloudNode(node(k),bounds,window)){complete=false;continue}
    if(k===root||!seenNodes.has(k)){if(n===-1){if(k===root)throw Error("Invalid EPT page pointer");await page(k)}else{if(queue.has(k))throw Error("Duplicate EPT node");queue.set(k,n)}seenNodes.add(k)}
    else throw Error("Duplicate EPT node");
   }

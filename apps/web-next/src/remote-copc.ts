@@ -3,6 +3,7 @@
  * Hierarchy pages and LAZ chunks have disjoint validated ranges and finite budgets.
  */
 import {decodeLazChunk} from "./laz-decoder";
+import {nativeRegion,intersectsCloudNode,type CloudRegion} from "./cloud-region";
 import {boundedParallel} from "./bounded-parallel";
 import {parseLasRecords,LAS_MAX_BYTES,type LasCloud} from "./local-las";
 export type CopcPreview=LasCloud&{datasetCount:number;nodeCount:number;complete:boolean};
@@ -54,7 +55,7 @@ export function parseCopcHierarchy(bytes:ArrayBuffer,ancestor:Key):Entry[]{
  if(!seen.has(id(ancestor)))throw Error("COPC hierarchy page has no root");
  return out;
 }
-export async function readRemoteCopc(raw:string,crs:4326|3857,depth:number,signal:AbortSignal,fetcher:typeof fetch=fetch,decode=decodeLazChunk):Promise<CopcPreview>{
+export async function readRemoteCopc(raw:string,crs:4326|3857,depth:number,signal:AbortSignal,fetcher:typeof fetch=fetch,decode=decodeLazChunk,region?:CloudRegion):Promise<CopcPreview>{
  if(!Number.isInteger(depth)||depth<0||depth>12)throw Error("COPC depth must be 0–12");
  const reader=boundedRangeReader(copcUrl(raw),signal,fetcher),first=await reader.read(0,589),d=new DataView(first);
  if(ascii(d,0,4)!=="LASF"||d.getUint8(24)!==1||d.getUint8(25)!==4||d.getUint16(94,true)!==375||ascii(d,377,16)!=="copc"||d.getUint16(393,true)!==1||d.getUint16(395,true)!==160||!(d.getUint16(6,true)&16))throw Error("Invalid COPC 1.0 header");
@@ -65,6 +66,8 @@ export async function readRemoteCopc(raw:string,crs:4326|3857,depth:number,signa
  if(!info.every(Number.isFinite)||info[3]!<=0||info[4]!<=0||evlr<=offset||evlr>=reader.size||!evlrCount||evlrCount>64)throw Error("Invalid COPC info or EVLR");
  // Verify the entire metadata header chain; reject projection EVLRs rather
  // than silently dropping conflicting CRS metadata during subset decoding.
+ const [cx,cy,cz,half]=info as [number,number,number,number,number];
+ const bounds=[cx-half,cy-half,cz-half,cx+half,cy+half,cz+half],window=nativeRegion(region,crs);
  const hierarchyRanges:{start:number;end:number}[]=[];let ev=evlr;
  for(let i=0;i<evlrCount;i++){
   const b=new DataView(await reader.read(ev,60)),user=ascii(b,2,16),record=b.getUint16(18,true),n=safe64(b,20),start=ev+60,end=start+n;
@@ -86,7 +89,7 @@ export async function readRemoteCopc(raw:string,crs:4326|3857,depth:number,signa
   claim(at,n,hr.start,hr.end);pages.add(id(key));
   const rows=parseCopcHierarchy(await reader.read(at,n),key);
   for(const row of rows){
-   if(row.key[0]>depth){complete=false;continue}
+   if(row.key[0]>depth||!intersectsCloudNode(row.key,bounds,window)){complete=false;continue}
    if(row.count===-1){if(id(row.key)===id(key))throw Error("Self-referencing COPC hierarchy page");await page(row.key,row.offset,row.bytes)}
    else{if(entries.has(id(row.key)))throw Error("Duplicate COPC node");entries.set(id(row.key),row)}
   }
