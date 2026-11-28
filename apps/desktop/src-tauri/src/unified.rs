@@ -54,6 +54,12 @@ impl Unified{
   let store=Store::reopen(&p).map_err(err)?;if !store.integrity().map_err(err)?{return Err("INVALID_STORAGE")}
   let handle=Uuid::new_v4();s.insert(handle,(id,store));Ok(Opened{id,handle})
  }
+ pub fn restore(&self,path:&std::path::Path)->UResult<Project>{
+  let _lock=self.open.lock().map_err(|_|"SESSION_FAILED")?;
+  if self.list()?.len()>=128{return Err("RESOURCE_LIMIT")}
+  let id=Uuid::new_v4();
+  Store::restore_copy(path,&self.path(id),&AtomicBool::new(false)).map_err(err)?;Ok(Project{id})
+ }
  pub fn shutdown(&self)->UResult<()>{let mut s=self.open.lock().map_err(|_|"SESSION_FAILED")?;for (_,store) in s.values(){store.checkpoint().map_err(err)?;}s.clear();Ok(())}
  pub fn close(&self,h:Uuid)->UResult<()>{let mut s=self.open.lock().map_err(|_|"SESSION_FAILED")?;s.get(&h).ok_or("STALE_HANDLE")?.1.checkpoint().map_err(err)?;s.remove(&h);Ok(())}
  pub fn with<T>(&self,h:Uuid,f:impl FnOnce(&Store)->UResult<T>)->UResult<T>{let s=self.open.lock().map_err(|_|"SESSION_FAILED")?;f(&s.get(&h).ok_or("STALE_HANDLE")?.1)}
@@ -118,4 +124,39 @@ mod tests{
   let w=u.open(p.id).unwrap();assert_eq!(u.with(w.handle,|s|s.feature(b,y,3).map_err(err)).unwrap().0,1);
   u.shutdown().unwrap();
  }
+}
+
+#[tauri::command]
+pub async fn unified_backup(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid,expected:String)->Reply<bool>{
+ let app=window.app_handle().clone();
+ work(window,u.inner().clone(),move|s|{
+  let Some(file)=app.dialog().file().add_filter("Unified SQLite backup",&["sqlite"]).set_file_name("unified-backup.sqlite").blocking_save_file() else{return Ok(false)};
+  let p=file.into_path().map_err(|_|"INVALID_STORAGE")?;
+  if p.extension().and_then(|v|v.to_str())!=Some("sqlite"){return Err("UNSUPPORTED_FORMAT")}
+  s.with(handle,|s|s.backup_copy(&p,number(&expected)?,&AtomicBool::new(false)).map_err(err))?;Ok(true)
+ }).await
+}
+#[tauri::command]
+pub async fn unified_restore(window:WebviewWindow,u:State<'_,Unified>)->Reply<Option<Project>>{
+ let app=window.app_handle().clone();
+ work(window,u.inner().clone(),move|s|{
+  let Some(file)=app.dialog().file().add_filter("Unified SQLite backup or migration export",&["sqlite"]).blocking_pick_file() else{return Ok(None)};
+  let p=file.into_path().map_err(|_|"INVALID_STORAGE")?;
+  s.restore(&p).map(Some)
+ }).await
+}
+#[tauri::command]
+pub async fn unified_tile(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid,layer:Uuid,expected:String,z:u8,x:u32,y:u32,request_id:Uuid)->Reply<tauri::ipc::Response>{
+ trusted(&window)?;let read=ReadPermit::acquire(request_id)?;
+ let slot=tokio::select!{
+  p=READ_SLOTS.get_or_init(||tokio::sync::Semaphore::new(4)).acquire()=>p.map_err(|_|"SESSION_FAILED".to_owned())?,
+  _=read.token.notify.notified()=>return Err("CANCELLED".into())
+ };
+ let b=work(window,u.inner().clone(),move|s|{
+  let _slot=slot;
+  if read.token.flag.load(Ordering::Acquire){return Err("CANCELLED")}
+  let b=s.with(handle,|store|crate::mvt::unified_tile(store,layer,number(&expected)?,z,x,y,&read.token.flag))?;
+  if read.token.flag.load(Ordering::Acquire){return Err("CANCELLED")}Ok(b)
+ }).await?;
+ Ok(tauri::ipc::Response::new(b))
 }
