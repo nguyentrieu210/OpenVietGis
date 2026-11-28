@@ -113,6 +113,14 @@ export type UnifiedCatalog={revision:string;layers:{id:string;name:string;fields
 export type UnifiedEdit={layer:string;feature:string;expected:string;geometry:GeoJSON.Geometry|null;attributes:Attributes};
 export type UnifiedLink={relation:string;source:string;target:string;add:boolean};
 export type UnifiedBatch={operation:string;expected_project:string;edits:UnifiedEdit[];links:UnifiedLink[]};
+export type NativeProviderStatus={ogr_linked:boolean;analytics_linked:boolean;qualification:string;spatial:string;parquet:string};
+export const nativeProviders={
+ status:()=>host().core.invoke<NativeProviderStatus>("native_provider_status"),
+ importOGR:(handle:string,layer:string,index:number,expected:string)=>host().core.invoke<{revision:string}|null>("native_import_ogr",{handle,layer,index,expected}),
+ transform:(handle:string,source:number,target:number,xy:[number,number][])=>host().core.invoke<[number,number][]>("native_proj",{handle,source,target,xy}),
+ pointSummary:(handle:string,layer:string,expected:string,spatial:boolean)=>host().core.invoke<Record<string,unknown>>("native_point_summary",{handle,layer,expected,spatial}),
+ rasterPreview:(handle:string,band:number)=>host().core.invoke<{width:number;height:number;bands:number;epsg:number|null;geotransform:number[];sample_width:number;sample_height:number;values:(number|null)[]}|null>("native_raster_preview",{handle,band})
+};
 export const unified={
  importGeoJSON:(handle:string,layer:string,expected:string)=>host().core.invoke<{revision:string}|null>("unified_import_geojson",{handle,layer,expected}),
  exportGeoJSON:(handle:string,layer:string,expected:string)=>host().core.invoke<number|null>("unified_export_geojson",{handle,layer,expected}),
