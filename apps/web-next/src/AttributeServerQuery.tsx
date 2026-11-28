@@ -1,4 +1,4 @@
-import {collectQuerySelection,collectExpressionSelection,combineQuerySelection,sameKeys,selectionLayerCurrent,QUERY_SELECTION_LIMIT,type QuerySelectionMode} from "./query-selection";
+import {collectQuerySelection,collectExpressionSelection,exportSelectedAttributes,combineQuerySelection,sameKeys,selectionLayerCurrent,QUERY_SELECTION_LIMIT,type QuerySelectionMode} from "./query-selection";
 import {parseExpression} from "./label-expr";
 import React,{useEffect,useRef,useState} from "react";
 import type {LayerQueryResponse,SpatialLayer} from "@openvietgis/client-sdk";
@@ -49,6 +49,20 @@ export function AttributeServerQuery({layer,execute,openFeature,selection,applyS
   }catch(e){if(epoch.current===seq){setSelectionProgress("");setError(e instanceof Error?e.message:"Không áp dụng được vùng chọn.")}}
   finally{if(epoch.current===seq){lock.current=false;setBusy(false);setSelecting(false)}}
  }
+ async function exportSelection(){
+  if(lock.current||!selection)return;
+  const seq=++epoch.current,before=new Set(selection),base=layer;
+  lock.current=true;setBusy(true);setSelecting(true);setError("");setSelectionProgress("");
+  const current=()=>epoch.current===seq&&selectionLayerCurrent(latest.current.layer,base)&&!!latest.current.selection&&sameKeys(latest.current.selection,before);
+  try{
+   const found=await exportSelectedAttributes(base,before,body=>execute(base,body),current,(n,total)=>{if(current())setSelectionProgress("Đang đối chiếu "+n+"/"+total+" bản ghi…")});
+   if(!current())throw Error("Phạm vi đã thay đổi.");
+   const url=URL.createObjectURL(new Blob(["\ufeff",found.tsv],{type:"text/tab-separated-values;charset=utf-8"}));
+   const a=document.createElement("a");a.href=url;a.download="selected-attributes.tsv";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+   setSelectionProgress("Đã xuất "+found.count+" dòng thuộc tính được chọn.");
+  }catch(e){if(epoch.current===seq){setSelectionProgress("");setError(e instanceof Error?e.message:String(e))}}
+  finally{if(epoch.current===seq){lock.current=false;setBusy(false);setSelecting(false)}}
+ }
  const selectionLimit=selectionMode==="invert"?layer.source.feature_count:result?.total_count;
  return <div className="attribute-server-query">
   <p className="live-note">Truy vấn thuộc tính Rust trên toàn nguồn được phép (tối đa 50.000 bản ghi), gồm cả bản ghi thiếu hoặc lỗi hình học. Không tải hình học vào kết quả; chỉ mở bản ghi có hình học hiện hữu trên bản đồ.</p>
@@ -64,6 +78,7 @@ export function AttributeServerQuery({layer,execute,openFeature,selection,applyS
    <button type="submit" disabled={busy}>Chạy truy vấn</button>
   </form>
   {selection&&applySelection&&<details><summary>Chọn theo biểu thức AST (toàn nguồn)</summary><p>Biểu thức Boolean; NULL không được chọn. Tối đa 5.000 bản ghi, đọc theo revision đã xác minh, không thực thi SQL.</p><label>Biểu thức<textarea rows={3} maxLength={500} disabled={busy} value={expression} onChange={e=>{setExpression(e.target.value);setSelectionProgress("")}} placeholder={'"ma" IS NOT NULL'}/></label><div>{fields.slice(0,50).map(f=><button key={f.field_id} type="button" disabled={busy} onClick={()=>setExpression(v=>(v+'"'+f.field_id.replaceAll('"','""')+'"').slice(0,500))}>{f.name}</button>)}</div>{expressionError&&<p role="alert">{expressionError}</p>}<label>Thao tác<select value={selectionMode} disabled={busy} onChange={e=>setSelectionMode(e.target.value as QuerySelectionMode)}><option value="replace">Thay vùng chọn nguồn này</option><option value="add">Thêm</option><option value="remove">Bỏ</option><option value="intersect">Giao</option>{selectionMode==="invert"&&<option value="invert" disabled>Đảo (chỉ truy vấn)</option>}</select></label><button type="button" disabled={busy||!expression.trim()||!!expressionError||selectionMode==="invert"||layer.source.feature_count==null||layer.source.feature_count>QUERY_SELECTION_LIMIT} onClick={()=>void selectMatches(true)}>Áp dụng biểu thức</button></details>}
+  {selection&&<section aria-label="Xuất thuộc tính vùng chọn"><button type="button" disabled={busy||![...selection].some(k=>k.startsWith(layer.source_id+":"))} onClick={()=>void exportSelection()}>Xuất toàn bộ thuộc tính đã chọn (TSV)</button><small>Gồm cả FID chưa tải ở trang hiện tại, không xuất hình học; kiểm tra phiên bản trước khi tải tệp.</small></section>}
   {busy&&!selecting&&<p role="status">Đang tải từ máy chủ…</p>}{selectionProgress&&<p role="status">{selectionProgress}</p>}{error&&<p role="alert">{error}</p>}
   {result&&<><p role="status">{result.total_count.toLocaleString("vi-VN")} đối tượng phù hợp · trang {Math.floor(result.offset/TABLE_QUERY_LIMIT)+1}</p>
    <div className="qgis-table-scroll"><table><thead><tr><th>FID</th><th>Hình học</th>{fields.map(f=><th key={f.field_id}>{f.name}</th>)}</tr></thead><tbody>{result.items.map(r=><tr key={r.feature_id}><td><button type="button" disabled={busy||r.geometry_state!=="present"} onClick={()=>void open(r.feature_id)}>{r.feature_id}</button></td><td>{({present:"Có hình học",absent:"Thiếu hình học",empty:"Rỗng",invalid:"Không hợp lệ",unsupported:"Chưa hỗ trợ"} as const)[r.geometry_state??"unsupported"]}</td>{fields.map(f=><td key={f.field_id}>{String(r.attributes[f.field_id]??"—")}</td>)}</tr>)}</tbody></table></div>

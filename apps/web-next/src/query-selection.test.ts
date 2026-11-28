@@ -1,6 +1,6 @@
 import {describe,it,expect,vi} from "vitest";
 import type {SpatialLayer,LayerQueryResponse} from "@openvietgis/client-sdk";
-import {combineQuerySelection,collectQuerySelection,sameKeys,collectExpressionSelection} from "./query-selection";
+import {combineQuerySelection,collectQuerySelection,sameKeys,collectExpressionSelection,exportSelectedAttributes} from "./query-selection";
 const layer={id:"l",source_id:"s",source:{content_revision:"c",schema_revision:"v",feature_count:101,schema:{fields:[]}}} as unknown as SpatialLayer;
 const page=(offset:number,ids:string[],fp="pin")=>({layer_id:"l",source_id:"s",content_revision:"c",schema_revision:"v",offset,limit:100,query_fingerprint:fp,attribute_only:true,total_count:101,has_more:offset===0,items:ids.map(feature_id=>({feature_id,attributes:{},geometry:null,geometry_state:"absent"}))} as LayerQueryResponse);
 const first=page(0,Array.from({length:100},(_,i)=>"id"+i));
@@ -40,5 +40,17 @@ describe("typed expression selection",()=>{
   expect((await collectExpressionSelection(l,"NULL",async()=>response,()=>true,()=>{})).keys.size).toBe(0);
   await expect(collectExpressionSelection(l,"42",async()=>response,()=>true,()=>{})).rejects.toThrow("Boolean");
   await expect(collectExpressionSelection(l,"TRUE",async()=>response,()=>false,()=>{})).rejects.toThrow();
+ });
+});
+
+describe("export selected attributes from pinned server pages",()=>{
+ it("exports selected unloaded FIDs and does not mix another source",async()=>{
+  const request=vi.fn(async(b:Record<string,unknown>)=>b.offset===0?first:page(100,["last"]));
+  const result=await exportSelectedAttributes(layer,new Set(["s:id0","s:last","other:secret"]),request,()=>true,()=>{});
+  expect(result.count).toBe(2);expect(result.tsv).toBe("FID\tgeometry_state\nid0\tabsent\nlast\tabsent");
+  expect(request.mock.calls.length).toBe(2);
+  expect(request.mock.calls[1]![0]).toMatchObject({expected_query_fingerprint:"pin"});
+  await expect(exportSelectedAttributes(layer,new Set(["s:missing"]),async b=>b.offset===0?first:page(100,["last"]),()=>true,()=>{})).rejects.toThrow("FID");
+  await expect(exportSelectedAttributes(layer,new Set(["s:id0"]),async()=>first,()=>false,()=>{})).rejects.toThrow();
  });
 });

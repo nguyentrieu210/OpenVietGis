@@ -1,4 +1,5 @@
 import {parseExpression,evaluateExpression} from "./label-expr";
+import {tableTsv} from "./table-columns";
 import type {LayerQueryResponse,SpatialLayer} from "@openvietgis/client-sdk";
 import type {FilterRow} from "./workbenches/features/platform/query-filters";
 import {tableQueryBody,verifyTableQuery,TABLE_QUERY_LIMIT} from "./table-query";
@@ -69,4 +70,36 @@ export async function collectExpressionSelection(layer:SpatialLayer,expression:s
  }
  ensure();if(seen.size!==expected)throw Error("Nguồn chưa được tải đủ.");
  return {keys,missingGeometry};
+}
+
+export const SELECTED_EXPORT_MAX_SOURCE=50000;
+export const SELECTED_EXPORT_MAX_BYTES=16*1024*1024;
+/** Export selected FIDs from the authorized source, not just the visible page.
+ * Preserve the table text format and its formula-injection protections. */
+export async function exportSelectedAttributes(layer:SpatialLayer,selected:ReadonlySet<string>,execute:(body:Record<string,unknown>)=>Promise<LayerQueryResponse>,current:()=>boolean,progress:(count:number,total:number)=>void){
+ const prefix=layer.source_id+":",ids=new Set([...selected].filter(k=>k.startsWith(prefix)).map(k=>k.slice(prefix.length)));
+ const expected=layer.source.feature_count;
+ if(!ids.size||ids.size>QUERY_SELECTION_LIMIT||ids.has("")||expected===null||!Number.isSafeInteger(expected)||expected<ids.size||expected>SELECTED_EXPORT_MAX_SOURCE)throw Error("Vùng chọn hoặc nguồn vượt giới hạn xuất.");
+ const fields=layer.source.schema.fields;
+ let bytes=0,scanned=0;const records:string[]=[];const encoder=new TextEncoder();
+ const push=(line:string)=>{bytes+=encoder.encode(line).byteLength+1;if(bytes>SELECTED_EXPORT_MAX_BYTES)throw Error("Kết quả vượt 16 MiB.");records.push(line)};
+ push(tableTsv(["FID","geometry_state",...fields.map(f=>f.name)],[]));
+ let fingerprint:string|undefined;const seen=new Set<string>();
+ const ensure=()=>{if(!current())throw Error("Nguồn, quyền hoặc vùng chọn đã thay đổi; không xuất tệp.")};
+ for(let offset=0;;offset+=TABLE_QUERY_LIMIT){
+  ensure();const body=tableQueryBody(layer,{field:"",op:"eq",value:"",negate:false},"","asc",offset,fingerprint);
+  const page=verifyTableQuery(layer,await execute(body),offset,fingerprint);ensure();
+  if(page.total_count!==expected)throw Error("Số lượng nguồn không khớp.");
+  fingerprint=page.query_fingerprint;
+  for(const row of page.items){
+   if(seen.has(row.feature_id))throw Error("Trùng FID giữa các trang.");seen.add(row.feature_id);
+   if(ids.has(row.feature_id)){push(tableTsv([row.feature_id,row.geometry_state??"",...fields.map(f=>row.attributes[f.field_id]??"")],[]));ids.delete(row.feature_id)}
+  }
+  scanned+=page.items.length;progress(scanned,expected);
+  if(!page.has_more)break;
+  // Stop only after every selected FID has been verified in this pinned query.
+  if(!ids.size)break;
+ }
+ ensure();if(ids.size)throw Error("Không tìm thấy đầy đủ FID đã chọn trong nguồn hiện tại.");
+ return {tsv:records.join("\n"),count:records.length-1};
 }

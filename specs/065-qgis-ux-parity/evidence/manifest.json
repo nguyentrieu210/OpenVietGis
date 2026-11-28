@@ -439,9 +439,11 @@
         "apps/web-next/src/table-columns.test.ts",
         "apps/web-next/qgis-parity-keyboard-smoke.mjs",
         "apps/web-next/src/AttributeServerQuery.tsx",
-        "apps/web-next/src/table-query.ts"
+        "apps/web-next/src/table-query.ts",
+        "apps/web-next/src/query-selection.ts",
+        "apps/web-next/src/query-selection.test.ts"
       ],
-      "blocker": "Copy current server query page TSV; no whole-source export or QGIS pairing."
+      "blocker": "Current page TSV plus selected attribute TSV across revision-pinned source pages (up to 5000 selected FIDs, 50000 source rows, 16 MiB, includes unloaded FIDs and missing geometry states). Formula-injection protection, stale scope guard and no partial export. Full spatial format export and paired QGIS/browser acceptance remain. New tests not executed."
     },
     {
       "id": "TABLE-08",
