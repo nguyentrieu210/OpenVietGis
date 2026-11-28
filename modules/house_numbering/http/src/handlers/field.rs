@@ -85,6 +85,7 @@ struct ReviewBody {
 #[serde(deny_unknown_fields)]
 struct SyncBody {
     operations: Vec<Map<String, Value>>,
+    receipt_version: Option<u32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -241,7 +242,7 @@ async fn sync_surveys(
     csrf(&state, &auth, &headers)?;
     let (org, project) = scope_ids(&params)?;
     let body: SyncBody = decode(&body)?;
-    if !(1..=500).contains(&body.operations.len()) {
+    if !(1..=500).contains(&body.operations.len()) || !matches!(body.receipt_version,None|Some(2)) {
         return Err(HouseNumberingError::InvalidRequest);
     }
     let mut edit = module_survey(&state, &auth, org, project).await?;
@@ -257,6 +258,7 @@ async fn sync_surveys(
         can_manage,
         &state.artifact_store_dir,
         &operations,
+        body.receipt_version,
     )
     .await?;
     edit.commit().await?;

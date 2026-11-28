@@ -695,18 +695,20 @@ export function syncHouseNumberingSurveys(
   client: ApiClient,
   orgId: string,
   projectId: string,
-  operations: Array<Record<string, unknown>>
+  operations: Array<Record<string, unknown>>,
+  receiptVersion?: 2
 ) {
   return jsonMutation<{
     applied: string[];
     replayed: string[];
     conflicts: Array<Record<string, unknown>>;
     warnings: Array<Record<string, unknown>>;
+    receipts?: import("./survey-outbox").SyncReceipt[];
   }>(
     client,
     `${base(orgId, projectId)}/survey/sync`,
     "POST",
-    { operations }
+    { operations, ...(receiptVersion ? { receipt_version: receiptVersion } : {}) }
   );
 }
 export function listHouseNumberingSurveys(

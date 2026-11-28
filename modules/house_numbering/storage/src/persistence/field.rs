@@ -511,6 +511,7 @@ pub async fn sync_surveys(
     can_manage: bool,
     artifact_root: &Path,
     operations: &[Value],
+    receipt_version: Option<u32>,
 ) -> Result<Value, AppError> {
     if operations.is_empty() || operations.len() > 500 {
         return Err(validation(
@@ -519,6 +520,8 @@ pub async fn sync_surveys(
     }
     let (mut applied, mut replayed, mut conflicts, mut warnings_out) =
         (Vec::new(), Vec::new(), Vec::new(), Vec::<Value>::new());
+    let mut receipts=Vec::<Value>::new();
+    let mut seen=std::collections::HashSet::new();
     let mut delegated = 0_i64;
     let now = chrono::Utc::now();
     let empty = Map::new();
@@ -533,6 +536,14 @@ pub async fn sync_surveys(
             Some(value) => Some(Uuid::parse_str(&id_text(value)).map_err(|_| identifiers())?),
             None => None,
         };
+        let expected_revision=if receipt_version==Some(2){
+            if !seen.insert(client_uuid){return Err(validation("duplicate client_uuid in batch"));}
+            let queue_actor=item.get("queue_actor_id").and_then(Value::as_str).and_then(|v|Uuid::parse_str(v).ok());
+            if queue_actor!=Some(actor.id){return Err(AppError::forbidden("offline queue belongs to another actor"));}
+            Some(item.get("expected_building_revision").and_then(Value::as_i64).filter(|r|*r>0)
+                .ok_or_else(||validation("offline survey requires expected building revision"))?)
+        }else{None};
+        if expected_revision.is_some()&&building_id.is_none(){return Err(validation("offline survey requires building identity"));}
         let recorded_by = match item.get("recorded_by_actor_id").filter(|v| py_truthy(v)) {
             Some(value) => Uuid::parse_str(&id_text(value)).map_err(|_| identifiers())?,
             None => actor.id,
@@ -584,17 +595,9 @@ pub async fn sync_surveys(
                 "invalid survey photo list",
             ));
         }
-        for photo in &photo_ids {
-            if !artifact_available(artifact_root, edit, *photo) {
-                return Err(AppError::validation(
-                    "PHOTO_MISSING",
-                    format!("survey photo {photo} is unavailable"),
-                ));
-            }
-        }
         let canonical_photos: Vec<String> = photo_ids.iter().map(Uuid::to_string).collect();
         let raw = |key: &str| item.get(key).cloned().unwrap_or(Value::Null);
-        let semantic = json!({
+        let mut semantic = json!({
             "building_id": building_id.map(|id| id.to_string()),
             "condition": condition,
             "x": raw("x"),
@@ -604,6 +607,11 @@ pub async fn sync_surveys(
             "photo_artifact_ids": canonical_photos,
             "recorded_by_actor_id": recorded_by.to_string(),
         });
+        if let Some(revision)=expected_revision {
+            semantic["expected_building_revision"]=json!(revision);
+            semantic["queue_actor_id"]=json!(actor.id);
+            semantic["protocol"]=json!(2);
+        }
         // serde_json maps are key-sorted and compact, like json.dumps(sort_keys, separators).
         let fingerprint = format!(
             "{:x}",
@@ -631,6 +639,7 @@ pub async fn sync_surveys(
             if stored.as_deref() == Some(fingerprint.as_str()) {
                 let id: Uuid = existing.try_get("id").map_err(db_error)?;
                 replayed.push(json!(id.to_string()));
+                receipts.push(json!({"client_uuid":client_uuid,"survey_id":id,"status":"replayed"}));
                 if let Value::Array(items) =
                     existing.try_get::<Value, _>("warnings").map_err(db_error)?
                 {
@@ -644,8 +653,20 @@ pub async fn sync_surveys(
             }));
             continue;
         }
+        for photo in &photo_ids {
+            if !artifact_available(artifact_root, edit, *photo) {
+                return Err(AppError::validation(
+                    "PHOTO_MISSING",
+                    format!("survey photo {photo} is unavailable"),
+                ));
+            }
+        }
         if let Some(building) = building_id {
-            get_building(edit, building, false).await?;
+            let current=get_building(edit,building,true).await?;
+            if expected_revision.is_some() && (current["state"]!="active" || current["revision"].as_i64()!=expected_revision){
+                conflicts.push(json!({"client_uuid":client_uuid,"code":"STALE_BUILDING","current_revision":current["revision"]}));
+                continue;
+            }
             let accepted = sqlx::query(
                 "SELECT id FROM house_numbering.surveys
                  WHERE organization_id=$1 AND project_id=$2 AND building_id=$3
@@ -698,6 +719,7 @@ pub async fn sync_surveys(
         .await
         .map_err(db_error)?;
         applied.push(json!(survey_id.to_string()));
+        receipts.push(json!({"client_uuid":client_uuid,"survey_id":survey_id,"status":"applied"}));
         warnings_out.extend(gps.warnings);
         if recorded_by != actor.id {
             delegated += 1;
@@ -718,12 +740,9 @@ pub async fn sync_surveys(
         }),
     )
     .await?;
-    Ok(json!({
-        "applied": applied,
-        "replayed": replayed,
-        "conflicts": conflicts,
-        "warnings": warnings_out,
-    }))
+    let mut response=json!({"applied":applied,"replayed":replayed,"conflicts":conflicts,"warnings":warnings_out});
+    if receipt_version==Some(2){response["receipts"]=json!(receipts);}
+    Ok(response)
 }
 
 /// Python truthiness for JSON values read with `item.get(...)`.
