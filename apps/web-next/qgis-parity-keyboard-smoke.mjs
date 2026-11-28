@@ -207,6 +207,18 @@ try{
  }else if(process.env.OVG_EXPORT_ONLY==="1"){
   await first.click();await page.keyboard.press("Control+k");const command=page.getByRole("textbox",{name:"Dòng lệnh GIS"});await command.fill("EXPORT");await command.press("Enter");
   const xp=page.getByRole("dialog",{name:"Xuất dữ liệu"});await xp.waitFor();
+  const originalViewport=page.viewportSize();
+  for(const theme of ["light","dark"]){
+   await page.evaluate(value=>{document.documentElement.dataset.ovgTheme=value},theme);
+   for(const width of [360,390,640,768,1280,1920]){
+    await page.setViewportSize({width,height:width<640?720:900});
+    const layout=await xp.evaluate(el=>{const r=el.getBoundingClientRect(),footer=el.querySelector("footer"),opts=el.querySelector(".xp-opts");return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,viewportHeight:innerHeight,scroll:opts.scrollWidth,client:opts.clientWidth,bg:getComputedStyle(el).backgroundColor,buttons:[...footer.querySelectorAll("button")].every(b=>{const v=b.getBoundingClientRect();return v.left>=r.left-1&&v.right<=r.right+1&&v.bottom<=r.bottom+1})}});
+    assert.ok(layout.left>=-1&&layout.right<=width+1&&layout.top>=-1&&layout.bottom<=layout.viewportHeight+1&&layout.scroll<=layout.client+1&&layout.buttons,JSON.stringify({theme,width,layout}));
+    assert.equal(layout.bg,theme==="dark"?"rgb(32, 43, 52)":"rgb(255, 255, 255)");
+   }
+  }
+  await page.evaluate(()=>{document.documentElement.dataset.ovgTheme="light"});await page.setViewportSize(originalViewport);
+  console.log("PASS SPEC072 export portal 12 responsive/theme combinations");
   await xp.getByRole("radio",{name:"Toàn bộ lớp",exact:true}).click();
   await xp.getByRole("radio",{name:/Shapefile/}).click();
   await xp.getByRole("button",{name:"Kiểm tra trước khi xuất"}).click();
