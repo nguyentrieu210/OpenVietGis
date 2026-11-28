@@ -115,6 +115,8 @@ export type UnifiedLink={relation:string;source:string;target:string;add:boolean
 export type UnifiedBatch={operation:string;expected_project:string;edits:UnifiedEdit[];links:UnifiedLink[]};
 export type NativeProviderStatus={ogr_linked:boolean;analytics_linked:boolean;qualification:string;spatial:string;parquet:string};
 export const nativeProviders={
+ importOGRStream:(handle:string,index:number,name:string,expected:string,requestId:string)=>host().core.invoke<{layer:string;revision:string;count:number;digest:string}|null>("native_import_ogr_stream",{handle,index,name,expected,requestId}),
+ cancel:(requestId:string)=>host().core.invoke<void>("desktop_cancel_resource",{requestId}),
  status:()=>host().core.invoke<NativeProviderStatus>("native_provider_status"),
  importOGR:(handle:string,layer:string,index:number,expected:string)=>host().core.invoke<{revision:string}|null>("native_import_ogr",{handle,layer,index,expected}),
  transform:(handle:string,source:number,target:number,xy:[number,number][])=>host().core.invoke<[number,number][]>("native_proj",{handle,source,target,xy}),
@@ -156,6 +158,17 @@ export type UnifiedAsset={id:string;kind:UnifiedAssetKind;count:number;epsg:numb
 export type AssetRead={chunk?:number;bbox?:[number,number,number,number];bounds?:[number,number,number,number,number,number];level?:number;tile?:[number,number,number];band?:number;pixel?:[number,number,number,number];shape?:[number,number]};
 export type PersistentAsset={id:string;kind:UnifiedAssetKind;epsg:number|null;bytes:number;sha256:string};
 export const unifiedAssets={
+ tiffTile:async(handle:string,id:string,band:number,z:number,x:number,y:number,stretch:[number,number],signal?:AbortSignal)=>{
+  if(signal?.aborted)throw new DOMException("Aborted","AbortError");
+  const requestId=crypto.randomUUID();
+  const cancel=()=>{void host().core.invoke<void>("desktop_cancel_resource",{requestId}).catch(()=>{})};
+  signal?.addEventListener("abort",cancel,{once:true});
+  try{
+   const raw=await host().core.invoke<ArrayBuffer|number[]>("unified_tiff_tile",{handle,id,band,z,x,y,stretch,requestId});
+   if(signal?.aborted)throw new DOMException("Aborted","AbortError");
+   const b=raw instanceof ArrayBuffer?raw:Uint8Array.from(raw).buffer;if(b.byteLength>4*1024*1024)throw Error("RESOURCE_LIMIT");return b;
+  }finally{signal?.removeEventListener("abort",cancel)}
+ },
  list:(handle:string)=>host().core.invoke<PersistentAsset[]>("unified_asset_list",{handle}),
  attach:(handle:string,kind:UnifiedAssetKind,epsg:number|null,expected:string)=>host().core.invoke<PersistentAsset|null>("unified_asset_attach",{handle,kind,epsg,expected}),
  reopen:(handle:string,id:string)=>host().core.invoke<UnifiedAsset>("unified_asset_reopen",{handle,id}),
