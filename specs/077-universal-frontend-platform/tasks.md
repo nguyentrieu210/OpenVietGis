@@ -21,29 +21,37 @@
 ## W3 workbench
 - [x] T301a Dockview 8.10.0 OSS adapter, registered panels, tabs/split/dock/float/resize/maximize/reset and scoped versioned persistence; window capabilities fail closed.
 - [x] T301b TypeScript, production demo build, 4 W3 browser tests plus 9 W2 regression tests; synthetic canvas lifecycle and restore checks.
-- [ ] T301c Real MapLibre/Cesium/CAD lifecycle, keyboard drag/accessibility, layout performance, native IPC window qualification and application integration/rollback after W0/W1 gates.
+- [x] T301c1 Real MapLibre lifecycle fixture: same map mount, camera, selected feature state across tab/split/float/redock.
+- [ ] T301c2 Actual Studio DockLayout replacement, Cesium/CAD lifecycle, keyboard drag/accessibility, performance, native IPC and rollback.
 ## W4 GIS/CAD
 - [x] T401a Shared GIS/CAD UI: LayerTree, Legend, CrsSelector, SymbolEditor/Preview, ColorRamp, CoordinateInput, SnapToolbar and PropertyEditor with typed host intents and scoped styles.
 - [x] T401b Validate inputs, capabilities, revision-bound property updates; TypeScript, Vite and 18/18 isolated tests (5 W4 + 13 regressions).
-- [ ] T401c Wire host adapters to existing map/layer/style/CRS/digitizing/CAD services; verify real render/event/edit-state, print isolation and legacy parity after integration gates.
+- [x] T401c1 Existing CRS picker uses shared accent-insensitive CRS search; display-only semantics and VN-2000 smoke verified.
+- [ ] T401c2 Remaining layer/style/symbol/snapping/CAD/print host adapters and parity.
 ## W5 data
 - [x] T501a TanStack Table/Virtual grid and virtual tree candidate, host paging/filter/sort intents, selection, typed edits and synthetic 100k rows test.
-- [ ] T501b Real server cursor paging, tree keyboard semantics, performance benchmark and app wiring.
+- [x] T501b1 Shared TanStack row window in existing QGIS attribute table, preserving legacy selection, read ACL and cursor/paging code; scroll and selection smoke PASS.
+- [ ] T501b2 Actual remote server cursor end-to-end, editable grid integration, tree keyboard semantics and large dataset latency benchmark.
 ## W6 Flutter
 - [x] T601a Flutter package with W1 ThemeData, button/field/layer/status/adaptive workspace and widget test sources.
-- [ ] T601b Flutter compile/device tests, shared icons, offline/GPS and actual mobile app integration.
+- [x] T601b1 Stacked PR #120: generated native light/dark/system theme, shared GPS survey controls, dependency vendor and host theme test.
+- [ ] T601b2 Native build/device results, full component integration, shared icons, offline/GPS/renderer parity.
 ## W7 plugin UI
 - [x] T701a React presentation adapter for SPEC075 read-only nodes and host session, bounds and invalid action tests; no independent signature/runtime.
-- [ ] T701b Wire canonical SPEC075 parsers/session, version negotiation and existing Flutter renderer, verify cross-platform session/revocation and migrate plugins.
+- [x] T701b1 Stacked PR #121: canonical Web SPEC075 host consumes shared controlled document renderer; preserve parser/grant/proposal confirmation; build and SDK tests PASS.
+- [ ] T701b2 End-to-end server/revocation/version negotiation, Flutter renderer/transport qualification, remaining plugin migration.
 ## W8 commands
 - [x] T801a Command registry, palette, normalized shortcut collision, dynamic capability guard, vi/en labels and CoreCommand adapter.
 - [ ] T801b Integrate existing CoreCommandBar/ribbon/menu and all legacy aliases/context keys; keyboard/accessibility tests.
 ## W9 theming/accessibility
 - [x] T901a Per-account preferences helpers and theme/density/locale/contrast/motion panel, tested dark/high contrast and normalization.
-- [ ] T901b Integrate existing account preference and translation systems; screen reader, forced colors and native preference parity.
+- [x] T901b1 Web AccountMenu stores theme/density/contrast/motion through shared per-account settings; migration and persistence smoke PASS.
+- [ ] T901b2 Full bilingual application translation, screen reader, forced colors and native preference parity.
 ## W10 migration
 - [x] T1001a First reversible Web slice: generated token imports, remove duplicate SPEC072 token blocks, shared compatibility facade and pnpm lock; fixture baseline/candidate and Web tests.
-- [ ] T1001b Full per-domain adoption (GIS/CAD/DataGrid/Dockview/AI/photo/plugins), native branch convergence, verified legacy CSS removal.
+- [x] T1001b1 Web account settings, shared CRS search and table row window, modal/chat stacking fix; native and plugin stacked candidates.
+- [ ] T1001b2 Full per-domain adoption (GIS/CAD/DataGrid/Dockview/AI/photo/plugins), native branch convergence, verified legacy CSS removal.
 ## W11 qualification
 - [x] T1101a Package exports, demo and release checklist, dedicated UI qualification workflow, local evidence.
-- [ ] T1101b Full integrated CI result, Flutter/Tauri build, renderer and device qualification, security/visual/performance parity and release artifacts; no deployment implied.
+- [x] T1101b1 Integrated local 21/21 UI regression, Web 314 Vitest + 53 Node, real MapLibre fixture, account/CRS/table/CRUD smoke. CI workflow duplicate key and observed Flutter import/focus failures repaired.
+- [ ] T1101b2 Green remote CI on final commit, Flutter/Tauri build, renderer and device qualification, security/visual/performance parity and release artifacts.

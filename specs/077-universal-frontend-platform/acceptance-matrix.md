@@ -56,3 +56,14 @@ Source checks alone are not runtime acceptance. Missing external branch objects 
 | W10 six viewport screenshot captures, no document overflow, modal CRUD smoke | PASS fixture; no full image/renderer comparison |
 | W11 latest isolated combined test run | interrupted/timeouts; focused rerun 3/3 PASS; final consolidated run pending |
 | W11 native builds, full production integration, renderer/device benchmark/security | pending |
+
+## Follow-up integration qualification
+| Gate | Status |
+|---|---|
+| Web account appearance persistence, shared CRS and modal/chat stacking | PASS on isolated real application with mocked server |
+| Existing attribute table uses TanStack window; bounded rows and selection after scroll | PASS fixture |
+| Dockview real MapLibre camera + feature state on same mounted renderer | PASS isolated fixture, not full Studio |
+| Integrated pnpm UI suite 21/21; Web 314 Vitest + 53 Node | PASS local (plugin presentation refactor separately focused 2/2) |
+| Mobile host integration PR #120 | code committed, native qualification pending |
+| SPEC075 host integration PR #121 | build, frozen lock, client SDK 100/100 and lifecycle 2/2 PASS; E2E/CI pending |
+| Full app migration, Cesium/CAD/native windows, remote CI and release | pending |

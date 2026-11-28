@@ -37,6 +37,16 @@ jobs:
           trap 'kill "$server" 2>/dev/null || true' EXIT
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4198/ >/dev/null && break; sleep 1; done
           OVG_CAPTURE_DIR="$RUNNER_TEMP/spec077-captures" OVG_TEST_URL="http://127.0.0.1:4198/rewrite/?live=1" node spec077-baseline-smoke.mjs
+      - name: Real MapLibre docking fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd apps/web-next
+          pnpm exec vite --host 127.0.0.1 --port 4199 --strictPort > "$RUNNER_TEMP/spec077-map.log" 2>&1 &
+          server=$!
+          trap 'kill "$server" 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4199/spec077-map-fixture.html >/dev/null && break; sleep 1; done
+          node spec077-map-lifecycle-smoke.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
