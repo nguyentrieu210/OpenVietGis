@@ -9,6 +9,7 @@ export default function UnifiedWorkbench(){
  const [schema,setSchema]=useState("[]"),[cursor,setCursor]=useState<UnifiedCursor|null>(null),[rows,setRows]=useState<GeoJSON.Feature[]>([]);
  const [tileMode,setTileMode]=useState(false),[visibleLayers,setVisibleLayers]=useState<string[]>([]);
  const [native,setNative]=useState<NativeProviderStatus>(),[nativeOutput,setNativeOutput]=useState("");
+ const [ogrBulkName,setOgrBulkName]=useState("Import OGR"),[ogrRequest,setOgrRequest]=useState<string>(),[tiffMap,setTiffMap]=useState(false),[tiffStyle,setTiffStyle]=useState<{band:number;min:number;max:number}>({band:1,min:0,max:255}),[stretchMin,setStretchMin]=useState("0"),[stretchMax,setStretchMax]=useState("255");
  const [ogrIndex,setOgrIndex]=useState("0"),[fromCrs,setFromCrs]=useState("4326"),[toCrs,setToCrs]=useState("3857"),[xyText,setXyText]=useState("[[106.7,11]]"),[band,setBand]=useState("1");
  const [persisted,setPersisted]=useState<PersistentAsset[]>([]),[bulkName,setBulkName]=useState("Import NDJSON");
  const [asset,setAsset]=useState<UnifiedAsset>(),[assetKind,setAssetKind]=useState<UnifiedAssetKind>("cad"),[assetEpsg,setAssetEpsg]=useState("4326"),[assetChunk,setAssetChunk]=useState("0"),[assetWindow,setAssetWindow]=useState("0,0,256,256"),[assetBounds,setAssetBounds]=useState(""),[assetLod,setAssetLod]=useState("0"),[assetPreview,setAssetPreview]=useState(""),[rasterImage,setRasterImage]=useState("");
@@ -19,6 +20,11 @@ export default function UnifiedWorkbench(){
  const open=async(id:string)=>{if(active.current?.id===id)return;if(active.current){await unified.close(active.current.handle);active.current=undefined;setOpened(undefined);setCatalog(undefined);setAsset(undefined);setAssetPreview("");setRasterImage("");setPersisted([])}const w=await unified.open(id);if(!alive.current){await unified.close(w.handle);return}active.current=w;setOpened(w);setVisibleLayers([]);await refresh(w.handle)};
  useEffect(()=>{alive.current=true;void run(async()=>{setProjects(await unified.list());setNative(await nativeProviders.status())});return()=>{alive.current=false;if(active.current)void unified.close(active.current.handle).catch(()=>{})}},[]);
  useEffect(()=>{if(!div.current)return;
+ maplibregl.addProtocol("ovgt",async(params,abort)=>{
+  const r=/^ovgt:\/\/v1\/([0-9a-f-]{36})\/([0-9a-f-]{36})\/([0-9]+)\/([^/]+)\/([^/]+)\/([0-9]+)\/([0-9]+)\/([0-9]+)\.png$/.exec(params.url);
+  if(!r)throw Error("INVALID_TILE_URI");
+  return {data:await unifiedAssets.tiffTile(r[1]!,r[2]!,Number(r[3]),Number(r[6]),Number(r[7]),Number(r[8]),[Number(r[4]),Number(r[5])],abort.signal)};
+ });
  maplibregl.addProtocol("ovgr",async(params,abort)=>{
   const r=/^ovgr:\/\/v1\/([0-9a-f-]{36})\/([0-9a-f-]{36})\/([0-9]+)\/([0-9]+)\/([0-9]+)\.png$/.exec(params.url);if(!r)throw Error("INVALID_TILE_URI");if(abort.signal.aborted)throw new DOMException("Aborted","AbortError");
   const b=await unifiedAssets.read(r[1]!,r[2]!,{tile:[Number(r[3]),Number(r[4]),Number(r[5])]});if(abort.signal.aborted)throw new DOMException("Aborted","AbortError");return {data:b};
@@ -28,7 +34,7 @@ export default function UnifiedWorkbench(){
   if(!m)throw Error("INVALID_TILE_URI");
   return {data:await unified.tile(m[1]!,m[2]!,m[3]!,Number(m[4]),Number(m[5]),Number(m[6]),abort.signal)};
  });
- const m=new maplibregl.Map({container:div.current,style:{version:8,sources:{},layers:[{id:"background",type:"background",paint:{"background-color":"#eef2f4"}}]},center:[106.7,11],zoom:6,renderWorldCopies:false});map.current=m;m.on("load",()=>{m.addSource("features",{type:"geojson",data:{type:"FeatureCollection",features:[]}});m.addSource("assets",{type:"geojson",data:{type:"FeatureCollection",features:[]}});m.addLayer({id:"fill",source:"features",type:"fill",filter:["==",["geometry-type"],"Polygon"],paint:{"fill-color":"#1976a3","fill-opacity":.25}});m.addLayer({id:"line",source:"features",type:"line",filter:["in",["geometry-type"],["literal",["Polygon","LineString"]]],paint:{"line-color":"#1976a3","line-width":2}});m.addLayer({id:"point",source:"features",type:"circle",filter:["==",["geometry-type"],"Point"],paint:{"circle-color":"#1976a3","circle-radius":5}});m.addLayer({id:"asset-line",type:"line",source:"assets",filter:["==",["geometry-type"],"LineString"],paint:{"line-color":"#8548b5","line-width":2}});m.addLayer({id:"asset-point",type:"circle",source:"assets",filter:["==",["geometry-type"],"Point"],paint:{"circle-color":"#8548b5","circle-radius":3}});setReady(true)});m.on("error",e=>{if(alive.current)setMessage(String(e.error))});m.addControl(new maplibregl.NavigationControl());return()=>{map.current=undefined;m.remove();maplibregl.removeProtocol("ovgu");maplibregl.removeProtocol("ovgr")}},[]);
+ const m=new maplibregl.Map({container:div.current,style:{version:8,sources:{},layers:[{id:"background",type:"background",paint:{"background-color":"#eef2f4"}}]},center:[106.7,11],zoom:6,renderWorldCopies:false});map.current=m;m.on("load",()=>{m.addSource("features",{type:"geojson",data:{type:"FeatureCollection",features:[]}});m.addSource("assets",{type:"geojson",data:{type:"FeatureCollection",features:[]}});m.addLayer({id:"fill",source:"features",type:"fill",filter:["==",["geometry-type"],"Polygon"],paint:{"fill-color":"#1976a3","fill-opacity":.25}});m.addLayer({id:"line",source:"features",type:"line",filter:["in",["geometry-type"],["literal",["Polygon","LineString"]]],paint:{"line-color":"#1976a3","line-width":2}});m.addLayer({id:"point",source:"features",type:"circle",filter:["==",["geometry-type"],"Point"],paint:{"circle-color":"#1976a3","circle-radius":5}});m.addLayer({id:"asset-line",type:"line",source:"assets",filter:["==",["geometry-type"],"LineString"],paint:{"line-color":"#8548b5","line-width":2}});m.addLayer({id:"asset-point",type:"circle",source:"assets",filter:["==",["geometry-type"],"Point"],paint:{"circle-color":"#8548b5","circle-radius":3}});setReady(true)});m.on("error",e=>{if(alive.current)setMessage(String(e.error))});m.addControl(new maplibregl.NavigationControl());return()=>{map.current=undefined;m.remove();maplibregl.removeProtocol("ovgu");maplibregl.removeProtocol("ovgr");maplibregl.removeProtocol("ovgt")}},[]);
  useEffect(()=>{
   const m=map.current;if(!m||!ready)return;
   const ids:string[]=[];
@@ -49,11 +55,22 @@ export default function UnifiedWorkbench(){
  useEffect(()=>{
   const m=map.current;if(!ready||!m)return;
   (m.getSource("assets") as GeoJSONSource|undefined)?.setData({type:"FeatureCollection",features:[]});
-  if(!opened||asset?.kind!=="mbtiles")return;
-  m.addSource("asset-raster",{type:"raster",tiles:[`ovgr://v1/${opened.handle}/${asset.id}/{z}/{x}/{y}.png`],tileSize:256,maxzoom:22});
+  if(!opened||!asset)return;
+  if(asset.kind!=="mbtiles"&&!(asset.kind==="tiff"&&tiffMap))return;
+  const url=asset.kind==="tiff"?`ovgt://v1/${opened.handle}/${asset.id}/${tiffStyle.band}/${tiffStyle.min}/${tiffStyle.max}/{z}/{x}/{y}.png`:`ovgr://v1/${opened.handle}/${asset.id}/{z}/{x}/{y}.png`;
+  m.addSource("asset-raster",{type:"raster",tiles:[url],tileSize:256,maxzoom:22});
   m.addLayer({id:"asset-raster",source:"asset-raster",type:"raster"},"fill");
   return()=>{if(map.current!==m)return;if(m.getLayer("asset-raster"))m.removeLayer("asset-raster");if(m.getSource("asset-raster"))m.removeSource("asset-raster")};
- },[opened,asset,ready]);
+ },[opened,asset,ready,tiffMap,tiffStyle]);
+ const fitTiff=()=>{
+  if(asset?.kind!=="tiff"||!asset.metadata||!map.current)return;
+  const a=asset.metadata;const [x,dx,rx,y,ry,dy]=a.geotransform;
+  if(x===undefined||dx===undefined||rx!==0||y===undefined||ry!==0||dy===undefined||dx<=0||dy>=0||![4326,3857].includes(a.epsg??0))throw Error("MAP_TILE_REQUIRES_NORTH_UP_4326_OR_3857");
+  const xy=(u:number,v:number):[number,number]=>a.epsg===4326?[u,v]:[u/6378137*180/Math.PI,Math.atan(Math.sinh(v/6378137))*180/Math.PI];
+  const sw=xy(x,y+dy*a.height),ne=xy(x+dx*a.width,y);
+  if([...sw,...ne].some(n=>!Number.isFinite(n))||sw[0]< -180||ne[0]>180||sw[1]< -85.051129||ne[1]>85.051129)throw Error("RASTER_EXTENT_UNSUPPORTED");
+  map.current.fitBounds([sw,ne],{padding:24,duration:0});
+ };
  const assetCrs=()=>{
   const epsg=assetKind==="cad"?4326:["las","laz","copc"].includes(assetKind)?Number(assetEpsg):null;
   if(epsg!==null&&(!Number.isInteger(epsg)||epsg<=0||epsg>4294967295))throw Error("INVALID_CRS");return epsg;
@@ -69,7 +86,7 @@ export default function UnifiedWorkbench(){
   if(!opened)return;
   if(asset?.id===id)return;
   if(asset){await unifiedAssets.close(opened.handle,asset.id);setAsset(undefined)}
-  const a=await unifiedAssets.reopen(opened.handle,id);setAsset(a);setAssetChunk("0");setAssetPreview(JSON.stringify(a,null,2));setRasterImage("");
+  const a=await unifiedAssets.reopen(opened.handle,id);setAsset(a);setTiffMap(false);setAssetChunk("0");setAssetPreview(JSON.stringify(a,null,2));setRasterImage("");
   if(a.metadata)setAssetWindow("0,0,"+Math.min(256,a.metadata.width)+","+Math.min(256,a.metadata.height));
  };
  const loadAsset=async()=>{
@@ -142,12 +159,23 @@ export default function UnifiedWorkbench(){
  {["las","laz","copc"].includes(asset.kind)&&<label>Khối điểm <input value={assetChunk} onChange={e=>setAssetChunk(e.target.value)} maxLength={10}/></label>}
  {asset.kind==="copc"&&<><label>BBox XYZ (trống: khối) <input value={assetBounds} onChange={e=>setAssetBounds(e.target.value)}/></label><label>LOD <input value={assetLod} onChange={e=>setAssetLod(e.target.value)} maxLength={2}/></label></>}
  {asset.kind==="tiff"&&<><label>Pixel x,y,w,h <input value={assetWindow} onChange={e=>setAssetWindow(e.target.value)}/></label><label>Band <input value={band} onChange={e=>setBand(e.target.value)} maxLength={3}/></label></>}
+ {asset.kind==="tiff"&&<><label>Min <input value={stretchMin} onChange={e=>setStretchMin(e.target.value)}/></label><label>Max <input value={stretchMax} onChange={e=>setStretchMax(e.target.value)}/></label>
+ <button disabled={busy||!ready} onClick={()=>void run(async()=>{const n=Number(band),min=Number(stretchMin),max=Number(stretchMax);
+ if(!Number.isInteger(n)||n<1||n>(asset.metadata?.bands??0)||!Number.isFinite(min)||!Number.isFinite(max)||min>=max)throw Error("INVALID_RASTER_STYLE");
+ fitTiff();setTiffStyle({band:n,min,max});setTiffMap(true)})}>Hiển thị GeoTIFF trên bản đồ</button>
+ {tiffMap&&<button onClick={()=>setTiffMap(false)}>Ẩn GeoTIFF</button>}</>}
  {asset.kind!=="mbtiles"&&<button disabled={busy||!ready} onClick={()=>void run(readAsset)}>Đọc khung / khối</button>}
  <pre>{assetPreview}</pre>{rasterImage&&<img src={rasterImage} alt="Mẫu cửa sổ pixel GeoTIFF" width={256} height={256}/>}</>}
  </details>
  <details><summary>Native Data Providers (GDAL / PROJ / DuckDB)</summary>
  <p>GDAL/PROJ: {native?.ogr_linked?"đã liên kết · thử nghiệm":"chưa liên kết"} · DuckDB: {native?.analytics_linked?"đã liên kết · thử nghiệm":"chưa liên kết"}</p>
- <label>Chỉ số lớp OGR <input value={ogrIndex} onChange={e=>setOgrIndex(e.target.value)} maxLength={2}/></label><button disabled={busy||!native?.ogr_linked||!layer} onClick={()=>void run(async()=>{const i=Number(ogrIndex);if(!Number.isInteger(i)||i<0||i>=64)throw Error("INVALID_LAYER");const r=await nativeProviders.importOGR(opened.handle,layer,i,catalog.revision);if(r){await refresh(opened.handle);setMessage("Đã nhập OGR revision "+r.revision)}})}>Nhập SHP / FGB / GeoParquet</button><button disabled={busy||!native?.ogr_linked||!layer} onClick={()=>void run(async()=>{const n=await unifiedAssets.exportParquet(opened.handle,layer,catalog.revision);if(n!==null)setMessage("Đã xuất "+n+" đối tượng GeoParquet")})}>Xuất GeoParquet</button>
+ <label>Chỉ số lớp OGR <input value={ogrIndex} onChange={e=>setOgrIndex(e.target.value)} maxLength={2}/></label><button disabled={busy||!native?.ogr_linked||!layer} onClick={()=>void run(async()=>{const i=Number(ogrIndex);if(!Number.isInteger(i)||i<0||i>=64)throw Error("INVALID_LAYER");const r=await nativeProviders.importOGR(opened.handle,layer,i,catalog.revision);if(r){await refresh(opened.handle);setMessage("Đã nhập OGR revision "+r.revision)}})}>Nhập SHP / FGB / GeoParquet</button>
+ <label>Tên lớp nhập lớn <input value={ogrBulkName} onChange={e=>setOgrBulkName(e.target.value)} maxLength={256}/></label>
+ <button disabled={busy||!native?.ogr_linked||!ogrBulkName.trim()} onClick={()=>void run(async()=>{
+  const i=Number(ogrIndex);if(!Number.isInteger(i)||i<0||i>=64)throw Error("INVALID_LAYER");
+  const id=crypto.randomUUID();setOgrRequest(id);
+  try{const r=await nativeProviders.importOGRStream(opened.handle,i,ogrBulkName,catalog.revision,id);if(r){await refresh(opened.handle);setLayer(r.layer);setMessage("Đã nhập OGR "+r.count+" đối tượng")}}finally{setOgrRequest(undefined)}
+ })}>Nhập OGR theo luồng (lớp mới)</button>{ogrRequest&&<button onClick={()=>void nativeProviders.cancel(ogrRequest).catch(e=>setMessage(String(e)))}>Hủy nhập OGR</button><button disabled={busy||!native?.ogr_linked||!layer} onClick={()=>void run(async()=>{const n=await unifiedAssets.exportParquet(opened.handle,layer,catalog.revision);if(n!==null)setMessage("Đã xuất "+n+" đối tượng GeoParquet")})}>Xuất GeoParquet</button>
  <label>EPSG nguồn <input value={fromCrs} onChange={e=>setFromCrs(e.target.value)} maxLength={10}/></label><label>EPSG đích <input value={toCrs} onChange={e=>setToCrs(e.target.value)} maxLength={10}/></label><textarea aria-label="Tọa độ XY JSON" value={xyText} onChange={e=>setXyText(e.target.value)} rows={2}/><button disabled={busy||!native?.ogr_linked} onClick={()=>void run(async()=>{const a=Number(fromCrs),b=Number(toCrs),xy=JSON.parse(xyText);if(![a,b].every(n=>Number.isInteger(n)&&n>0&&n<=4294967295)||!Array.isArray(xy)||xy.length>4096)throw Error("INVALID_COORDINATES");setNativeOutput(JSON.stringify(await nativeProviders.transform(opened.handle,a,b,xy),null,2))})}>Chuyển CRS PROJ</button>
  <label>Band TIFF <input value={band} onChange={e=>setBand(e.target.value)} maxLength={3}/></label><button disabled={busy||!native?.ogr_linked} onClick={()=>void run(async()=>{const n=Number(band);if(!Number.isInteger(n)||n<1||n>256)throw Error("INVALID_BAND");const r=await nativeProviders.rasterPreview(opened.handle,n);if(r){const {values,...metadata}=r;setNativeOutput(JSON.stringify({...metadata,valid_samples:values.filter(x=>x!==null).length,sample_first_16:values.slice(0,16)},null,2))}})}>Đọc mẫu GeoTIFF</button>
  <button disabled={busy||!layer||!native?.analytics_linked} onClick={()=>void run(async()=>setNativeOutput(JSON.stringify(await nativeProviders.pointSummary(opened.handle,layer,catalog.revision,false),null,2)))}>DuckDB thống kê điểm</button>
