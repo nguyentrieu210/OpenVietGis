@@ -126,6 +126,12 @@ try{
  await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
  assert.equal(await page.locator(".maplibregl-canvas").count(),0);
  await modes.getByRole("button",{name:"GIS",exact:true}).click();
+ // SPEC071: installed plugins are lazy and must be opened explicitly.
+ await page.locator(".core-ribbon").getByRole("button",{name:"Plugin",exact:true}).click();
+ const pluginMenu=page.getByRole("region",{name:"Menu Plugin",exact:true});
+ const pluginTrigger=pluginMenu.locator(".ovg-plugin-sub-trigger").first();
+ await pluginTrigger.focus();await pluginTrigger.press("ArrowRight");
+ await page.locator(".ovg-plugin-submenu").getByText("Mở không gian",{exact:true}).click();
  await page.getByRole("button",{name:"Địa bàn",exact:true}).waitFor();
  await modes.getByRole("button",{name:"CAD",exact:true}).click();
  await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
@@ -137,7 +143,9 @@ try{
  console.log("PASS enabled business module can enter CAD and 3D without switching to Core");
  pluginCompatible=false;await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
  await page.getByRole("button",{name:"Địa bàn",exact:true}).waitFor({state:"detached"});
- await page.getByRole("button",{name:/Chợ ứng dụng/}).click();
+ await page.locator(".core-ribbon").getByRole("button",{name:"Plugin",exact:true}).click();
+ await page.getByRole("region",{name:"Menu Plugin",exact:true}).getByRole("button",{name:"Quản lý plugin",exact:false}).click();
+ await page.getByRole("dialog",{name:"Chợ ứng dụng"}).getByRole("button",{name:"Thẻ",exact:true}).click();
  const mismatch=page.locator(".ovg-app").filter({hasText:"Quản lý và đánh số nhà"});
  await mismatch.getByText("Phiên bản không khớp",{exact:true}).waitFor();
  assert.equal(await mismatch.getByRole("button",{name:"Mở",exact:true}).count(),0);
