@@ -73,12 +73,13 @@ export function ExportDialog({client,org,pid,projectName,layers,rows,selection,i
  const panel=useRef<HTMLDivElement>(null);
  const requestClose=()=>{if(!running.current&&!busy)close()};
  useDesktopDialog(panel,requestClose);
- const shown=layers.filter(l=>canRead(l)&&l.name.toLocaleLowerCase("vi").includes(q.toLocaleLowerCase("vi")));
+ const readable=layers.filter(canRead),allPicked=readable.length>0&&readable.every(l=>picked.has(l.id));
+ const shown=readable.filter(l=>l.name.toLocaleLowerCase("vi").includes(q.toLocaleLowerCase("vi")));
  return createPortal(<div className="qgis-studio ovg-ws-shade" onMouseDown={e=>{if(e.target===e.currentTarget)requestClose()}}><div ref={panel} tabIndex={-1} className="xp" role="dialog" aria-modal="true" aria-label="Xuất dữ liệu" aria-busy={!!busy}>
   <header><div><b>Xuất dữ liệu</b><small>{projectName}</small></div><Button type="button" aria-label="Đóng" disabled={!!busy} onClick={requestClose}>×</Button></header>
   <div className="xp-body">
    <section inert={!!busy} className="xp-layers" aria-label="Lớp">
-    <div className="xp-col-head"><b>Lớp</b><Button type="button" onClick={()=>setPicked(layers.filter(canRead).every(l=>picked.has(l.id))?new Set():new Set(layers.filter(canRead).map(l=>l.id)))}>{layers.filter(canRead).every(l=>picked.has(l.id))?"Bỏ chọn":"Chọn tất cả"}</Button></div>
+    <div className="xp-col-head"><b>Lớp</b><Button type="button" disabled={!readable.length} onClick={()=>setPicked(allPicked?new Set():new Set(readable.map(l=>l.id)))}>{allPicked?"Bỏ chọn":"Chọn tất cả"}</Button></div>
     <Input className="xp-search" value={q} onChange={e=>setQ(e.target.value)} placeholder="Tìm lớp…" aria-label="Tìm lớp"/>
     <ScrollArea className="xp-layer-list">{shown.map(l=><label key={l.id} className={picked.has(l.id)?"on":""}><input type="checkbox" checked={picked.has(l.id)} onChange={()=>setPicked(p=>{const s=new Set(p);if(s.has(l.id))s.delete(l.id);else s.add(l.id);return s})}/><span className="xp-gi">{geomIcon(l)}</span><span className="xp-ln"><b>{l.name}</b><small>{(scope==="all"?counts[l.id]?.all:n(l.id))?.toLocaleString("vi-VN")} đối tượng{scope!=="all"?(scope==="selected"?" đang chọn":" trong khung nhìn"):""}</small></span></label>)}</ScrollArea>
    </section>
