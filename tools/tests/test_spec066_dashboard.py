@@ -46,7 +46,17 @@ def test_dashboard_panels_use_only_aggregate_metrics_and_document_receipts():
         "ovg:api:resident_memory_bytes",
         "ovg:api:max_instance_resident_memory_bytes",
     } <= set(queries)
-    assert record_names <= set(queries)
+    expected_recordings = {
+        "ovg:http_latency:p95_5m",
+        "ovg:http_latency:p99_5m",
+        "ovg:http_errors:ratio_5m",
+        "ovg:http_requests:rate_5m",
+        "ovg:tile_cache:hit_ratio_5m",
+        "ovg:tile_cache:capacity_ratio",
+        "ovg:api:resident_memory_bytes",
+        "ovg:api:max_instance_resident_memory_bytes",
+    }
+    assert set(queries) & record_names == expected_recordings
 
     serialized = json.dumps(dashboard).lower()
     for forbidden in ("organization_id", "project_id", "actor_id", "feature_id", "token=", "route="):
