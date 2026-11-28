@@ -1,0 +1,6 @@
+# OpenVietGIS Native Mobile
+W1 candidate; A0 and device acceptance remain open. The Flutter source is checked in here. The authoritative Rust host is crates/ovg-mobile-ffi; native platform project and generated bindings are produced by the pinned FRB integration workflow. Do not hand-edit generated files. See .github/workflows/spec073-wave1-flutter.yml for the exact setup, source copy, generation, host tests and Android build commands.
+ 
+Independent standalone mode opens an empty offline MapLibre map immediately. Local workspaces are actual private SQLite/GeoPackage files created/opened via the Rust bridge. Preferences store only language and selected local ID. No connected auth, protected cache, online plugin or import/edit UI is enabled until implemented and qualified. The current supported local write profile is WGS84 XY; no mobile server token or production secret.
+ 
+Native crates are isolated Cargo workspaces so existing Web/Server lockfiles and build targets remain untouched during feasibility. Generated lockfiles and bindings must be retained and reconciled before release; current workflow artifacts are not a final lockfile commitment. W1 source work does not waive A0.
