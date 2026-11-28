@@ -28,6 +28,7 @@ async fn immutable_certificate_lifecycle_and_tenant_denial() {
         audience: "fixture".into(),
         authority_key_id: fingerprint(key.as_bytes()),
         licensed_release_digests: vec!["a".repeat(64), "b".repeat(64)],
+        revocation_floors: vec![],
     };
     let now = Utc::now() - Duration::seconds(1);
     let mut g = LicenseGrant {
@@ -99,8 +100,41 @@ async fn immutable_certificate_lifecycle_and_tenant_denial() {
         .unwrap();
     assert!(tx.import_license(&trial, &sig).await.is_err());
     drop(tx);
+    let mut central = p.clone();
+    central
+        .revocation_floors
+        .push(ovg_module_sdk::entitlement::LicenseRevocationFloor {
+            organization_id: org,
+            release_digest: g.release_digest.clone(),
+            through_sequence: 2,
+        });
+    let mut tx = OrgExtensionScope::begin_human(&pool, org, user, session)
+        .await
+        .unwrap();
+    // No new certificate imported: current stored subscription is now denied.
+    assert_eq!(
+        tx.license_status(&g.release_digest, &g.extension_key, &central, &key)
+            .await
+            .unwrap(),
+        LicenseState::Revoked
+    );
+    tx.commit().await.unwrap();
     g.grant_id = Uuid::new_v4();
     g.sequence = 3;
+    let (renewal, rs) = sign(&g);
+    let mut tx = OrgExtensionScope::begin_human(&pool, org, user, session)
+        .await
+        .unwrap();
+    tx.import_license(&renewal, &rs).await.unwrap();
+    assert_eq!(
+        tx.license_status(&g.release_digest, &g.extension_key, &central, &key)
+            .await
+            .unwrap(),
+        LicenseState::Active
+    );
+    tx.commit().await.unwrap();
+    g.grant_id = Uuid::new_v4();
+    g.sequence = 4;
     g.kind = GrantKind::Revoked;
     g.valid_until = now;
     g.grace_until = now;

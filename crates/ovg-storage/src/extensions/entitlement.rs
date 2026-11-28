@@ -57,6 +57,9 @@ async fn latest(
     if proof.digest() != row.try_get::<String, _>("grant_digest").map_err(db_error)? {
         return Err(denied());
     }
+    if policy.revokes(proof.grant()) {
+        return Ok(LicenseState::Revoked);
+    }
     Ok(proof.grant().state(now))
 }
 impl OrgExtensionScope<'_> {

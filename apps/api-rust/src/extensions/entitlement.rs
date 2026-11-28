@@ -56,13 +56,16 @@ fn authority(state: &AppState, p: &CommercialPolicy) -> Result<VerifyingKey, App
     if fingerprint(key.as_bytes()) != p.authority_key_id || key.is_weak() {
         return Err(denied());
     }
-    if state
-        .config
-        .plugin_sandbox_payment_public_key
-        .as_deref()
-        .and_then(|v| decode_ed25519_public_key(v).ok())
-        .is_some_and(|k| k == key)
-    {
+    if [
+        &state.config.plugin_sandbox_payment_public_key,
+        &state.config.plugin_sandbox_offer_public_key,
+    ]
+    .into_iter()
+    .any(|v| {
+        v.as_deref()
+            .and_then(|s| decode_ed25519_public_key(s).ok())
+            .is_some_and(|k| k == key)
+    }) {
         return Err(denied());
     }
     Ok(key)
@@ -164,6 +167,12 @@ async fn import(
     let k = authority(&state, &p).map_err(domain)?;
     let verified =
         verify_grant(body.certificate, &sig, &k, &p, org_id, chrono::Utc::now()).map_err(domain)?;
+    if p.revokes(verified.grant()) {
+        return Err(domain(AppError::conflict(
+            "LICENSE_CENTRALLY_REVOKED",
+            "certificate has been centrally revoked; renewal required",
+        )));
+    }
     let mut tx = open_org_scope(&state, &actor, org_id).await?;
     let result = tx.import_license(&verified, &sig).await.map_err(domain)?;
     tx.commit().await.map_err(domain)?;

@@ -11,6 +11,22 @@ pub struct CommercialPolicy {
     pub audience: String,
     pub authority_key_id: String,
     pub licensed_release_digests: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub revocation_floors: Vec<LicenseRevocationFloor>,
+}
+/// Central revocation of certificates at or below an inclusive sequence,
+/// scoped to one tenant and one exact release. A later certificate can renew.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LicenseRevocationFloor {
+    pub organization_id: Uuid,
+    pub release_digest: String,
+    pub through_sequence: u64,
+}
+impl LicenseRevocationFloor {
+    fn key(&self) -> (Uuid, &str) {
+        (self.organization_id, self.release_digest.as_str())
+    }
 }
 pub fn valid_hash(s: &str) -> bool {
     s.len() == 64
@@ -33,11 +49,31 @@ impl CommercialPolicy {
                 .licensed_release_digests
                 .windows(2)
                 .all(|w| w[0] < w[1])
+            && self.revocation_floors.len() <= 512
+            && self.revocation_floors.iter().all(|f| {
+                !f.organization_id.is_nil()
+                    && self.requires(&f.release_digest)
+                    && (1..=9_007_199_254_740_991).contains(&f.through_sequence)
+            })
+            && self
+                .revocation_floors
+                .windows(2)
+                .all(|w| w[0].key() < w[1].key())
     }
     pub fn requires(&self, digest: &str) -> bool {
         self.licensed_release_digests
             .binary_search_by(|v| v.as_str().cmp(digest))
             .is_ok()
+    }
+    pub fn revocation_floor(&self, org: Uuid, digest: &str) -> u64 {
+        self.revocation_floors
+            .binary_search_by(|f| f.key().cmp(&(org, digest)))
+            .ok()
+            .map(|i| self.revocation_floors[i].through_sequence)
+            .unwrap_or(0)
+    }
+    pub fn revokes(&self, grant: &LicenseGrant) -> bool {
+        grant.sequence <= self.revocation_floor(grant.organization_id, &grant.release_digest)
     }
     pub fn preserves(&self, old: &Self) -> bool {
         self.audience == old.audience
@@ -45,6 +81,9 @@ impl CommercialPolicy {
                 .licensed_release_digests
                 .iter()
                 .all(|v| self.requires(v))
+            && old.revocation_floors.iter().all(|f| {
+                self.revocation_floor(f.organization_id, &f.release_digest) >= f.through_sequence
+            })
     }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -194,6 +233,7 @@ mod tests {
             audience: "fixture-installation".into(),
             authority_key_id: fingerprint(k.verifying_key().as_bytes()),
             licensed_release_digests: vec!["a".repeat(64)],
+            revocation_floors: vec![],
         };
         let mut g = LicenseGrant {
             schema: "openvietgis.license.grant.v1".into(),
@@ -210,6 +250,29 @@ mod tests {
             valid_until: now + Duration::days(30),
             grace_until: now + Duration::days(37),
         };
+        let mut centrally_revoked = p.clone();
+        centrally_revoked
+            .revocation_floors
+            .push(LicenseRevocationFloor {
+                organization_id: g.organization_id,
+                release_digest: g.release_digest.clone(),
+                through_sequence: 1,
+            });
+        assert!(centrally_revoked.validate());
+        assert!(centrally_revoked.revokes(&g));
+        assert!(centrally_revoked.preserves(&p));
+        assert!(!p.preserves(&centrally_revoked));
+        let mut renewal = g.clone();
+        renewal.sequence = 2;
+        assert!(!centrally_revoked.revokes(&renewal));
+        renewal.sequence = 1;
+        renewal.organization_id = Uuid::new_v4();
+        assert!(!centrally_revoked.revokes(&renewal));
+        let mut invalid = centrally_revoked.clone();
+        invalid
+            .revocation_floors
+            .push(invalid.revocation_floors[0].clone());
+        assert!(!invalid.validate());
         let sign = |g: &LicenseGrant| k.sign(&canonical(g).unwrap());
         assert!(verify_grant(
             g.clone(),

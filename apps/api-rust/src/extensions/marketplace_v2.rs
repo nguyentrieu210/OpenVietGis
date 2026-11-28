@@ -542,6 +542,7 @@ mod tests {
             audience: "fixture-installation".into(),
             authority_key_id: hash(license_key.verifying_key().as_bytes()),
             licensed_release_digests: vec![hash(&canonical(&c.releases[1].envelope).unwrap())],
+            revocation_floors: vec![],
         });
         save(&policy);
         let (licensed, proof) = load(&cfg, &p).unwrap();

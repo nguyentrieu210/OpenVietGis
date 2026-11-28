@@ -40,7 +40,7 @@ async fn global_checkpoint_survives_restart_and_denies_rollback() {
         revoked_release_digests: vec![],
         revoked_publisher_keys: vec![],
         revoked_operator_keys: vec![],
-            commercial:None,
+        commercial: None,
     };
     let old = signed(&p, &root, &op);
     let (a, b) = tokio::join!(admit_policy(&pool, &old), admit_policy(&pool, &old));
@@ -48,12 +48,36 @@ async fn global_checkpoint_survives_restart_and_denies_rollback() {
     b.unwrap();
     p.sequence = 2;
     p.revoked_release_digests = vec!["b".repeat(64)];
+    p.commercial = Some(ovg_module_sdk::entitlement::CommercialPolicy {
+        audience: "fixture".into(),
+        authority_key_id: fingerprint(
+            SigningKey::from_bytes(&[113; 32])
+                .verifying_key()
+                .as_bytes(),
+        ),
+        licensed_release_digests: vec!["e".repeat(64)],
+        revocation_floors: vec![ovg_module_sdk::entitlement::LicenseRevocationFloor {
+            organization_id: uuid::Uuid::new_v4(),
+            release_digest: "e".repeat(64),
+            through_sequence: 2,
+        }],
+    });
     let revoked = signed(&p, &root, &op);
     admit_policy(&pool, &revoked).await.unwrap();
     assert!(admit_policy(&pool, &old).await.is_err());
     let mut bad = p.clone();
     bad.revoked_release_digests.clear();
     bad.sequence = 3;
+    assert!(admit_policy(&pool, &signed(&bad, &root, &op))
+        .await
+        .is_err());
+    bad = p.clone();
+    bad.sequence = 3;
+    bad.commercial.as_mut().unwrap().revocation_floors[0].through_sequence = 1;
+    assert!(admit_policy(&pool, &signed(&bad, &root, &op))
+        .await
+        .is_err());
+    bad.commercial.as_mut().unwrap().revocation_floors.clear();
     assert!(admit_policy(&pool, &signed(&bad, &root, &op))
         .await
         .is_err());

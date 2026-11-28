@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Offline SPEC075 trust authority tool. Root private key never belongs on API hosts."""
 import argparse
+from uuid import UUID
 import base64
 import hashlib
 import re
@@ -56,7 +57,7 @@ def sign_policy(args):
     commercial=getattr(args,"commercial",None)
     if commercial:
         c=load_json(commercial,1024*1024)
-        if set(c)!={"audience","authority_key_id","licensed_release_digests"} or not re.fullmatch("[A-Za-z0-9_.-]{1,128}",c["audience"]):
+        if set(c)-{"revocation_floors"}!={"audience","authority_key_id","licensed_release_digests"} or not re.fullmatch("[A-Za-z0-9_.-]{1,128}",c["audience"]):
             raise ValueError("invalid commercial policy")
         ids=c["licensed_release_digests"]
         if not isinstance(ids,list) or not 1<=len(ids)<=4096 or len(set(ids))!=len(ids) or any(not re.fullmatch("[a-f0-9]{64}",v) for v in ids):
@@ -64,6 +65,19 @@ def sign_policy(args):
         if not re.fullmatch("[a-f0-9]{64}",c["authority_key_id"]) or c["authority_key_id"] in (sha(op_raw),sha(public(root.public_key()))):
             raise ValueError("independent license authority required")
         c["licensed_release_digests"]=sorted(ids)
+        floors=c.get("revocation_floors",[])
+        if not isinstance(floors,list) or len(floors)>512:raise ValueError("invalid license floors")
+        seen=set()
+        for f in floors:
+            if not isinstance(f,dict) or set(f)!={"organization_id","release_digest","through_sequence"}:raise ValueError("invalid license floor")
+            org=UUID(f["organization_id"])
+            if not org.int or f["release_digest"] not in ids or type(f["through_sequence"]) is not int or not 1<=f["through_sequence"]<=MAX_SAFE:raise ValueError("invalid license floor scope")
+            f["organization_id"]=str(org)
+            ident=(str(org),f["release_digest"])
+            if ident in seen:raise ValueError("duplicate license floor")
+            seen.add(ident)
+        if floors:c["revocation_floors"]=sorted(floors,key=lambda f:(f["organization_id"],f["release_digest"]))
+        else:c.pop("revocation_floors",None)
         policy["commercial"]=c
     if args.previous:
         previous=load_json(args.previous,1024*1024)
@@ -75,6 +89,9 @@ def sign_policy(args):
             new=policy.get("commercial")
             if not new or new["audience"]!=old["commercial"]["audience"] or not set(old["commercial"]["licensed_release_digests"]).issubset(new["licensed_release_digests"]):
                 raise ValueError("commercial classification removal")
+            floors={(f["organization_id"],f["release_digest"]):f["through_sequence"] for f in new.get("revocation_floors",[])}
+            if any(floors.get((f["organization_id"],f["release_digest"]),0)<f["through_sequence"] for f in old["commercial"].get("revocation_floors",[])):
+                raise ValueError("license revocation floor rollback")
         if any(not set(old[k]).issubset(policy[k]) for k in FIELDS):raise ValueError("revocation removal")
         if policy["operator_key_id"]!=old["operator_key_id"] and (epoch<=old["catalog_epoch"] or old["operator_key_id"] not in policy["revoked_operator_keys"]):raise ValueError("old operator must be revoked")
     elif args.sequence!=1:
