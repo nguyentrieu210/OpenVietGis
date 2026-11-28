@@ -52,6 +52,7 @@ pub mod tileset;
 pub mod dense_io;
 pub mod fused_ply;
 pub mod dense_job;
+pub mod cuda_candidate;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
